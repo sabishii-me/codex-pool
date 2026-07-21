@@ -291,6 +291,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/auth/callback/google":
 		h.handleGoogleLoginCallback(w, r)
 		return
+	case "/auth/callback":
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.handleCodexCallback(w, r)
+		return
 	case "/auth/logout":
 		h.handleLogout(w, r)
 		return
@@ -558,6 +565,8 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.handleCodexAdd(w, r)
 		case "/api/pool/accounts/codex/exchange":
 			h.handleCodexExchange(w, r)
+		case "/api/pool/accounts/codex/status":
+			h.handleCodexStatus(w, r)
 		case "/api/pool/accounts/claude/add":
 			h.handleClaudeAdd(w, r)
 		case "/api/pool/accounts/claude/exchange":

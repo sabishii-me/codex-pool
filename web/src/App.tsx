@@ -19,6 +19,7 @@ import {
 import {
 	  antigravityOAuthStatus,
   checkMFAStatus,
+  codexOAuthStatus,
   confirmMFA,
   contributeAPIKey,
   contributeGrok,
@@ -1443,31 +1444,32 @@ function oauthCode(value: string) {
 function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdded: () => Promise<void> }) {
   const [provider, setProvider] = useState<ContributableProvider>("codex");
   const [credential, setCredential] = useState("");
-	  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string } | null>(null);
+	  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; automaticCallback?: boolean } | null>(null);
 	  const oauthCompleted = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const selected = CONTRIBUTION_PROVIDERS.find((candidate) => candidate.id === provider)!;
 
 	  useEffect(() => {
-	    if (provider !== "antigravity" || !oauth?.sessionID) return;
+	    if ((provider !== "antigravity" && provider !== "codex") || !oauth?.sessionID) return;
 	    let stopped = false;
 	    const complete = async () => {
 	      if (stopped || oauthCompleted.current) return;
 	      oauthCompleted.current = true;
 	      await onAdded();
 	    };
+	    const messageType = provider === "codex" ? "codex-pool-codex-oauth" : "codex-pool-antigravity-oauth";
 	    const onMessage = (event: MessageEvent) => {
-	      if (event.origin !== window.location.origin || event.data?.type !== "codex-pool-antigravity-oauth" || event.data?.session_id !== oauth.sessionID) return;
+	      if (event.origin !== window.location.origin || event.data?.type !== messageType || event.data?.session_id !== oauth.sessionID) return;
 	      if (event.data.status === "complete") void complete();
-	      if (event.data.status === "error") setError(event.data.error || "Google sign-in failed");
+	      if (event.data.status === "error") setError(event.data.error || `${provider === "codex" ? "Codex" : "Google"} sign-in failed`);
 	    };
 	    window.addEventListener("message", onMessage);
 	    const timer = window.setInterval(async () => {
 	      try {
-	        const status = await antigravityOAuthStatus(oauth.sessionID!);
+	        const status = provider === "codex" ? await codexOAuthStatus(oauth.sessionID!) : await antigravityOAuthStatus(oauth.sessionID!);
 	        if (status.status === "complete") { window.clearInterval(timer); await complete(); }
-	        if (status.status === "error") { window.clearInterval(timer); setError(status.error || "Google sign-in failed"); }
+	        if (status.status === "error") { window.clearInterval(timer); setError(status.error || `${provider === "codex" ? "Codex" : "Google"} sign-in failed`); }
 	      } catch { /* polling is only a fallback for a missed popup message */ }
 	    }, 1200);
 	    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("message", onMessage); };
@@ -1492,7 +1494,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
 	      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude");
 	      if (!result.oauth_url || (provider === "antigravity" ? !result.session_id : !result.verifier)) throw new Error("Provider did not return an OAuth session");
 	      oauthCompleted.current = false;
-	      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url });
+	      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url, automaticCallback: result.automatic_callback });
       authorizationWindow?.location.replace(result.oauth_url);
     } catch (cause) {
       authorizationWindow?.close();
@@ -1560,7 +1562,9 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
             ) : (
               <>
                 <a href={oauth.url} target="_blank" rel="noreferrer">Authorization opened. Reopen it here ↗</a>
-                <label className="contribution-field"><span>Authorization code or callback URL</span><input value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus autoComplete="off" /></label>
+                {provider === "codex" && oauth.automaticCallback && <small>Waiting for Codex to return to this gateway automatically. No dedicated callback port is reserved.</small>}
+                {provider === "codex" && !oauth.automaticCallback && <small>This gateway is not on the browser's loopback host. After authorization, copy the failed localhost callback URL here.</small>}
+                <label className="contribution-field"><span>{provider === "codex" && oauth.automaticCallback ? "Callback URL (fallback only)" : "Authorization code or callback URL"}</span><input value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus={provider !== "codex" || !oauth.automaticCallback} autoComplete="off" /></label>
               </>
             )}
           </div>
@@ -1574,7 +1578,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
           </label>
         )}
         {error && <div className="access-error" role="alert">{error}</div>}
-        <div><button type="button" onClick={onClose}>CANCEL</button>{(selected.mode !== "oauth" || oauth) && <button className="gold-button" disabled={busy || !credential.trim()}>{busy ? "VALIDATING" : "ADD TO POOL"}</button>}</div>
+        <div><button type="button" onClick={onClose}>CANCEL</button>{(selected.mode !== "oauth" || (oauth && (provider !== "codex" || credential.trim()))) && <button className="gold-button" disabled={busy || !credential.trim()}>{busy ? "VALIDATING" : "ADD TO POOL"}</button>}</div>
       </form>
     </div>
   );

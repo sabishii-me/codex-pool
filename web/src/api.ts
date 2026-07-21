@@ -128,6 +128,7 @@ export interface AccountContributionResult {
   state?: string;
 	  session_id?: string;
 	  status?: "pending" | "exchanging" | "complete" | "error";
+  automatic_callback?: boolean;
 	  error?: string;
 }
 
@@ -152,6 +153,14 @@ export async function startAccountOAuth(provider: "codex" | "claude") {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{}",
+  }));
+}
+
+export async function codexOAuthStatus(sessionID: string) {
+  return decode<AccountContributionResult>(await fetch("/api/pool/accounts/codex/status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionID }),
   }));
 }
 

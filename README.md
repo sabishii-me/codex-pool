@@ -125,6 +125,8 @@ export ANTHROPIC_API_KEY="pool"
 export CODE_ASSIST_ENDPOINT="http://127.0.0.1:8989"
 ```
 
+**Codex account**: open the dashboard, choose "Contribute an account", then press "Codex". For a loopback deployment, Codex returns to `/auth/callback` on the gateway's existing port and the popup completes automatically. The gateway does not reserve Codex CLI's traditional port `1455`. For a remote gateway, paste the failed localhost callback URL into the contribution dialog. `CODEX_OAUTH_REDIRECT_URI` can explicitly override the redirect when required.
+
 **Google Antigravity account**: open the dashboard, choose "Contribute an account", then press "Google Antigravity". The popup completes the callback automatically. Pasting the callback URL remains available when popups are blocked.
 
 The sign-in flow uses Antigravity's shipped Google OAuth client and its fixed `http://localhost:51121/oauth-callback` redirect, matching CLIProxyAPI and VibeProxy. When the pool runs on the same machine as the browser, the popup completes on its own. For a remote pool, paste the failed localhost callback URL into the contribution dialog; the state and PKCE verifier are still checked before exchange.

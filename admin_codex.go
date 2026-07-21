@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -28,11 +29,15 @@ const (
 
 // CodexOAuthSession stores pending OAuth state
 type CodexOAuthSession struct {
-	AccountID string
-	Verifier  string
-	Challenge string
-	State     string
-	CreatedAt time.Time
+	AccountID    string
+	Verifier     string
+	Challenge    string
+	State        string
+	RedirectURI  string
+	TargetOrigin string
+	Status       string
+	Error        string
+	CreatedAt    time.Time
 }
 
 // In-memory store for pending Codex OAuth sessions
@@ -67,6 +72,9 @@ func (h *proxyHandler) serveCodexAdmin(w http.ResponseWriter, r *http.Request) {
 
 	case path == "/exchange" && r.Method == http.MethodPost:
 		h.handleCodexExchange(w, r)
+
+	case path == "/status" && r.Method == http.MethodPost:
+		h.handleCodexStatus(w, r)
 
 	default:
 		http.NotFound(w, r)
@@ -129,12 +137,16 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
-	// Build OAuth URL
+	redirectURI := codexOAuthRedirectURI(h, r)
+
+	// Build OAuth URL. Codex's native OAuth client permits loopback ports, so
+	// send the callback to the gateway's existing port instead of reserving
+	// localhost:1455. Remote deployments retain the manual-paste fallback.
 	u, _ := url.Parse(CodexOAuthAuthorizeURL)
 	q := u.Query()
 	q.Set("response_type", "code")
 	q.Set("client_id", CodexOAuthClientID)
-	q.Set("redirect_uri", CodexOAuthRedirectURI)
+	q.Set("redirect_uri", redirectURI)
 	q.Set("scope", "openid profile email offline_access")
 	q.Set("code_challenge", challenge)
 	q.Set("code_challenge_method", "S256")
@@ -146,10 +158,13 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 
 	// Store session
 	session := &CodexOAuthSession{
-		Verifier:  verifier,
-		Challenge: challenge,
-		State:     state,
-		CreatedAt: time.Now(),
+		Verifier:     verifier,
+		Challenge:    challenge,
+		State:        state,
+		RedirectURI:  redirectURI,
+		TargetOrigin: codexOAuthTargetOrigin(r, h),
+		Status:       "pending",
+		CreatedAt:    time.Now(),
 	}
 
 	codexOAuthSessions.Lock()
@@ -160,13 +175,161 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 	go cleanupOldCodexSessions()
 
 	respondJSON(w, map[string]any{
-		"oauth_url": u.String(),
-		"verifier":  verifier,
-		"state":     state,
+		"oauth_url":          u.String(),
+		"verifier":           verifier,
+		"state":              state,
+		"session_id":         verifier,
+		"status":             "pending",
+		"redirect_uri":       redirectURI,
+		"automatic_callback": redirectURI != CodexOAuthRedirectURI,
 	})
 }
 
-// POST /admin/codex/exchange - exchange OAuth code for tokens
+// POST /admin/codex/status - poll automatic callback completion.
+func (h *proxyHandler) handleCodexStatus(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondJSONError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	codexOAuthSessions.RLock()
+	session := codexOAuthSessions.sessions[strings.TrimSpace(req.SessionID)]
+	if session == nil || time.Since(session.CreatedAt) > 30*time.Minute {
+		codexOAuthSessions.RUnlock()
+		respondJSONError(w, http.StatusNotFound, "invalid or expired session")
+		return
+	}
+	status, accountID, sessionError := session.Status, session.AccountID, session.Error
+	codexOAuthSessions.RUnlock()
+	respondJSON(w, map[string]any{
+		"session_id": req.SessionID,
+		"status":     status,
+		"account_id": accountID,
+		"error":      sessionError,
+	})
+}
+
+func codexOAuthRedirectURI(h *proxyHandler, r *http.Request) string {
+	if configured := strings.TrimSpace(os.Getenv("CODEX_OAUTH_REDIRECT_URI")); configured != "" {
+		return configured
+	}
+	publicURL, err := url.Parse(h.getEffectivePublicURL(r))
+	if err != nil {
+		return CodexOAuthRedirectURI
+	}
+	hostname := strings.ToLower(publicURL.Hostname())
+	if hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1" {
+		return CodexOAuthRedirectURI
+	}
+	host := "localhost"
+	if port := publicURL.Port(); port != "" {
+		host += ":" + port
+	}
+	return "http://" + host + "/auth/callback"
+}
+
+func codexOAuthTargetOrigin(r *http.Request, h *proxyHandler) string {
+	if origin := strings.TrimSpace(r.Header.Get("Origin")); origin != "" {
+		if parsed, err := url.Parse(origin); err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" {
+			return parsed.Scheme + "://" + parsed.Host
+		}
+	}
+	if parsed, err := url.Parse(h.getEffectivePublicURL(r)); err == nil && parsed.Host != "" {
+		return parsed.Scheme + "://" + parsed.Host
+	}
+	return "*"
+}
+
+// GET /auth/callback completes Codex OAuth on the gateway's existing loopback
+// port. It deliberately does not require a session cookie: the random OAuth
+// state and PKCE verifier authenticate the callback.
+func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Request) {
+	state := strings.TrimSpace(r.URL.Query().Get("state"))
+	codexOAuthSessions.Lock()
+	var session *CodexOAuthSession
+	for _, candidate := range codexOAuthSessions.sessions {
+		if candidate.State == state {
+			session = candidate
+			break
+		}
+	}
+	if session == nil || time.Since(session.CreatedAt) > 30*time.Minute {
+		codexOAuthSessions.Unlock()
+		h.renderCodexCallback(w, nil, "error", "", "invalid or expired OAuth state")
+		return
+	}
+	if session.Status == "complete" {
+		accountID := session.AccountID
+		codexOAuthSessions.Unlock()
+		h.renderCodexCallback(w, session, "complete", accountID, "")
+		return
+	}
+	if session.Status == "exchanging" {
+		codexOAuthSessions.Unlock()
+		h.renderCodexCallback(w, session, "exchanging", "", "")
+		return
+	}
+	if upstreamError := strings.TrimSpace(r.URL.Query().Get("error")); upstreamError != "" {
+		session.Status, session.Error = "error", upstreamError
+		codexOAuthSessions.Unlock()
+		h.renderCodexCallback(w, session, "error", "", upstreamError)
+		return
+	}
+	session.Status, session.Error = "exchanging", ""
+	codexOAuthSessions.Unlock()
+
+	code := strings.TrimSpace(r.URL.Query().Get("code"))
+	if code == "" {
+		h.setCodexOAuthError(session, "authorization code is missing")
+		h.renderCodexCallback(w, session, "error", "", "authorization code is missing")
+		return
+	}
+	tokens, err := codexExchangeCode(code, session.Verifier, session.RedirectURI)
+	if err != nil {
+		log.Printf("Codex callback token exchange failed: %v", err)
+		h.setCodexOAuthError(session, "token exchange failed")
+		h.renderCodexCallback(w, session, "error", "", "token exchange failed")
+		return
+	}
+	accountID := generateCodexAccountID(tokens.IDToken)
+	if err := saveNewCodexAccount(filepath.Join(h.cfg.poolDir, "codex"), accountID, tokens); err != nil {
+		h.setCodexOAuthError(session, "failed to save account")
+		h.renderCodexCallback(w, session, "error", "", "failed to save account")
+		return
+	}
+	h.reloadAccounts()
+	codexOAuthSessions.Lock()
+	session.Status, session.AccountID, session.Error = "complete", accountID, ""
+	codexOAuthSessions.Unlock()
+	h.renderCodexCallback(w, session, "complete", accountID, "")
+}
+
+func (h *proxyHandler) setCodexOAuthError(session *CodexOAuthSession, message string) {
+	codexOAuthSessions.Lock()
+	session.Status, session.Error = "error", message
+	codexOAuthSessions.Unlock()
+}
+
+func (h *proxyHandler) renderCodexCallback(w http.ResponseWriter, session *CodexOAuthSession, status, accountID, message string) {
+	sessionID, targetOrigin := "", "*"
+	if session != nil {
+		sessionID, targetOrigin = session.Verifier, session.TargetOrigin
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"type": "codex-pool-codex-oauth", "session_id": sessionID,
+		"status": status, "account_id": accountID, "error": message,
+	})
+	encodedPayload := base64.StdEncoding.EncodeToString(payload)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+	_, _ = fmt.Fprintf(w, `<!doctype html><meta charset="utf-8"><title>Codex sign-in</title><p>%s</p><script>const payload=JSON.parse(atob(%q));if(window.opener){window.opener.postMessage(payload,%q)}window.close()</script>`, template.HTMLEscapeString(status), encodedPayload, targetOrigin)
+}
+
+// POST /admin/codex/exchange - exchange a manually pasted OAuth code.
 func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Code     string `json:"code"`
@@ -193,7 +356,7 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 
 	// Look up session
 	codexOAuthSessions.RLock()
-	_, ok := codexOAuthSessions.sessions[verifier]
+	session, ok := codexOAuthSessions.sessions[verifier]
 	codexOAuthSessions.RUnlock()
 
 	if !ok {
@@ -202,7 +365,7 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Exchange code for tokens
-	tokens, err := codexExchangeCode(code, verifier)
+	tokens, err := codexExchangeCode(code, verifier, session.RedirectURI)
 	if err != nil {
 		log.Printf("Codex token exchange failed: %v", err)
 		respondJSONError(w, http.StatusInternalServerError, "token exchange failed: "+err.Error())
@@ -219,9 +382,10 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Remove session
 	codexOAuthSessions.Lock()
-	delete(codexOAuthSessions.sessions, verifier)
+	session.Status = "complete"
+	session.AccountID = accountID
+	session.Error = ""
 	codexOAuthSessions.Unlock()
 
 	// Reload accounts
@@ -234,12 +398,12 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 }
 
 // codexExchangeCode exchanges an authorization code for tokens
-func codexExchangeCode(code, verifier string) (*CodexTokenResponse, error) {
+func codexExchangeCode(code, verifier, redirectURI string) (*CodexTokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("client_id", CodexOAuthClientID)
 	data.Set("code", code)
-	data.Set("redirect_uri", CodexOAuthRedirectURI)
+	data.Set("redirect_uri", redirectURI)
 	data.Set("code_verifier", verifier)
 
 	req, err := http.NewRequest(http.MethodPost, CodexOAuthTokenURL, strings.NewReader(data.Encode()))
@@ -384,7 +548,7 @@ func cleanupOldCodexSessions() {
 
 	now := time.Now()
 	for verifier, session := range codexOAuthSessions.sessions {
-		if now.Sub(session.CreatedAt) > 10*time.Minute {
+		if now.Sub(session.CreatedAt) > 30*time.Minute {
 			delete(codexOAuthSessions.sessions, verifier)
 		}
 	}

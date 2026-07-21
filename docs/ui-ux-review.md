@@ -362,6 +362,199 @@ analytics
 
 Each query retains its last successful data. The page header can show overall freshness and incident count without hiding healthy panels.
 
+## Visual system and theming
+
+The current stylesheet has many feature-specific treatments that independently define borders, spacing, typography, colors, meters, headers, and interaction states. This creates the “random” feeling: individual sections are polished, but they do not always look like parts of the same product.
+
+The redesign should establish a small visual system before redesigning individual screens.
+
+### Theme contract
+
+Components must consume semantic tokens rather than literal colors or page-specific values. Themes should be selectable through a root attribute such as `data-theme` and should not require component changes.
+
+```css
+:root,
+[data-theme="signal-dark"] {
+  color-scheme: dark;
+
+  --color-bg-canvas: #090a08;
+  --color-bg-surface: #11120f;
+  --color-bg-elevated: #181a15;
+  --color-text-primary: #f3f0df;
+  --color-text-secondary: #aaa790;
+  --color-text-muted: #777564;
+  --color-border-subtle: #292a22;
+  --color-border-strong: #494738;
+  --color-accent: #e0bd58;
+  --color-on-accent: #111008;
+  --color-success: #72b879;
+  --color-warning: #daa64b;
+  --color-danger: #d86c62;
+  --color-info: #6fa7c8;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius-control: 0.25rem;
+  --radius-panel: 0.375rem;
+  --border-width: 1px;
+  --font-body: system-ui, sans-serif;
+  --font-data: ui-monospace, monospace;
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+}
+```
+
+The exact values belong in visual design work; the important part is the stable semantic contract.
+
+Token groups should cover:
+
+- canvas, surface, elevated surface, and overlay;
+- primary, secondary, muted, inverse, and disabled text;
+- subtle, default, strong, focus, and interactive borders;
+- accent, success, warning, danger, and information states;
+- chart categorical and sequential palettes;
+- spacing, typography, radius, border, elevation, and motion;
+- control height and content width breakpoints.
+
+Do not encode a theme name into component APIs. A button uses `variant="primary"`, not `variant="gold"`.
+
+### Initial theme set
+
+Support these through the same token contract:
+
+1. **Signal dark** — evolution of the current black/gold identity and the default.
+2. **Signal light** — readable light surfaces for bright environments and printing.
+3. **High contrast** — stronger borders and text contrast with reduced decorative noise.
+4. **System** — selects light or dark from `prefers-color-scheme`, with a persisted user override.
+
+Theme preference should be available in Profile and applied before React renders to avoid a flash of the wrong theme.
+
+### Provider identity is not a theme
+
+Provider colors are categorical data, not structural UI colors. A provider may supply a validated display color or palette index through the API, but that value should only populate a scoped variable such as `--provider-color` for a marker or chart series.
+
+Provider color must not determine text contrast, status, button style, or panel background. Provider identity must also be available as text or icon so color is never the sole distinction.
+
+### Consistent component vocabulary
+
+Reduce one-off patterns to a documented set of reusable components:
+
+| Component | Responsibility |
+|---|---|
+| `PageHeader` | Title, description, freshness, and page-level actions |
+| `Section` | Heading, supporting copy, actions, and content spacing |
+| `Panel` | Standard surface, border, padding, and optional header/footer |
+| `MetricCard` | Label, normalized value, trend, evidence state, and timeframe |
+| `StatusBadge` | Semantic state with icon and text |
+| `Button` / `IconButton` | Primary, secondary, quiet, and danger actions |
+| `Tabs` | Route or local mode selection with one visual treatment |
+| `DataTable` | Sorting, selection, actions, empty state, and responsive fallback |
+| `DisclosureList` | Mobile/detail alternative to dense tables |
+| `Field` | Label, help, validation, and control association |
+| `Dialog` / `Drawer` | Focus-managed overlays with consistent actions |
+| `EmptyState` | Explanation and next action |
+| `ResourceState` | Loading, stale, partial failure, and retry behavior |
+| `ChartFrame` | Title, legend, summary, evidence, and theme-aware chart palette |
+
+Each component needs defined sizes, variants, allowed composition, keyboard behavior, loading/disabled state, and examples. Feature code may arrange these primitives, but should not recreate their visual rules.
+
+### Layout rules
+
+- Use one spacing scale; do not introduce arbitrary gaps for each dashboard.
+- Define standard page widths and a responsive grid instead of bespoke grids per panel group.
+- Use one panel header pattern and one section-heading hierarchy.
+- Keep data alignment predictable: labels left, comparable numeric values right, status consistently located.
+- Reserve monospaced type for IDs, models, commands, timestamps, and numeric data—not all explanatory copy.
+- Use uppercase sparingly for short metadata labels; body and action text should use normal casing.
+- Define one density setting for normal users and an optional compact density for operator tables.
+- Decorative section codes such as `C.10` can remain secondary but must not replace descriptive headings.
+
+### Interaction rules
+
+- One primary action per page or dialog.
+- Quiet actions remain visually quiet until hover/focus.
+- Danger styling is reserved for destructive or materially risky actions.
+- All interactive elements share focus-ring, hover, pressed, disabled, and busy treatments.
+- Motion conveys state or hierarchy; it is not independently invented by each feature.
+- Reduced-motion mode removes nonessential transitions and chart animation.
+- Toasts report completed background actions; inline feedback explains field and resource errors.
+
+### Chart consistency
+
+Charts currently have distinctive visual treatments but need a shared theme adapter. Standardize:
+
+- axes, grid, tooltip, legend, and focus behavior;
+- series assignment from semantic chart palettes;
+- number and time formatting;
+- measured versus inferred line/dash styles;
+- unknown and missing intervals;
+- accessible tabular or textual summaries;
+- compact and full-height chart sizes.
+
+Charts must consume CSS token values at runtime so switching themes updates charts without remounting feature code.
+
+### CSS organization
+
+Replace the single large global stylesheet incrementally:
+
+```text
+src/styles/
+  reset.css
+  tokens.css
+  themes/
+    signal-dark.css
+    signal-light.css
+    high-contrast.css
+  foundations/
+    typography.css
+    layout.css
+    motion.css
+
+src/components/
+  button/Button.tsx
+  button/Button.module.css
+  panel/Panel.tsx
+  panel/Panel.module.css
+  ...
+```
+
+Use global CSS only for reset, tokens, themes, and basic document foundations. Component styles should be locally scoped. Feature styles should describe layout, not redefine controls, colors, typography, or status semantics.
+
+Inline styles should be limited to genuinely dynamic values such as chart coordinates, progress percentages, and a validated provider marker variable. Move static colors and layout values out of JSX.
+
+### Component catalog and governance
+
+Maintain a development-only component catalog using Storybook, Ladle, or a small in-app catalog route. It should show:
+
+- every component and variant;
+- all themes;
+- normal, hover, focus, disabled, loading, empty, error, and stale states;
+- realistic short and long content;
+- narrow and wide viewports;
+- unknown providers and missing data;
+- accessibility checks.
+
+New one-off controls or panel treatments should require an explicit reason. Prefer extending a shared primitive only when the new behavior is useful in more than one feature.
+
+### Visual-system migration
+
+1. Inventory literal colors, spacing values, type sizes, repeated controls, panels, and badges.
+2. Define semantic tokens by mapping current values before changing the look.
+3. Build foundational components and catalog fixtures.
+4. Convert the application shell, navigation, buttons, fields, and dialogs.
+5. Convert status and resource-state components.
+6. Convert panels, metrics, tables, and charts feature by feature.
+7. Delete superseded selectors after each feature migration.
+8. Add visual regression snapshots for every theme and key viewport.
+9. Add a lint rule or CI check that prevents new unapproved color literals and global feature selectors.
+
+A temporary compatibility layer may map old variables/classes to new tokens, but it should have an owner and removal milestone.
+
 ## Frontend structure
 
 Suggested layout:
@@ -451,14 +644,17 @@ Deliverable: clickable low-fidelity flow without visual polish.
 
 Deliverable: versioned UI data contract with fixtures.
 
-### UX Phase 3 — Frontend foundation
+### UX Phase 3 — Frontend and visual-system foundation
 
 - Add routing and query caching.
+- Define semantic design tokens and the initial dark, light, and high-contrast themes.
+- Build the component catalog and visual regression harness.
 - Split `App.tsx` by feature.
-- Introduce shared status, table, dialog, and form components.
+- Introduce shared page, panel, status, button, table, dialog, chart, and form components.
+- Migrate global styles into foundations, locally scoped component styles, and feature layouts.
 - Generate or validate API types.
 
-Deliverable: new shell running against fixtures and compatibility APIs.
+Deliverable: a theme-switchable new shell and component catalog running against fixtures and compatibility APIs.
 
 ### UX Phase 4 — Core user experience
 
@@ -507,6 +703,8 @@ These can be made before the full redesign if desired:
 5. Distinguish unknown from `$0` and measured from estimated.
 6. Move pool-wide analytics behind the administrator workspace.
 7. Split `App.tsx` into feature modules without changing visuals.
+8. Inventory repeated visual patterns and map literal colors/spacing to semantic tokens.
+9. Standardize buttons, fields, panels, status badges, and focus states before adding new dashboard treatments.
 
 ## Redesign success criteria
 
@@ -524,3 +722,12 @@ An operator should be able to:
 - understand whether data is measured, inferred, stale, or unavailable;
 - inspect routing and usage without consulting source code;
 - perform connection actions with clear consequences.
+
+The visual system should also meet these criteria:
+
+- every core screen works in dark, light, and high-contrast themes without feature-specific overrides;
+- the same state has the same label, color role, icon treatment, and placement throughout the product;
+- core controls and data states are represented in the component catalog;
+- new providers render without adding provider-specific CSS;
+- no new unapproved color literals or globally scoped feature-control styles enter the codebase;
+- desktop and mobile visual regressions are checked for every supported theme.

@@ -65,7 +65,17 @@ func providerTargetFormat(accountType AccountType) RequestFormat {
 		return FormatClaude
 	case AccountTypeZAI:
 		return FormatClaude
+	case AccountTypeKimiPlatform:
+		return FormatClaude
+	case AccountTypeDeepSeek:
+		return FormatClaude
+	case AccountTypeQwen:
+		return FormatClaude
+	case AccountTypeOpenRouter:
+		return FormatClaude
 	case AccountTypeCodex:
+		return FormatOpenAI
+	case AccountTypeNvidia:
 		return FormatOpenAI
 	default:
 		return FormatUnknown

@@ -53,10 +53,10 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
-func poolHashSalt(friendCode string) string {
-	friendCode = strings.TrimSpace(friendCode)
-	if friendCode != "" {
-		return friendCode
+func poolHashSalt(secret string) string {
+	secret = strings.TrimSpace(secret)
+	if secret != "" {
+		return secret
 	}
 	return "codex-pool"
 }

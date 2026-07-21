@@ -1,4 +1,5 @@
 import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import QRCode from "qrcode";
 import {
   Area,
   AreaChart,
@@ -16,11 +17,12 @@ import {
   type DitherColor,
 } from "./components/dither-kit";
 import {
-  claim,
 	  antigravityOAuthStatus,
-  clearFriendSession,
+  checkMFAStatus,
+  confirmMFA,
   contributeAPIKey,
   contributeGrok,
+  enrollMFA,
   exchangeAccountOAuth,
 	  exchangeAntigravityOAuth,
   loadAdminAccounts,
@@ -28,17 +30,16 @@ import {
 	loadLivePiModels,
 	loadModelCatalog,
   loadPoolStats,
+  loadSession,
   loadSignalAnalytics,
-  lockOperator,
+  logout,
   mutateAccount,
+  regenerateMFA,
+  regenerateRecoveryCodes,
   reloadAccounts,
-  storedAdminToken,
-  storedFriendCode,
-  storedFriendEmail,
-  storedFriendSession,
   startAccountOAuth,
 	  startAntigravityOAuth,
-  unlockOperator,
+  verifyMFA,
 } from "./api";
 import {
   accountFlow,
@@ -56,6 +57,7 @@ import type {
   AdminAccount,
   FriendSession,
   HourlyUsage,
+	MFAStatus,
 	ModelDailyUsage,
 	ModelDescriptor,
   ModelQuotaEfficiency,
@@ -67,7 +69,7 @@ import type {
   SignalAnalytics,
 } from "./types";
 
-type View = "pulse" | "insights" | "usage" | "accounts" | "models" | "setup";
+type View = "pulse" | "insights" | "usage" | "accounts" | "models" | "setup" | "profile";
 
 const PROVIDERS: Record<Provider, { label: string; color: string; dither: DitherColor; glyph: string }> = {
   codex: { label: "Codex", color: "#39e75f", dither: "green", glyph: "◎" },
@@ -75,10 +77,15 @@ const PROVIDERS: Record<Provider, { label: string; color: string; dither: Dither
   gemini: { label: "Gemini", color: "#27d8d1", dither: "cyan", glyph: "✦" },
 	  antigravity: { label: "Antigravity", color: "#70d6ff", dither: "cyan", glyph: "✧" },
   kimi: { label: "Kimi", color: "#3f8cff", dither: "blue", glyph: "◈" },
+  "kimi-platform": { label: "Kimi (Platform)", color: "#5aa9ff", dither: "blue", glyph: "◔" },
   minimax: { label: "MiniMax", color: "#ffb23f", dither: "orange", glyph: "◇" },
   zai: { label: "Z.ai", color: "#ff5454", dither: "red", glyph: "◆" },
   xiaomi: { label: "Xiaomi", color: "#ff7b2d", dither: "orange", glyph: "◫" },
   grok: { label: "Grok", color: "#86efff", dither: "cyan", glyph: "⌁" },
+  deepseek: { label: "DeepSeek", color: "#4d6bfe", dither: "blue", glyph: "◐" },
+  qwen: { label: "Qwen", color: "#eb8c00", dither: "gold", glyph: "◑" },
+  openrouter: { label: "OpenRouter", color: "#8b8b8b", dither: "grey", glyph: "◒" },
+  nvidia: { label: "NVIDIA", color: "#76b900", dither: "green", glyph: "◓" },
 };
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
@@ -207,19 +214,19 @@ function classNames(...values: Array<string | false | null | undefined>) {
 }
 
 export function App() {
-  const [session, setSession] = useState<FriendSession | null>(storedFriendSession());
-  const [booting, setBooting] = useState(Boolean(storedFriendCode() && storedFriendSession()));
+  const [session, setSession] = useState<FriendSession | null>(null);
+  const [booting, setBooting] = useState(true);
   const [view, setView] = useState<View>("pulse");
   const [stats, setStats] = useState<PoolStats | null>(null);
   const [signal, setSignal] = useState<SignalAnalytics | null>(null);
 	const [models, setModels] = useState<ModelDescriptor[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [operatorToken, setOperatorToken] = useState(storedAdminToken());
+  const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
+  const [adminElevated, setAdminElevated] = useState(false);
   const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
 
   const refresh = useCallback(async () => {
-    if (!storedFriendCode()) return;
     setLoading(true);
     try {
 	  const [nextStats, nextSignal, nextCatalog] = await Promise.all([loadPoolStats(), loadSignalAnalytics(), loadModelCatalog()]);
@@ -234,21 +241,45 @@ export function App() {
     }
   }, []);
 
-  useEffect(() => {
-    const savedCode = storedFriendCode();
-    if (!savedCode || !session) {
-      setBooting(false);
+  // refreshAdminState re-checks MFA status for the signed-in admin (if any)
+  // and, once elevated, loads the operator-only account data. Called once
+  // after a session is established, and again after every successful
+  // enroll/confirm/verify so the UI reflects the just-granted elevation
+  // without waiting for the next full page load.
+  const refreshAdminState = useCallback(async (isAdmin: boolean) => {
+    if (!isAdmin) {
+      setMfaStatus(null);
+      setAdminElevated(false);
+      setAdminAccounts([]);
       return;
     }
-    claim(savedCode, storedFriendEmail())
-      .then((fresh) => {
+    try {
+      const status = await checkMFAStatus();
+      setMfaStatus(status);
+      if (status.elevated) {
+        setAdminAccounts(await loadAdminAccounts());
+        setAdminElevated(true);
+      } else {
+        setAdminAccounts([]);
+        setAdminElevated(false);
+      }
+    } catch {
+      setMfaStatus(null);
+      setAdminElevated(false);
+      setAdminAccounts([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSession()
+      .then(async (fresh) => {
         setSession(fresh);
-        return refresh();
+        if (fresh) {
+          await refresh();
+          await refreshAdminState(fresh.is_admin);
+        }
       })
-      .catch(() => {
-        clearFriendSession();
-        setSession(null);
-      })
+      .catch(() => setSession(null))
       .finally(() => setBooting(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -259,27 +290,19 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [session, refresh]);
 
-  useEffect(() => {
-    if (!operatorToken) return;
-    loadAdminAccounts()
-      .then(setAdminAccounts)
-      .catch(() => {
-        lockOperator();
-        setOperatorToken("");
-        setAdminAccounts([]);
-      });
-  }, [operatorToken]);
-
   if (booting) return <BootScreen />;
   if (!session) {
-    return <AccessGate onAccess={(next) => { setSession(next); refresh(); }} />;
+    return <AccessGate />;
   }
 
-  const signOut = () => {
-    clearFriendSession();
+  const signOut = async () => {
+    await logout();
     setSession(null);
     setStats(null);
     setSignal(null);
+    setMfaStatus(null);
+    setAdminElevated(false);
+    setAdminAccounts([]);
   };
 
   return (
@@ -288,12 +311,11 @@ export function App() {
       <Header
         stats={stats}
         loading={loading}
-        operator={Boolean(operatorToken)}
+        operator={adminElevated}
         onRefresh={refresh}
-        onLock={() => { lockOperator(); setOperatorToken(""); setAdminAccounts([]); }}
       />
       <div className="app-grid">
-        <Navigation view={view} onChange={setView} onSignOut={signOut} />
+        <Navigation view={view} onChange={setView} onSignOut={signOut} email={session.email} />
         <main className="signal-main" id="main-content">
           {error && <div className="signal-error" role="alert">SIGNAL INTERRUPTED // {error}</div>}
           {view === "pulse" && <Pulse stats={stats} signal={signal} onAccounts={() => setView("accounts")} />}
@@ -302,11 +324,13 @@ export function App() {
           {view === "accounts" && (
             <Accounts
               stats={stats}
+              isAdmin={session.is_admin}
+              mfaStatus={mfaStatus}
+              adminElevated={adminElevated}
               adminAccounts={adminAccounts}
-              operatorToken={operatorToken}
-              onUnlocked={(token, accounts) => { setOperatorToken(token); setAdminAccounts(accounts); }}
+              onElevated={() => refreshAdminState(session.is_admin)}
               onAccountsChanged={async () => {
-				if (!operatorToken) {
+				if (!adminElevated) {
 				  await refresh();
 				  return;
 				}
@@ -317,6 +341,16 @@ export function App() {
           )}
 		  {view === "models" && <Models models={models} />}
           {view === "setup" && <Setup session={session} />}
+          {view === "profile" && (
+            <Profile
+              email={session.email}
+              isAdmin={session.is_admin}
+              mfaStatus={mfaStatus}
+              adminElevated={adminElevated}
+              onElevated={() => refreshAdminState(session.is_admin)}
+              onSignOut={signOut}
+            />
+          )}
         </main>
       </div>
     </div>
@@ -337,24 +371,15 @@ function BootScreen() {
   );
 }
 
-function AccessGate({ onAccess }: { onAccess: (session: FriendSession) => void }) {
-  const [code, setCode] = useState(storedFriendCode());
-  const [email, setEmail] = useState(storedFriendEmail());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+const ACCESS_GATE_ERRORS: Record<string, string> = {
+  not_allowed: "That Google account isn't on the allowlist. Ask an operator to add you.",
+  oauth_failed: "Sign-in didn't complete. Try again.",
+  system_error: "System error — the pool isn't fully configured yet.",
+};
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      onAccess(await claim(code.trim(), email.trim()));
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Access denied");
-    } finally {
-      setBusy(false);
-    }
-  };
+function AccessGate() {
+  const errorCode = new URLSearchParams(window.location.search).get("error");
+  const errorMessage = errorCode ? (ACCESS_GATE_ERRORS[errorCode] ?? "Access denied") : "";
 
   return (
     <div className="access-gate">
@@ -365,29 +390,18 @@ function AccessGate({ onAccess }: { onAccess: (session: FriendSession) => void }
         <div className="access-name">Friends of PP</div>
         <h1>Full-Spectrum Signal Room</h1>
         <p>For the few who know. The charts are nosy.</p>
-        <form onSubmit={submit} className="access-form">
-          <label>
-            <span>Friend code</span>
-            <input value={code} onChange={(event) => setCode(event.target.value)} required autoFocus autoComplete="off" />
-          </label>
-          <label>
-            <span>Email <i>optional</i></span>
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" />
-          </label>
-          {error && <div className="access-error" role="alert">{error}</div>}
-          <button className="gold-button" disabled={busy}>{busy ? "TUNING…" : "ENTER POOL"}</button>
-        </form>
+        {errorMessage && <div className="access-error" role="alert">{errorMessage}</div>}
+        <a className="gold-button access-google-button" href="/auth/login/google">SIGN IN WITH GOOGLE</a>
       </div>
     </div>
   );
 }
 
-function Header({ stats, loading, operator, onRefresh, onLock }: {
+function Header({ stats, loading, operator, onRefresh }: {
   stats: PoolStats | null;
   loading: boolean;
   operator: boolean;
   onRefresh: () => void;
-  onLock: () => void;
 }) {
   const generated = stats ? new Date(stats.generated_at) : null;
   return (
@@ -405,13 +419,13 @@ function Header({ stats, loading, operator, onRefresh, onLock }: {
         <span>24H {formatTokens(stats?.last_24h_tokens ?? 0)}</span>
         <span>{generated ? generated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}</span>
         <button onClick={onRefresh} disabled={loading}>{loading ? "SYNCING" : "SYNC"}</button>
-        {operator && <button className="operator-live" onClick={onLock}>OPERATOR LIVE // LOCK</button>}
+        {operator && <span className="operator-live">OPERATOR LIVE</span>}
       </div>
     </header>
   );
 }
 
-function Navigation({ view, onChange, onSignOut }: { view: View; onChange: (view: View) => void; onSignOut: () => void }) {
+function Navigation({ view, onChange, onSignOut, email }: { view: View; onChange: (view: View) => void; onSignOut: () => void; email: string }) {
   const items: Array<[View, string, string]> = [
     ["pulse", "PULSE", "⌁"],
     ["insights", "INSIGHTS", "△"],
@@ -429,6 +443,9 @@ function Navigation({ view, onChange, onSignOut }: { view: View; onChange: (view
         </button>
       ))}
       <div className="nav-spacer" />
+      <button className={classNames("nav-item", "nav-user", view === "profile" && "active")} onClick={() => onChange("profile")} title={email}>
+        <span>◍</span>{email}
+      </button>
       <button className="nav-item sign-out" onClick={onSignOut}><span>×</span>EXIT</button>
     </nav>
   );
@@ -1243,11 +1260,13 @@ function Usage({ stats, signal, session }: { stats: PoolStats | null; signal: Si
   );
 }
 
-function Accounts({ stats, adminAccounts, operatorToken, onUnlocked, onAccountsChanged }: {
+function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
   stats: PoolStats | null;
   adminAccounts: AdminAccount[];
-  operatorToken: string;
-  onUnlocked: (token: string, accounts: AdminAccount[]) => void;
+  isAdmin: boolean;
+  mfaStatus: MFAStatus | null;
+  adminElevated: boolean;
+  onElevated: () => void;
   onAccountsChanged: () => Promise<void>;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -1289,8 +1308,8 @@ function Accounts({ stats, adminAccounts, operatorToken, onUnlocked, onAccountsC
         <p>Every paid seat, what it burned, and whether it deserves to stay plugged in.</p>
         <div className="account-title-actions">
           <button className="contribute-button" onClick={() => setContributing(true)}>＋ CONTRIBUTE ACCOUNT</button>
-          {!operatorToken && <button className="unlock-button" onClick={() => setUnlocking(true)}>⌑ UNLOCK CONTROLS</button>}
-          {operatorToken && <button className="operator-badge" onClick={async () => { await reloadAccounts(); await onAccountsChanged(); }}>OPERATOR // RELOAD POOL</button>}
+          {isAdmin && !adminElevated && <button className="unlock-button" onClick={() => setUnlocking(true)}>⌑ {mfaStatus?.enrolled ? "UNLOCK CONTROLS" : "SET UP 2FA"}</button>}
+          {adminElevated && <button className="operator-badge" onClick={async () => { await reloadAccounts(); await onAccountsChanged(); }}>OPERATOR // RELOAD POOL</button>}
         </div>
       </div>
       <div className={classNames("accounts-layout", selectedAdmin && "inspecting")}>
@@ -1303,7 +1322,7 @@ function Accounts({ stats, adminAccounts, operatorToken, onUnlocked, onAccountsC
             const rowID = adminMatch?.id ?? account.id;
             return (
               <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span>{operatorToken && adminMatch ? adminMatch.id : account.id}</span></small></span>
+                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span>{adminElevated && adminMatch ? adminMatch.id : account.id}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1366,7 +1385,11 @@ function Accounts({ stats, adminAccounts, operatorToken, onUnlocked, onAccountsC
                     {message && <div className="operator-message" role="status">{message}</div>}
                   </>
                 ) : (
-                  <div className="locked-inspector"><span>⌑</span><b>OPERATOR CONTROLS LOCKED</b><p>Reset windows and account economics stay visible. Unlock only to change pool state.</p><button onClick={() => setUnlocking(true)}>UNLOCK CONTROLS</button></div>
+                  <div className="locked-inspector">
+                    <span>⌑</span><b>OPERATOR CONTROLS LOCKED</b>
+                    <p>Reset windows and account economics stay visible. Unlock only to change pool state.</p>
+                    {isAdmin && <button onClick={() => setUnlocking(true)}>{mfaStatus?.enrolled ? "UNLOCK CONTROLS" : "SET UP 2FA"}</button>}
+                  </div>
                 )}
               </>
             ) : null}
@@ -1374,22 +1397,35 @@ function Accounts({ stats, adminAccounts, operatorToken, onUnlocked, onAccountsC
         )}
       </div>
       {contributing && <AccountContribution onClose={() => setContributing(false)} onAdded={async () => { await onAccountsChanged(); setContributing(false); }} />}
-      {unlocking && <OperatorUnlock onClose={() => setUnlocking(false)} onUnlocked={(token, accounts) => { onUnlocked(token, accounts); setUnlocking(false); }} />}
+      {unlocking && <AdminMFAGate enrolled={Boolean(mfaStatus?.enrolled)} onClose={() => setUnlocking(false)} onElevated={() => { onElevated(); setUnlocking(false); }} />}
     </div>
   );
 }
 
-type ContributableProvider = "codex" | "claude" | "antigravity" | "kimi" | "minimax" | "zai" | "xiaomi" | "grok";
+type ContributableProvider = "codex" | "claude" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia";
 
-const CONTRIBUTION_PROVIDERS: Array<{ id: ContributableProvider; label: string; mode: "oauth" | "key" | "json" }> = [
-  { id: "codex", label: "Codex", mode: "oauth" },
-  { id: "claude", label: "Claude", mode: "oauth" },
-	  { id: "antigravity", label: "Google Antigravity", mode: "oauth" },
-  { id: "kimi", label: "Kimi", mode: "key" },
-  { id: "minimax", label: "MiniMax", mode: "key" },
-  { id: "zai", label: "Z.ai", mode: "key" },
-  { id: "xiaomi", label: "Xiaomi", mode: "key" },
-  { id: "grok", label: "Grok", mode: "json" },
+type ContributionGroup = "Sign in" | "Paste API key" | "Aggregators" | "Paste JSON";
+
+// Ordered for display; grouped by auth mode (what actually determines the
+// form below the picker) rather than a flat list - with 12 providers, an
+// undifferentiated button grid becomes exactly the "excessive pills" /
+// "equal visual weight" pattern this app's design system rules out.
+const CONTRIBUTION_GROUPS: ContributionGroup[] = ["Sign in", "Paste API key", "Aggregators", "Paste JSON"];
+
+const CONTRIBUTION_PROVIDERS: Array<{ id: ContributableProvider; label: string; mode: "oauth" | "key" | "json"; group: ContributionGroup; keyHint?: string }> = [
+  { id: "codex", label: "Codex", mode: "oauth", group: "Sign in" },
+  { id: "claude", label: "Claude", mode: "oauth", group: "Sign in" },
+	  { id: "antigravity", label: "Google Antigravity", mode: "oauth", group: "Sign in" },
+  { id: "kimi", label: "Kimi (Coding Plan)", mode: "key", group: "Paste API key", keyHint: "Needs a key from the Kimi Code Console's coding plan - a general Moonshot/Kimi Platform API key will not authenticate here. Have one of those instead? Use \"Kimi (Platform Key)\" below." },
+  { id: "minimax", label: "MiniMax", mode: "key", group: "Paste API key" },
+  { id: "zai", label: "Z.ai", mode: "key", group: "Paste API key", keyHint: "Needs a GLM Coding Plan key, not a general Z.ai API key." },
+  { id: "xiaomi", label: "Xiaomi", mode: "key", group: "Paste API key", keyHint: "Needs a MiMo Token Plan key, not a general Xiaomi API key." },
+  { id: "deepseek", label: "DeepSeek", mode: "key", group: "Paste API key" },
+  { id: "qwen", label: "Qwen", mode: "key", group: "Paste API key", keyHint: "Needs a key from DashScope's Coding Plan, not a general Model Studio API key." },
+  { id: "kimi-platform", label: "Kimi (Platform Key)", mode: "key", group: "Aggregators", keyHint: "A pay-as-you-go Kimi Open Platform key. Use a real Open Platform model such as \"kimi-k3\" or \"kimi-k2.7-code\" (the optional \"kimi-platform/\" prefix is also accepted). Keys from platform.kimi.ai and platform.kimi.com are not interchangeable; the server endpoint must match the platform where the key was created." },
+  { id: "openrouter", label: "OpenRouter", mode: "key", group: "Aggregators" },
+  { id: "nvidia", label: "NVIDIA", mode: "key", group: "Aggregators" },
+  { id: "grok", label: "Grok", mode: "json", group: "Paste JSON" },
 ];
 
 function oauthCode(value: string) {
@@ -1487,7 +1523,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
       } else if (selected.mode === "json") {
         await contributeGrok(credential);
       } else {
-        await contributeAPIKey(provider as "kimi" | "minimax" | "zai" | "xiaomi", credential);
+        await contributeAPIKey(provider as "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "deepseek" | "qwen" | "openrouter" | "nvidia", credential);
       }
       await onAdded();
     } catch (cause) {
@@ -1503,8 +1539,19 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
         <span>FRIEND UPLINK // CREDENTIALS GO STRAIGHT TO THE POOL</span>
         <h2 id="contribution-title">Contribute an account</h2>
         <p>Add capacity without unlocking operator controls. We validate the credential before it joins the rotation.</p>
-        <div className="contribution-providers" aria-label="Provider">
-          {CONTRIBUTION_PROVIDERS.map((candidate) => <button type="button" key={candidate.id} className={provider === candidate.id ? "active" : ""} onClick={() => choose(candidate.id)}>{candidate.label}</button>)}
+        <div className="contribution-groups" aria-label="Provider">
+          {CONTRIBUTION_GROUPS.map((group) => (
+            <div className="contribution-group" key={group}>
+              <span className="contribution-group-label">{group}</span>
+              <div className="contribution-group-rows">
+                {CONTRIBUTION_PROVIDERS.filter((candidate) => candidate.group === group).map((candidate) => (
+                  <button type="button" key={candidate.id} className={classNames("contribution-row", provider === candidate.id && "active")} onClick={() => choose(candidate.id)}>
+                    {candidate.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
         {selected.mode === "oauth" ? (
           <div className="contribution-oauth">
@@ -1520,7 +1567,11 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
         ) : selected.mode === "json" ? (
           <label className="contribution-field"><span>Grok auth JSON</span><textarea value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus spellCheck={false} /></label>
         ) : (
-          <label className="contribution-field"><span>{selected.label} API key</span><input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus autoComplete="off" /></label>
+          <label className="contribution-field">
+            <span>{selected.label} API key</span>
+            <input type="password" value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus autoComplete="off" />
+            {selected.keyHint && <small className="contribution-key-hint">{selected.keyHint}</small>}
+          </label>
         )}
         {error && <div className="access-error" role="alert">{error}</div>}
         <div><button type="button" onClick={onClose}>CANCEL</button>{(selected.mode !== "oauth" || oauth) && <button className="gold-button" disabled={busy || !credential.trim()}>{busy ? "VALIDATING" : "ADD TO POOL"}</button>}</div>
@@ -1529,31 +1580,141 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
   );
 }
 
-function OperatorUnlock({ onClose, onUnlocked }: { onClose: () => void; onUnlocked: (token: string, accounts: AdminAccount[]) => void }) {
-  const [token, setToken] = useState("");
+// TOTPQRCode renders an otpauth:// URI as a scannable QR code, generated
+// client-side (the secret never needs to touch a third-party QR service).
+function TOTPQRCode({ value }: { value: string }) {
+  const [dataURL, setDataURL] = useState("");
+  useEffect(() => {
+    if (!value) return;
+    let active = true;
+    QRCode.toDataURL(value, { width: 220, margin: 1, color: { dark: "#070706", light: "#f3ecd6" } })
+      .then((url) => { if (active) setDataURL(url); })
+      .catch(() => { /* the manual key below still works if this fails */ });
+    return () => { active = false; };
+  }, [value]);
+  if (!dataURL) return null;
+  return (
+    <div className="mfa-qr-frame">
+      <img src={dataURL} alt="Scan with your authenticator app" width={180} height={180} />
+    </div>
+  );
+}
+
+// AdminMFAGate walks an admin-listed, signed-in user through whichever
+// step applies: first-time TOTP enrollment (QR + confirm code, then a
+// one-time recovery-codes reveal), or ordinary re-elevation (a fresh code,
+// or a recovery code if the authenticator is unavailable).
+function AdminMFAGate({ enrolled, onClose, onElevated }: { enrolled: boolean; onClose: () => void; onElevated: () => void }) {
+  const [phase, setPhase] = useState<"loading" | "enroll" | "verify" | "recovery">(enrolled ? "verify" : "loading");
+  const [secret, setSecret] = useState("");
+  const [otpauthURL, setOtpauthURL] = useState("");
+  const [code, setCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
+  const [savedConfirmed, setSavedConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const submit = async (event: FormEvent) => {
+
+  useEffect(() => {
+    if (enrolled) return;
+    let active = true;
+    enrollMFA()
+      .then((result) => {
+        if (!active) return;
+        setSecret(result.secret);
+        setOtpauthURL(result.otpauth_url);
+        setPhase("enroll");
+      })
+      .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "Failed to start enrollment"); });
+    return () => { active = false; };
+  }, [enrolled]);
+
+  const submitEnrollConfirm = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      onUnlocked(token, await unlockOperator(token));
+      const result = await confirmMFA(code);
+      setRecoveryCodes(result.recovery_codes);
+      setPhase("recovery");
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unlock failed");
+      setError(cause instanceof Error ? cause.message : "Invalid code");
     } finally {
       setBusy(false);
     }
   };
+
+  const submitVerify = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      await verifyMFA(useRecoveryCode ? { recoveryCode } : { code });
+      onElevated();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Invalid code");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="operator-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <form className="operator-dialog" onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="operator-title">
-        <span>PRIVILEGED FREQUENCY // SESSION ONLY</span>
-        <h2 id="operator-title">Unlock operator controls</h2>
-        <p>The token stays in this tab. Refreshing the planet remains unsupported.</p>
-        <input type="password" value={token} onChange={(event) => setToken(event.target.value)} autoFocus aria-label="Admin token" />
-        {error && <div className="access-error" role="alert">{error}</div>}
-        <div><button type="button" onClick={onClose}>CANCEL</button><button className="gold-button" disabled={busy || !token}>{busy ? "VERIFYING" : "UNLOCK"}</button></div>
+    <div className="operator-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && phase !== "recovery") onClose(); }}>
+      <form className="operator-dialog" onSubmit={phase === "enroll" ? submitEnrollConfirm : submitVerify} role="dialog" aria-modal="true" aria-labelledby="operator-title">
+        {phase === "loading" && <p>Preparing two-factor setup…</p>}
+
+        {phase === "enroll" && (
+          <>
+            <span>PRIVILEGED FREQUENCY // TWO-FACTOR SETUP</span>
+            <h2 id="operator-title">Set up two-factor authentication</h2>
+            <p>Scan this with an authenticator app (Google Authenticator, Authy, 1Password), then confirm with the code it shows.</p>
+            <TOTPQRCode value={otpauthURL} />
+            <details className="mfa-manual-key"><summary>Can't scan? Enter this key manually</summary><code>{secret}</code></details>
+            <label className="contribution-field"><span>6-digit code</span>
+              <input value={code} onChange={(event) => setCode(event.target.value)} autoFocus inputMode="numeric" maxLength={6} autoComplete="off" />
+            </label>
+            {error && <div className="access-error" role="alert">{error}</div>}
+            <div><button type="button" onClick={onClose}>CANCEL</button><button className="gold-button" disabled={busy || code.length !== 6}>{busy ? "VERIFYING" : "CONFIRM"}</button></div>
+          </>
+        )}
+
+        {phase === "verify" && (
+          <>
+            <span>PRIVILEGED FREQUENCY // TWO-FACTOR</span>
+            <h2 id="operator-title">Unlock operator controls</h2>
+            {!useRecoveryCode ? (
+              <label className="contribution-field"><span>6-digit code</span>
+                <input value={code} onChange={(event) => setCode(event.target.value)} autoFocus inputMode="numeric" maxLength={6} autoComplete="off" />
+              </label>
+            ) : (
+              <label className="contribution-field"><span>Recovery code</span>
+                <input value={recoveryCode} onChange={(event) => setRecoveryCode(event.target.value)} autoFocus autoComplete="off" placeholder="xxxx-xxxx-xxxx" />
+              </label>
+            )}
+            <button type="button" className="mfa-recovery-toggle" onClick={() => setUseRecoveryCode((v) => !v)}>
+              {useRecoveryCode ? "USE AUTHENTICATOR CODE INSTEAD" : "USE A RECOVERY CODE INSTEAD"}
+            </button>
+            {error && <div className="access-error" role="alert">{error}</div>}
+            <div>
+              <button type="button" onClick={onClose}>CANCEL</button>
+              <button className="gold-button" disabled={busy || (useRecoveryCode ? !recoveryCode.trim() : code.length !== 6)}>{busy ? "VERIFYING" : "UNLOCK"}</button>
+            </div>
+          </>
+        )}
+
+        {phase === "recovery" && (
+          <>
+            <span>SAVE THESE NOW // SHOWN ONCE</span>
+            <h2 id="operator-title">Your recovery codes</h2>
+            <p>Each code works once, if you ever lose access to your authenticator app. Save them somewhere safe - they won't be shown again.</p>
+            <div className="recovery-codes">{recoveryCodes.map((rc) => <code key={rc}>{rc}</code>)}</div>
+            <label className="mfa-saved-confirm">
+              <input type="checkbox" checked={savedConfirmed} onChange={(event) => setSavedConfirmed(event.target.checked)} /> I've saved these recovery codes
+            </label>
+            <div><button type="button" className="gold-button" disabled={!savedConfirmed} onClick={onElevated}>CONTINUE</button></div>
+          </>
+        )}
       </form>
     </div>
   );
@@ -1617,6 +1778,102 @@ function Models({ models }: { models: ModelDescriptor[] }) {
 			</div>
 		</div>
 	);
+}
+
+function Profile({ email, isAdmin, mfaStatus, adminElevated, onElevated, onSignOut }: {
+  email: string;
+  isAdmin: boolean;
+  mfaStatus: MFAStatus | null;
+  adminElevated: boolean;
+  onElevated: () => void;
+  onSignOut: () => void;
+}) {
+  const [unlocking, setUnlocking] = useState(false);
+  const [regenerating, setRegenerating] = useState<"full" | "codes" | null>(null);
+  const [freshSecret, setFreshSecret] = useState<{ secret: string; otpauth_url: string } | null>(null);
+  const [freshCodes, setFreshCodes] = useState<string[]>([]);
+  const [savedConfirmed, setSavedConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const runRegenerate = async (mode: "full" | "codes") => {
+    setBusy(true);
+    setError("");
+    try {
+      if (mode === "full") {
+        const result = await regenerateMFA();
+        setFreshSecret({ secret: result.secret, otpauth_url: result.otpauth_url });
+        setFreshCodes(result.recovery_codes);
+      } else {
+        const result = await regenerateRecoveryCodes();
+        setFreshSecret(null);
+        setFreshCodes(result.recovery_codes);
+      }
+      setSavedConfirmed(false);
+      setRegenerating(mode);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Failed to regenerate");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="signal-view profile-view">
+      <div className="view-title"><span>P.00</span><h1>Profile</h1><p>Who's holding this session, and how to end it.</p></div>
+      <div className="profile-card">
+        <div className="profile-row"><span>Signed in as</span><b>{email}</b></div>
+        <div className="profile-row"><span>Provider</span><b>Google</b></div>
+        <button className="unlock-button" onClick={onSignOut}>SIGN OUT</button>
+      </div>
+
+      {isAdmin && !regenerating && (
+        <div className="profile-card">
+          <div className="profile-row"><span>Two-factor authentication</span><b>{mfaStatus?.enrolled ? (adminElevated ? "Elevated" : "Locked") : "Not set up"}</b></div>
+          {mfaStatus?.enrolled && (
+            <div className="profile-row"><span>Recovery codes</span><b>{mfaStatus.recovery_codes_remaining} of 10 unused</b></div>
+          )}
+          <div className="account-title-actions">
+            {!mfaStatus?.enrolled && <button className="unlock-button" onClick={() => setUnlocking(true)}>SET UP 2FA</button>}
+            {mfaStatus?.enrolled && !adminElevated && <button className="unlock-button" onClick={() => setUnlocking(true)}>UNLOCK</button>}
+            {mfaStatus?.enrolled && adminElevated && (
+              <>
+                <button className="unlock-button" disabled={busy} onClick={() => runRegenerate("codes")}>REGENERATE RECOVERY CODES</button>
+                <button className="unlock-button" disabled={busy} onClick={() => runRegenerate("full")}>REGENERATE 2FA</button>
+              </>
+            )}
+          </div>
+          {error && <div className="access-error" role="alert">{error}</div>}
+        </div>
+      )}
+
+      {regenerating && (
+        <div className="profile-card">
+          {freshSecret && (
+            <>
+              <div className="profile-row"><span>New authenticator key</span></div>
+              <TOTPQRCode value={freshSecret.otpauth_url} />
+              <details className="mfa-manual-key"><summary>Can't scan? Enter this key manually</summary><code>{freshSecret.secret}</code></details>
+            </>
+          )}
+          <p>Save these recovery codes now - they won't be shown again.</p>
+          <div className="recovery-codes">{freshCodes.map((rc) => <code key={rc}>{rc}</code>)}</div>
+          <label className="mfa-saved-confirm">
+            <input type="checkbox" checked={savedConfirmed} onChange={(event) => setSavedConfirmed(event.target.checked)} /> I've saved these
+          </label>
+          <button className="gold-button" disabled={!savedConfirmed} onClick={() => setRegenerating(null)}>DONE</button>
+        </div>
+      )}
+
+      {unlocking && (
+        <AdminMFAGate
+          enrolled={Boolean(mfaStatus?.enrolled)}
+          onClose={() => setUnlocking(false)}
+          onElevated={() => { onElevated(); setUnlocking(false); }}
+        />
+      )}
+    </div>
+  );
 }
 
 function Setup({ session }: { session: FriendSession }) {

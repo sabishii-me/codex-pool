@@ -146,8 +146,12 @@ func (h *proxyHandler) pollUpstreamUsage() {
 			continue
 		}
 
-		// Xiaomi doesn't document a proactive usage endpoint; request usage is parsed from responses.
-		if accType == AccountTypeXiaomi {
+		// These static-key providers do not expose a compatible proactive usage
+		// endpoint. Usage is either parsed from inference responses or unavailable.
+		// Never send their credentials to the Codex WHAM endpoint below.
+		if accType == AccountTypeXiaomi || accType == AccountTypeKimiPlatform ||
+			accType == AccountTypeDeepSeek || accType == AccountTypeQwen ||
+			accType == AccountTypeOpenRouter || accType == AccountTypeNvidia {
 			continue
 		}
 

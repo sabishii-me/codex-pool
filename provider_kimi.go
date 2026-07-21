@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-// KimiProvider handles Kimi API accounts.
+// KimiProvider handles Kimi "for Coding" plan accounts (api.kimi.com/coding) -
+// a distinct product/key from Moonshot's general Kimi Platform API.
 type KimiProvider struct {
 	kimiBase *url.URL
 }

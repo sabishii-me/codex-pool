@@ -189,8 +189,10 @@ func serveNoopCodexAppsMCP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// checkAdminAuth verifies the admin token from its request header.
-// Returns true if authorized, false if not (and sends 401 response).
+// checkAdminAuth verifies the caller is a signed-in, admin-listed, MFA-
+// elevated session. Returns true if authorized, false if not (and sends an
+// error response - 401 for missing identity/elevation, 403 for a
+// signed-in but non-admin email).
 func (h *proxyHandler) checkAdminAuth(w http.ResponseWriter, r *http.Request) bool {
 	ip := getClientIP(r)
 	if h.bruteForce != nil && h.bruteForce.isBanned(ip) {
@@ -198,37 +200,36 @@ func (h *proxyHandler) checkAdminAuth(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 
-	if h.cfg.adminToken == "" {
-		// No admin token configured - deny all admin access
-		log.Printf("admin auth: no token configured")
-		http.Error(w, "admin access disabled", http.StatusForbidden)
+	user, ok := h.sessionUser(r)
+	if !ok {
+		http.Error(w, "sign in required", http.StatusUnauthorized)
 		return false
 	}
 
-	// Secrets belong in headers, never URLs or logs.
-	token := r.Header.Get("X-Admin-Token")
-
-	if h.cfg.debug.Load() {
-		log.Printf("admin auth: credential_present=%v", token != "")
-	}
-
-	if token != h.cfg.adminToken {
+	if !adminEmailAllowed(h.cfg.adminEmails, user.Email) {
 		if h.bruteForce != nil {
 			h.bruteForce.recordFailure(ip)
 		}
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		http.Error(w, "not an admin", http.StatusForbidden)
 		return false
 	}
+
+	if !adminElevated(r, user.ID) {
+		http.Error(w, "two-factor verification required", http.StatusUnauthorized)
+		return false
+	}
+
 	if h.bruteForce != nil {
 		h.bruteForce.recordSuccess(ip)
 	}
 	return true
 }
 
-// checkAdminOrFriendAuth verifies either the admin token or the friend code.
-// This is used for "pool stats" endpoints that are intended to be accessible in friend mode
-// (with the friend code) while still allowing admin access when configured.
-func (h *proxyHandler) checkAdminOrFriendAuth(w http.ResponseWriter, r *http.Request) bool {
+// checkAdminOrSessionAuth verifies a signed-in pool session (the Google
+// OAuth gate). This is used for "pool stats" endpoints that are intended to
+// be accessible to any signed-in pool user - admin status isn't relevant
+// here, that's what checkAdminAuth is for.
+func (h *proxyHandler) checkAdminOrSessionAuth(w http.ResponseWriter, r *http.Request) bool {
 	ip := getClientIP(r)
 	if h.bruteForce != nil && h.bruteForce.isBanned(ip) {
 		http.Error(w, "too many failed attempts, try again later", http.StatusTooManyRequests)
@@ -236,31 +237,15 @@ func (h *proxyHandler) checkAdminOrFriendAuth(w http.ResponseWriter, r *http.Req
 	}
 
 	// If nothing is configured, treat as an open/local deployment.
-	if h.cfg.adminToken == "" && h.cfg.friendCode == "" {
+	if h.cfg.oauthGoogleClientID == "" {
 		return true
 	}
 
-	// Admin credentials are header-only for the same reason as friend codes.
-	if h.cfg.adminToken != "" {
-		headerToken := r.Header.Get("X-Admin-Token")
-		if headerToken == h.cfg.adminToken {
-			if h.bruteForce != nil {
-				h.bruteForce.recordSuccess(ip)
-			}
-			return true
+	if _, ok := h.sessionUser(r); ok {
+		if h.bruteForce != nil {
+			h.bruteForce.recordSuccess(ip)
 		}
-	}
-
-	// Friend credentials are accepted only in a header. Query-string secrets
-	// leak into browser history, reverse-proxy logs, analytics, and referrers.
-	if h.cfg.friendCode != "" {
-		headerCode := r.Header.Get("X-Friend-Code")
-		if headerCode == h.cfg.friendCode {
-			if h.bruteForce != nil {
-				h.bruteForce.recordSuccess(ip)
-			}
-			return true
-		}
+		return true
 	}
 
 	if h.bruteForce != nil {
@@ -300,11 +285,38 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/hero.png", "/hero.webp":
 		h.serveHeroImage(w, r)
 		return
-	case "/api/friend/claim":
-		h.handleFriendClaim(w, r)
+	case "/auth/login/google":
+		h.handleGoogleLoginStart(w, r)
+		return
+	case "/auth/callback/google":
+		h.handleGoogleLoginCallback(w, r)
+		return
+	case "/auth/logout":
+		h.handleLogout(w, r)
+		return
+	case "/api/pool/session":
+		h.handlePoolSession(w, r)
+		return
+	case "/api/admin/mfa/status":
+		h.handleMFAStatus(w, r)
+		return
+	case "/api/admin/mfa/enroll":
+		h.handleMFAEnroll(w, r)
+		return
+	case "/api/admin/mfa/confirm":
+		h.handleMFAConfirm(w, r)
+		return
+	case "/api/admin/mfa/verify":
+		h.handleMFAVerify(w, r)
+		return
+	case "/api/admin/mfa/regenerate":
+		h.handleMFARegenerate(w, r)
+		return
+	case "/api/admin/mfa/regenerate-codes":
+		h.handleMFARegenerateCodes(w, r)
 		return
 	case "/api/pool/stats":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handlePoolStats(w, r)
@@ -313,37 +325,37 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.handleWhoami(w, r)
 		return
 	case "/api/pool/users":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handlePoolUsers(w, r)
 		return
 	case "/api/pool/origins":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handlePoolOrigins(w, r)
 		return
 	case "/api/pool/daily-breakdown":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handleDailyBreakdown(w, r)
 		return
 	case "/api/pool/hourly":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handleGlobalHourly(w, r)
 		return
 	case "/api/pool/signal":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handleSignalAnalytics(w, r)
 		return
 	case "/api/pool/catalog":
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		if r.Method != http.MethodGet {
@@ -484,7 +496,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// User daily usage: /api/pool/users/:id/daily
 	if strings.HasPrefix(r.URL.Path, "/api/pool/users/") && strings.HasSuffix(r.URL.Path, "/daily") {
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handleUserDaily(w, r)
@@ -493,7 +505,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// User hourly usage: /api/pool/users/:id/hourly
 	if strings.HasPrefix(r.URL.Path, "/api/pool/users/") && strings.HasSuffix(r.URL.Path, "/hourly") {
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		h.handleUserHourly(w, r)
@@ -533,7 +545,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Friends may contribute new provider credentials, but cannot inspect raw
 	// account identities, remove accounts, or mutate existing provider state.
 	if strings.HasPrefix(r.URL.Path, "/api/pool/accounts/") {
-		if !h.checkAdminOrFriendAuth(w, r) {
+		if !h.checkAdminOrSessionAuth(w, r) {
 			return
 		}
 		if r.Method != http.MethodPost {
@@ -558,6 +570,8 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.handleAntigravityExchange(w, r)
 		case "/api/pool/accounts/kimi/add":
 			h.handleKimiAdd(w, r)
+		case "/api/pool/accounts/kimi-platform/add":
+			h.handleKimiPlatformAdd(w, r)
 		case "/api/pool/accounts/minimax/add":
 			h.handleMinimaxAdd(w, r)
 		case "/api/pool/accounts/zai/add":
@@ -566,6 +580,14 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.handleXiaomiAdd(w, r)
 		case "/api/pool/accounts/grok/add":
 			h.handleGrokImport(w, r)
+		case "/api/pool/accounts/deepseek/add":
+			h.handleDeepSeekAdd(w, r)
+		case "/api/pool/accounts/qwen/add":
+			h.handleQwenAdd(w, r)
+		case "/api/pool/accounts/openrouter/add":
+			h.handleOpenRouterAdd(w, r)
+		case "/api/pool/accounts/nvidia/add":
+			h.handleNvidiaAdd(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -624,6 +646,14 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(r.URL.Path, "/admin/kimi-platform") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		h.serveKimiPlatformAdmin(w, r)
+		return
+	}
+
 	if strings.HasPrefix(r.URL.Path, "/admin/kimi") {
 		if !h.checkAdminAuth(w, r) {
 			return
@@ -661,6 +691,38 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.serveGrokAdmin(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/admin/deepseek") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		h.serveDeepSeekAdmin(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/admin/qwen") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		h.serveQwenAdmin(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/admin/openrouter") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		h.serveOpenRouterAdmin(w, r)
+		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/admin/nvidia") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		h.serveNvidiaAdmin(w, r)
 		return
 	}
 

@@ -38,6 +38,16 @@ var poolModels = []poolModel{
 	{AccountType: AccountTypeKimi, ID: "kimi-for-coding", DisplayName: "kimi-for-coding", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"kimi", "k2p5", "kimi-k2-thinking"}},
 	{AccountType: AccountTypeKimi, ID: "kimi-for-coding-highspeed", DisplayName: "kimi-for-coding-highspeed", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
 
+	// Kimi Open Platform is a separate pay-as-you-go product from the Kimi
+	// Coding Plan. Keep its real model IDs and limits aligned with the official
+	// Open Platform catalog; "kimi-for-coding" belongs only to AccountTypeKimi.
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k3", DisplayName: "Kimi K3", Description: "Latest Moonshot/Kimi Open Platform frontier model.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k3[1m]", DisplayName: "Kimi K3 (Anthropic 1M alias)", Description: "Kimi K3 alias documented for Anthropic-compatible clients.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.7-code", DisplayName: "Kimi K2.7-Code", Description: "Open Platform coding model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.7-code-highspeed", DisplayName: "Kimi K2.7-Code Highspeed", Description: "Open Platform coding model, faster inference.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.6", DisplayName: "Kimi K2.6", Description: "Open Platform general-purpose model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.5", DisplayName: "Kimi K2.5", Description: "Open Platform legacy model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+
 	{AccountType: AccountTypeMinimax, ID: "MiniMax-M3", DisplayName: "MiniMax-M3", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"minimax", "minimax-m3"}},
 	{AccountType: AccountTypeMinimax, ID: "MiniMax-M2.7", DisplayName: "MiniMax-M2.7", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
 	{AccountType: AccountTypeMinimax, ID: "MiniMax-M2.7-highspeed", DisplayName: "MiniMax-M2.7-Highspeed", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
@@ -45,6 +55,19 @@ var poolModels = []poolModel{
 	{AccountType: AccountTypeZAI, ID: "glm-5.2", DisplayName: "GLM-5.2", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}},
 
 	{AccountType: AccountTypeXiaomi, ID: "mimo-v2.5-pro", DisplayName: "MiMo-V2.5-Pro", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text"}, Aliases: []string{"mimo-v2.5-pro[1m]"}},
+
+	{AccountType: AccountTypeDeepSeek, ID: "deepseek-v4-flash", DisplayName: "DeepSeek-V4-Flash", Description: "Fast, cost-efficient DeepSeek model (non-thinking mode).", ContextWindow: 128000, MaxTokens: 32768, Reasoning: false, Input: []string{"text"}, Aliases: []string{"deepseek-flash"}},
+	{AccountType: AccountTypeDeepSeek, ID: "deepseek-v4-pro", DisplayName: "DeepSeek-V4-Pro", Description: "Frontier DeepSeek reasoning model.", ContextWindow: 128000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"deepseek-pro", "deepseek"}},
+
+	{AccountType: AccountTypeQwen, ID: "qwen3.6-plus", DisplayName: "Qwen3.6-Plus", Description: "Alibaba's flagship agentic coding model (Coding Plan).", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"qwen", "qwen-coder", "qwen3-coder"}},
+
+	// OpenRouter and NVIDIA are aggregators with no fixed catalog - any
+	// "openrouter/<vendor>/<model>" or "nvidia/<vendor>/<model>" slug routes
+	// to a pooled account of that type, prefix stripped before forwarding
+	// upstream (see isOpenRouterModel/isNvidiaModel). These entries exist only
+	// so the Models tab shows a discoverable, working example of each.
+	{AccountType: AccountTypeOpenRouter, ID: "openrouter/anthropic/claude-haiku-4.5", DisplayName: "OpenRouter: Claude Haiku 4.5", Description: "Example only - any \"openrouter/<vendor>/<model>\" slug routes to a pooled OpenRouter account.", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}},
+	{AccountType: AccountTypeNvidia, ID: "nvidia/meta/llama-3.3-70b-instruct", DisplayName: "NVIDIA: Llama 3.3 70B Instruct", Description: "Example only - any \"nvidia/<vendor>/<model>\" slug routes to a pooled NVIDIA account.", ContextWindow: 128000, MaxTokens: 8192, Reasoning: false, Input: []string{"text"}},
 }
 
 func modelsForProvider(accountType AccountType) []poolModel {

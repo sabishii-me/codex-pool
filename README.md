@@ -124,15 +124,53 @@ The sign-in flow uses Antigravity's shipped Google OAuth client and its fixed `h
 
 ## Friends Mode
 
-Pool accounts with friends. Set a code, share the URL:
+Pool accounts with friends, gated by Google sign-in and an explicit allowlist -
+no shared secret to rotate when someone should lose access.
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   create an OAuth Client ID of type "Web application" with redirect URI
+   `<public_url>/auth/callback/google` (e.g. `http://localhost:8989/auth/callback/google`
+   for local use) and scopes `openid email profile`.
+2. Configure the pool:
 
 ```toml
 # config.toml
-friend_code = "secret-code"
+oauth_google_client_id = "your-client-id.apps.googleusercontent.com"
+oauth_google_client_secret = "your-client-secret"
+allowed_emails = ["friend1@example.com", "your-domain.com"]
 friend_name = "YourName"
+
+[pool_users]
+jwt_secret = "32-char-secret-for-jwt-tokens!!"
 ```
 
-They log in, get setup instructions, start using the pool. You see everyone's usage in analytics.
+An empty `allowed_emails` denies everyone - it must be set explicitly. Entries
+with no `@` are treated as a bare domain and match any address on that domain
+(`your-domain.com` allows anyone `@your-domain.com`); entries with an `@` must
+match the full address exactly.
+
+Friends open the dashboard, click "Sign in with Google," and (if their email
+is on the list) land on the setup instructions and their own credentials.
+You see everyone's usage in analytics.
+
+---
+
+## Operator Access
+
+Account enable/disable/resurrect/refresh, provider admin routes, and
+`/metrics` require two things: your verified Google email must be in
+`admin_emails` (exact addresses only - no bare-domain wildcard, unlike
+`allowed_emails`), and a second factor (TOTP, RFC 6238 - Google
+Authenticator, Authy, 1Password, any standard authenticator app works).
+
+The first time an admin-listed email opens the Accounts tab, it prompts to
+set up 2FA: scan/enter the shown key in an authenticator app, confirm with
+the current code, then save the 10 one-time recovery codes shown - they
+won't be shown again, and are the normal way back in if you lose the
+authenticator (same as GitHub/Google's own 2FA). Losing both the
+authenticator and every recovery code means deleting that email's entry
+from `data/admin_mfa.json` on the host and re-enrolling - a true last
+resort, not the everyday recovery path.
 
 ---
 
@@ -142,13 +180,17 @@ They log in, get setup instructions, start using the pool. You see everyone's us
 listen_addr = "127.0.0.1:8989"
 pool_dir = "pool"
 
-# Friends mode
-friend_code = "your-secret"
+# Friends mode (Google OAuth gate)
+oauth_google_client_id = "your-client-id.apps.googleusercontent.com"
+oauth_google_client_secret = "your-client-secret"
+allowed_emails = ["you@example.com"]
 friend_name = "YourName"
+
+# Operator access (exact addresses only, plus TOTP 2FA on first sign-in)
+admin_emails = ["you@example.com"]
 
 # Multi-user tracking
 [pool_users]
-admin_password = "admin"
 jwt_secret = "32-char-secret-for-jwt-tokens!!"
 ```
 
@@ -179,6 +221,16 @@ Environment variable `PROXY_MAX_INMEM_BODY_BYTES` controls how large a request b
 ```
 
 Antigravity model names come from Google's live `fetchAvailableModels` response. Use `antigravity/<model-id>` to force this provider. `/api/pool/models`, `/v1/models`, `/v1beta/models`, Pi, Cute Code, and the Codex catalog consume the same registry. Temporary quota exhaustion changes `available_now` without removing a supported model from the catalog.
+
+**Kimi, Kimi Platform, MiniMax, Z.ai, Xiaomi, DeepSeek, Qwen, OpenRouter, NVIDIA** - `pool/<provider>/*.json`
+```json
+{"api_key": "..."}
+```
+These all authenticate with a plain API key (added via the dashboard's "Contribute an account", or dropped straight into `pool/<provider>/`) against an Anthropic-compatible endpoint - except NVIDIA, which only speaks standard OpenAI Chat Completions.
+
+**Kimi has two distinct products with separate keys.** `pool/kimi/` is the Kimi Code Console's **Coding Plan** - a subscription with an included quota and models such as `kimi-for-coding`. `pool/kimi-platform/` is the pay-as-you-go **Kimi Open Platform**, whose models include `kimi-k3`, `kimi-k2.7-code`, `kimi-k2.6`, and `kimi-k2.5`. Open Platform models route directly by their real IDs; an explicit prefix such as `kimi-platform/kimi-k3` is also accepted and stripped upstream. Open Platform keys from `platform.kimi.ai` and `platform.kimi.com` are not interchangeable, so `UPSTREAM_KIMI_PLATFORM_BASE` must target the platform where the key was created.
+
+**OpenRouter and NVIDIA are aggregators**, not single-model-family providers - they route to hundreds of vendor-prefixed models rather than a fixed catalog. Force a request to one of them with an explicit prefix: `openrouter/<vendor>/<model>` (e.g. `openrouter/anthropic/claude-opus-4.5`) or `nvidia/<vendor>/<model>` (e.g. `nvidia/meta/llama-3.3-70b-instruct`) - the prefix is stripped before the request reaches the upstream. Same convention as `antigravity/<model-id>` above.
 
 ---
 

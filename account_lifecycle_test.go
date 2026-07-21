@@ -25,7 +25,17 @@ func TestApplyProxyAuthFailure(t *testing.T) {
 	})
 
 	t.Run("static API key proxy auth failure never retires account", func(t *testing.T) {
-		for _, accountType := range []AccountType{AccountTypeKimi, AccountTypeMinimax, AccountTypeZAI, AccountTypeXiaomi} {
+		for _, accountType := range []AccountType{
+			AccountTypeKimi,
+			AccountTypeKimiPlatform,
+			AccountTypeMinimax,
+			AccountTypeZAI,
+			AccountTypeXiaomi,
+			AccountTypeDeepSeek,
+			AccountTypeQwen,
+			AccountTypeOpenRouter,
+			AccountTypeNvidia,
+		} {
 			acc := &Account{Type: accountType}
 			markedDead, penaltyNow := applyProxyAuthFailure(acc, true)
 			if markedDead || acc.Dead {

@@ -11,7 +11,9 @@ import (
 // like a bad account.
 func accountUsesStaticAPIKey(accountType AccountType) bool {
 	switch accountType {
-	case AccountTypeKimi, AccountTypeMinimax, AccountTypeZAI, AccountTypeXiaomi:
+	case AccountTypeKimi, AccountTypeKimiPlatform, AccountTypeMinimax,
+		AccountTypeZAI, AccountTypeXiaomi, AccountTypeDeepSeek,
+		AccountTypeQwen, AccountTypeOpenRouter, AccountTypeNvidia:
 		return true
 	default:
 		return false

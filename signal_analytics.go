@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -76,6 +77,7 @@ func (h *proxyHandler) handleSignalAnalytics(w http.ResponseWriter, r *http.Requ
 	if h.analyticsStore != nil {
 		economics, err := h.buildSignalEconomics(response.GeneratedAt)
 		if err != nil {
+			log.Printf("signal analytics: failed to build subscription economics: %v", err)
 			respondJSONError(w, http.StatusInternalServerError, "failed to build subscription economics")
 			return
 		}
@@ -93,6 +95,13 @@ func (h *proxyHandler) handleSignalAnalytics(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *proxyHandler) buildSignalEconomics(now time.Time) ([]SignalEconomicsPoint, error) {
+	// Keep the multi-query snapshot consistent with request inserts and the daily
+	// rollup. AnalyticsStore writes already use this mutex; without matching read
+	// serialization, dashboard refreshes can intermittently observe SQLite busy
+	// errors while usage events are being persisted.
+	h.analyticsStore.mu.Lock()
+	defer h.analyticsStore.mu.Unlock()
+
 	rows, err := h.analyticsStore.getAllAccountDailyCosts()
 	if err != nil {
 		return nil, err

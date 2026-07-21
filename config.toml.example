@@ -22,18 +22,29 @@ public_url = ""
 # from the friend admin page, or place pi-grok/simple auth JSON in that directory.
 grok_base = "https://cli-chat-proxy.grok.com/v1"
 
-# Friend Code Access
-# Enable a self-service landing page at / where users with this code
-# can generate their own credentials.
-friend_code = ""
+# Google OAuth Access Gate
+# Enable a "Sign in with Google" landing page at / for the pool dashboard.
+# Register a Web application OAuth client in Google Cloud Console with
+# redirect URI <public_url>/auth/callback/google and scopes openid email profile.
+# Only verified emails in allowed_emails may sign in - an empty list denies everyone.
+# Entries with no "@" are treated as a bare domain and match any address on
+# that domain (e.g. "example.com" allows anyone@example.com).
+oauth_google_client_id = ""
+oauth_google_client_secret = ""
+allowed_emails = ["you@example.com", "your-domain.com"]
+
+# Operator/admin access (account enable/disable, provider admin routes,
+# /metrics, etc.). Requires signing in above AND setting up two-factor
+# authentication (TOTP, prompted on first admin sign-in) - unlike
+# allowed_emails, this is exact-match only, no bare-domain entries: granting
+# operator power to a whole domain is a much bigger blast radius than just
+# letting the domain sign in.
+admin_emails = ["you@example.com"]
 
 # Pool Users (Multi-User Mode)
 # Enable this section to allow creating users who can share the pool
 # without access to real account credentials.
 [pool_users]
-# Password for the admin UI at /admin/pool-users
-admin_password = ""
-
 # Secret key for signing pool user tokens (should be 32+ characters)
 jwt_secret = ""
 

@@ -25,6 +25,96 @@ func TestIsZAIModelHandlesCodingPlanModels(t *testing.T) {
 	}
 }
 
+func TestZAIParseUsageMessageStart(t *testing.T) {
+	t.Parallel()
+
+	p := NewZAIProvider(nil)
+
+	// Full message_start with input, cached, model
+	ru := p.ParseUsage(map[string]any{
+		"type": "message_start",
+		"message": map[string]any{
+			"model": "glm-5.2",
+			"usage": map[string]any{
+				"input_tokens":            float64(42),
+				"cache_read_input_tokens": float64(5),
+			},
+		},
+	})
+	if ru == nil {
+		t.Fatal("expected non-nil usage")
+	}
+	if ru.InputTokens != 42 {
+		t.Fatalf("InputTokens = %d, want 42", ru.InputTokens)
+	}
+	if ru.CachedInputTokens != 5 {
+		t.Fatalf("CachedInputTokens = %d, want 5", ru.CachedInputTokens)
+	}
+	if ru.OutputTokens != 0 {
+		t.Fatalf("OutputTokens = %d, want 0", ru.OutputTokens)
+	}
+	if ru.BillableTokens != 37 {
+		t.Fatalf("BillableTokens = %d, want 37", ru.BillableTokens)
+	}
+	if ru.Model != "glm-5.2" {
+		t.Fatalf("Model = %q, want glm-5.2", ru.Model)
+	}
+
+	// message_start with zero input tokens returns nil
+	if got := p.ParseUsage(map[string]any{
+		"type":    "message_start",
+		"message": map[string]any{"usage": map[string]any{"input_tokens": float64(0)}},
+	}); got != nil {
+		t.Fatal("expected nil for zero input tokens")
+	}
+
+	// message_start without message key returns nil
+	if got := p.ParseUsage(map[string]any{"type": "message_start"}); got != nil {
+		t.Fatal("expected nil for missing message")
+	}
+
+	// Non-Anthropic event type returns nil
+	if got := p.ParseUsage(map[string]any{"type": "ping"}); got != nil {
+		t.Fatal("expected nil for ping event")
+	}
+}
+
+func TestZAIParseUsageMessageDelta(t *testing.T) {
+	t.Parallel()
+
+	p := NewZAIProvider(nil)
+
+	ru := p.ParseUsage(map[string]any{
+		"type":  "message_delta",
+		"usage": map[string]any{"output_tokens": float64(88)},
+	})
+	if ru == nil {
+		t.Fatal("expected non-nil usage")
+	}
+	if ru.OutputTokens != 88 {
+		t.Fatalf("OutputTokens = %d, want 88", ru.OutputTokens)
+	}
+	if ru.BillableTokens != 88 {
+		t.Fatalf("BillableTokens = %d, want 88", ru.BillableTokens)
+	}
+	if ru.InputTokens != 0 {
+		t.Fatalf("InputTokens = %d, want 0", ru.InputTokens)
+	}
+
+	// Zero output tokens returns nil
+	if got := p.ParseUsage(map[string]any{
+		"type":  "message_delta",
+		"usage": map[string]any{"output_tokens": float64(0)},
+	}); got != nil {
+		t.Fatal("expected nil for zero output tokens")
+	}
+
+	// Missing usage returns nil
+	if got := p.ParseUsage(map[string]any{"type": "message_delta"}); got != nil {
+		t.Fatal("expected nil for missing usage")
+	}
+}
+
 func TestModelRouteOverrideZAIModelUsesZAIBase(t *testing.T) {
 	t.Parallel()
 

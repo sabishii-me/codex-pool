@@ -96,20 +96,23 @@ func TestPoolModelsEndpointRequiresPoolToken(t *testing.T) {
 	}
 }
 
-func TestPoolCatalogEndpointAcceptsFriendAuthentication(t *testing.T) {
-	handler := &proxyHandler{cfg: &config{friendCode: "friend-secret"}, pool: newPoolState(nil, false)}
+func TestPoolCatalogEndpointAcceptsSessionAuthentication(t *testing.T) {
+	handler, user, secret := newTestHandlerWithSession(t)
+	handler.pool = newPoolState(nil, false)
+
 	request := httptest.NewRequest(http.MethodGet, "http://pool.example/api/pool/catalog", nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
+
 	request = httptest.NewRequest(http.MethodGet, "http://pool.example/api/pool/catalog", nil)
-	request.Header.Set("X-Friend-Code", "friend-secret")
+	request.AddCookie(newTestSessionCookie(t, secret, user))
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
-		t.Fatalf("friend-authenticated status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
+		t.Fatalf("session-authenticated status = %d, want %d: %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 }
 

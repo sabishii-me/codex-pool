@@ -1,7 +1,10 @@
-export type Provider = "codex" | "claude" | "gemini" | "antigravity" | "kimi" | "minimax" | "zai" | "xiaomi" | "grok";
+export type Provider = "codex" | "claude" | "gemini" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia";
 
 export interface FriendSession {
   public_url: string;
+  email: string;
+  is_admin: boolean;
+  mfa_enrolled: boolean;
   origin_id: string;
   download_token: string;
   auth_json: string;
@@ -10,6 +13,12 @@ export interface FriendSession {
   claude_api_key: string;
   pi_models_json: string;
   cute_code_settings_json: string;
+}
+
+export interface MFAStatus {
+  enrolled: boolean;
+  elevated: boolean;
+  recovery_codes_remaining: number;
 }
 
 export interface AccountStats {

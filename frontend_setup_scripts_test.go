@@ -260,7 +260,7 @@ func TestServeCuteCodeLanding(t *testing.T) {
 }
 
 func TestFriendLandingServesReactSignalRoom(t *testing.T) {
-	h := &proxyHandler{cfg: &config{friendCode: "peepee"}}
+	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
 	rr := httptest.NewRecorder()
 
@@ -287,13 +287,13 @@ func TestFriendLandingServesReactSignalRoom(t *testing.T) {
 	}
 }
 
-func TestFriendCodeIsNotEmbeddedInPublicSignalRoom(t *testing.T) {
-	const secret = "friend-secret-that-must-never-ship"
-	h := &proxyHandler{cfg: &config{friendCode: secret}}
+func TestOAuthClientSecretIsNotEmbeddedInPublicSignalRoom(t *testing.T) {
+	const secret = "google-client-secret-that-must-never-ship"
+	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee", oauthGoogleClientSecret: secret}}
 	page := httptest.NewRecorder()
 	h.serveFriendLanding(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 	if strings.Contains(page.Body.String(), secret) {
-		t.Fatal("friend code leaked into public HTML")
+		t.Fatal("OAuth client secret leaked into public HTML")
 	}
 	if err := fs.WalkDir(signalRoomContent, "web/dist", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
@@ -313,7 +313,7 @@ func TestFriendCodeIsNotEmbeddedInPublicSignalRoom(t *testing.T) {
 }
 
 func TestServeSignalRoomAsset(t *testing.T) {
-	h := &proxyHandler{cfg: &config{friendCode: "peepee"}}
+	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
 	page := httptest.NewRecorder()
 	h.serveFriendLanding(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 	body := page.Body.String()

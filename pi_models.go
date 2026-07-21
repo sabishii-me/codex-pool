@@ -91,6 +91,12 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 				API:     "anthropic-messages",
 				Models:  piModelsForProvider(AccountTypeKimi),
 			},
+			"kimi-platform": {
+				BaseURL: baseURL,
+				APIKey:  anthropicAPIKey,
+				API:     "anthropic-messages",
+				Models:  piModelsForProvider(AccountTypeKimiPlatform),
+			},
 			"minimax": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
@@ -115,6 +121,30 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 				API:     "openai-responses",
 				Models:  grokPiModels(),
 			},
+			"deepseek": {
+				BaseURL: baseURL,
+				APIKey:  anthropicAPIKey,
+				API:     "anthropic-messages",
+				Models:  piModelsForProvider(AccountTypeDeepSeek),
+			},
+			"qwen": {
+				BaseURL: baseURL,
+				APIKey:  anthropicAPIKey,
+				API:     "anthropic-messages",
+				Models:  piModelsForProvider(AccountTypeQwen),
+			},
+			"openrouter": {
+				BaseURL: baseURL,
+				APIKey:  anthropicAPIKey,
+				API:     "anthropic-messages",
+				Models:  piModelsForProvider(AccountTypeOpenRouter),
+			},
+			"nvidia": {
+				BaseURL: baseURL,
+				APIKey:  codexAPIKey,
+				API:     "openai-completions",
+				Models:  piModelsForProvider(AccountTypeNvidia),
+			},
 		},
 	}
 
@@ -133,7 +163,7 @@ func generateCuteCodeSettingsJSON(publicURL, apiKey string) ([]byte, error) {
 			URL: baseURL,
 		},
 	}
-	for _, accountType := range []AccountType{AccountTypeCodex, AccountTypeClaude, AccountTypeKimi, AccountTypeMinimax, AccountTypeZAI, AccountTypeXiaomi} {
+	for _, accountType := range []AccountType{AccountTypeCodex, AccountTypeClaude, AccountTypeKimi, AccountTypeKimiPlatform, AccountTypeMinimax, AccountTypeZAI, AccountTypeXiaomi, AccountTypeDeepSeek, AccountTypeQwen, AccountTypeOpenRouter, AccountTypeNvidia} {
 		settings.CustomModels = append(settings.CustomModels, cuteModelsForProvider(baseURL, apiKey, accountType)...)
 	}
 	settings.CustomModels = append(settings.CustomModels, grokCuteModels(baseURL, apiKey)...)
@@ -184,7 +214,7 @@ func cuteModelsForProvider(baseURL, apiKey string, accountType AccountType) []cu
 	result := make([]cuteCodeModelConfig, 0, len(models))
 	for _, model := range models {
 		protocol := "anthropic"
-		if accountType == AccountTypeCodex {
+		if accountType == AccountTypeCodex || accountType == AccountTypeNvidia {
 			protocol = "openai"
 		}
 		result = append(result, cuteCodeModelConfig{

@@ -22,10 +22,15 @@ const (
 	AccountTypeAntigravity AccountType = "antigravity"
 	AccountTypeClaude      AccountType = "claude"
 	AccountTypeKimi        AccountType = "kimi"
+	AccountTypeKimiPlatform AccountType = "kimi-platform"
 	AccountTypeMinimax     AccountType = "minimax"
 	AccountTypeZAI         AccountType = "zai"
 	AccountTypeXiaomi      AccountType = "xiaomi"
 	AccountTypeGrok        AccountType = "grok"
+	AccountTypeDeepSeek    AccountType = "deepseek"
+	AccountTypeQwen        AccountType = "qwen"
+	AccountTypeOpenRouter  AccountType = "openrouter"
+	AccountTypeNvidia      AccountType = "nvidia"
 )
 
 type Account struct {
@@ -339,10 +344,15 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*Account, error) {
 		"gemini":      AccountTypeGemini,
 		"antigravity": AccountTypeAntigravity,
 		"kimi":        AccountTypeKimi,
+		"kimi-platform": AccountTypeKimiPlatform,
 		"minimax":     AccountTypeMinimax,
 		"zai":         AccountTypeZAI,
 		"xiaomi":      AccountTypeXiaomi,
 		"grok":        AccountTypeGrok,
+		"deepseek":    AccountTypeDeepSeek,
+		"qwen":        AccountTypeQwen,
+		"openrouter":  AccountTypeOpenRouter,
+		"nvidia":      AccountTypeNvidia,
 	}
 
 	for subdir, accountType := range providerDirs {
@@ -1234,6 +1244,8 @@ func saveAccount(a *Account) error {
 		return saveClaudeAccount(a)
 	case AccountTypeKimi:
 		return saveAPIKeyAccount(a)
+	case AccountTypeKimiPlatform:
+		return saveAPIKeyAccount(a)
 	case AccountTypeMinimax:
 		return saveAPIKeyAccount(a)
 	case AccountTypeZAI:
@@ -1242,6 +1254,14 @@ func saveAccount(a *Account) error {
 		return saveAPIKeyAccount(a)
 	case AccountTypeGrok:
 		return saveGrokAccount(a)
+	case AccountTypeDeepSeek:
+		return saveAPIKeyAccount(a)
+	case AccountTypeQwen:
+		return saveAPIKeyAccount(a)
+	case AccountTypeOpenRouter:
+		return saveAPIKeyAccount(a)
+	case AccountTypeNvidia:
+		return saveAPIKeyAccount(a)
 	default:
 		return saveCodexAccount(a)
 	}

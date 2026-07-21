@@ -1,21 +1,4 @@
-import type { AdminAccount, FriendSession, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
-
-const FRIEND_CODE_KEY = "friendCode";
-const FRIEND_EMAIL_KEY = "friendEmail";
-const FRIEND_SESSION_KEY = "friendSession";
-const ADMIN_TOKEN_KEY = "operatorToken";
-
-export const storedFriendCode = () => localStorage.getItem(FRIEND_CODE_KEY) ?? "";
-export const storedFriendEmail = () => localStorage.getItem(FRIEND_EMAIL_KEY) ?? "";
-export const storedFriendSession = (): FriendSession | null => {
-  try {
-    const raw = localStorage.getItem(FRIEND_SESSION_KEY);
-    return raw ? (JSON.parse(raw) as FriendSession) : null;
-  } catch {
-    return null;
-  }
-};
-export const storedAdminToken = () => sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "";
+import type { AdminAccount, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
@@ -26,36 +9,26 @@ async function decode<T>(response: Response): Promise<T> {
   return data as T;
 }
 
-export async function claim(friendCode: string, email: string): Promise<FriendSession> {
-  const response = await fetch("/api/friend/claim", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ friend_code: friendCode, user_email: email }),
-  });
-  const session = await decode<FriendSession>(response);
-  localStorage.setItem(FRIEND_CODE_KEY, friendCode);
-  localStorage.setItem(FRIEND_EMAIL_KEY, email);
-  localStorage.setItem(FRIEND_SESSION_KEY, JSON.stringify(session));
-  return session;
+// loadSession hydrates the CLI-credential bundle for the signed-in Google
+// account (the pool_session httpOnly cookie is sent automatically on this
+// same-origin request). Returns null when there's no valid session instead
+// of throwing, so callers can fall through to the sign-in screen.
+export async function loadSession(): Promise<FriendSession | null> {
+  const response = await fetch("/api/pool/session", { cache: "no-store" });
+  if (response.status === 401) return null;
+  return decode<FriendSession>(response);
 }
 
-export function clearFriendSession() {
-  localStorage.removeItem(FRIEND_CODE_KEY);
-  localStorage.removeItem(FRIEND_EMAIL_KEY);
-  localStorage.removeItem(FRIEND_SESSION_KEY);
-  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-}
-
-function friendHeaders(): HeadersInit {
-  return { "X-Friend-Code": storedFriendCode() };
+export async function logout() {
+  await fetch("/auth/logout", { method: "POST" });
 }
 
 export async function loadPoolStats(): Promise<PoolStats> {
-  return decode(await fetch("/api/pool/stats", { headers: friendHeaders(), cache: "no-store" }));
+  return decode(await fetch("/api/pool/stats", { cache: "no-store" }));
 }
 
 export async function loadSignalAnalytics(): Promise<SignalAnalytics> {
-  const signal = await decode<SignalAnalytics>(await fetch("/api/pool/signal?weeks=6", { headers: friendHeaders(), cache: "no-store" }));
+  const signal = await decode<SignalAnalytics>(await fetch("/api/pool/signal?weeks=6", { cache: "no-store" }));
   return {
     ...signal,
     economics: signal.economics ?? [],
@@ -70,7 +43,7 @@ export async function loadSignalAnalytics(): Promise<SignalAnalytics> {
 }
 
 export async function loadModelCatalog(): Promise<ModelCatalog> {
-  const catalog = await decode<ModelCatalog>(await fetch("/api/pool/catalog", { headers: friendHeaders(), cache: "no-store" }));
+  const catalog = await decode<ModelCatalog>(await fetch("/api/pool/catalog", { cache: "no-store" }));
   return { models: catalog.models ?? [] };
 }
 
@@ -84,32 +57,67 @@ export async function loadLiveCuteCodeSettings(downloadToken: string): Promise<s
   return JSON.stringify(config, null, 2);
 }
 
-export async function unlockOperator(token: string): Promise<AdminAccount[]> {
-  const accounts = await decode<AdminAccount[]>(await fetch("/admin/accounts", {
-    headers: { "X-Admin-Token": token },
-    cache: "no-store",
-  }));
-  sessionStorage.setItem(ADMIN_TOKEN_KEY, token);
-  return accounts;
-}
-
-export function lockOperator() {
-  sessionStorage.removeItem(ADMIN_TOKEN_KEY);
-}
+// Admin routes require a signed-in, admin-listed, MFA-elevated session -
+// all carried by httpOnly cookies, so no header/token is attached here.
+// A 401/403 means "not currently elevated," which callers handle by
+// falling back to the MFA prompt.
 
 export async function loadAdminAccounts(): Promise<AdminAccount[]> {
-  const token = storedAdminToken();
-  if (!token) throw new Error("Operator controls are locked");
-  return decode(await fetch("/admin/accounts", { headers: { "X-Admin-Token": token }, cache: "no-store" }));
+  return decode(await fetch("/admin/accounts", { cache: "no-store" }));
 }
 
 export async function mutateAccount(accountID: string, action: "enable" | "disable" | "resurrect" | "refresh") {
-  const token = storedAdminToken();
-  if (!token) throw new Error("Operator controls are locked");
   return decode<Record<string, unknown>>(await fetch(`/admin/accounts/${encodeURIComponent(accountID)}/${action}`, {
     method: "POST",
-    headers: { "X-Admin-Token": token },
   }));
+}
+
+export interface MFAEnrollResult {
+  secret: string;
+  otpauth_url: string;
+}
+
+export interface MFAConfirmResult {
+  success: boolean;
+  recovery_codes: string[];
+}
+
+export interface MFARegenerateResult {
+  secret: string;
+  otpauth_url: string;
+  recovery_codes: string[];
+}
+
+export async function checkMFAStatus(): Promise<MFAStatus> {
+  return decode(await fetch("/api/admin/mfa/status", { cache: "no-store" }));
+}
+
+export async function enrollMFA(): Promise<MFAEnrollResult> {
+  return decode(await fetch("/api/admin/mfa/enroll", { method: "POST" }));
+}
+
+export async function confirmMFA(code: string): Promise<MFAConfirmResult> {
+  return decode(await fetch("/api/admin/mfa/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  }));
+}
+
+export async function verifyMFA(input: { code?: string; recoveryCode?: string }): Promise<{ success: boolean }> {
+  return decode(await fetch("/api/admin/mfa/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code: input.code, recovery_code: input.recoveryCode }),
+  }));
+}
+
+export async function regenerateMFA(): Promise<MFARegenerateResult> {
+  return decode(await fetch("/api/admin/mfa/regenerate", { method: "POST" }));
+}
+
+export async function regenerateRecoveryCodes(): Promise<{ recovery_codes: string[] }> {
+  return decode(await fetch("/api/admin/mfa/regenerate-codes", { method: "POST" }));
 }
 
 export interface AccountContributionResult {
@@ -123,10 +131,10 @@ export interface AccountContributionResult {
 	  error?: string;
 }
 
-export async function contributeAPIKey(provider: "kimi" | "minimax" | "zai" | "xiaomi", apiKey: string) {
+export async function contributeAPIKey(provider: "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "deepseek" | "qwen" | "openrouter" | "nvidia", apiKey: string) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/add`, {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ api_key: apiKey }),
   }));
 }
@@ -134,7 +142,7 @@ export async function contributeAPIKey(provider: "kimi" | "minimax" | "zai" | "x
 export async function contributeGrok(authJSON: string) {
   return decode<AccountContributionResult>(await fetch("/api/pool/accounts/grok/add", {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ auth_json: authJSON }),
   }));
 }
@@ -142,7 +150,7 @@ export async function contributeGrok(authJSON: string) {
 export async function startAccountOAuth(provider: "codex" | "claude") {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/add`, {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: "{}",
   }));
 }
@@ -150,7 +158,7 @@ export async function startAccountOAuth(provider: "codex" | "claude") {
 export async function exchangeAccountOAuth(provider: "codex" | "claude", code: string, verifier: string) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/exchange`, {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, verifier }),
   }));
 }
@@ -158,7 +166,7 @@ export async function exchangeAccountOAuth(provider: "codex" | "claude", code: s
 export async function startAntigravityOAuth() {
   return decode<AccountContributionResult>(await fetch("/api/pool/accounts/antigravity/add", {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: "{}",
   }));
 }
@@ -166,7 +174,7 @@ export async function startAntigravityOAuth() {
 export async function antigravityOAuthStatus(sessionID: string) {
   return decode<AccountContributionResult>(await fetch("/api/pool/accounts/antigravity/status", {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ session_id: sessionID }),
   }));
 }
@@ -176,14 +184,12 @@ export async function exchangeAntigravityOAuth(sessionID: string, value: string,
   const isCallback = /^https?:\/\//i.test(trimmed);
   return decode<AccountContributionResult>(await fetch("/api/pool/accounts/antigravity/exchange", {
     method: "POST",
-    headers: { ...friendHeaders(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
 	    body: JSON.stringify({ session_id: sessionID, ...(isCallback ? { callback_url: trimmed } : { code: trimmed, state }) }),
   }));
 }
 
 export async function reloadAccounts() {
-  const token = storedAdminToken();
-  if (!token) throw new Error("Operator controls are locked");
-  const response = await fetch("/admin/reload", { method: "POST", headers: { "X-Admin-Token": token } });
+  const response = await fetch("/admin/reload", { method: "POST" });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 }

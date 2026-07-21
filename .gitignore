@@ -34,6 +34,7 @@ config.toml
 # Build artifacts
 codex-pool
 codex-pool-proxy
+codex-pool-proxy.exe
 codex-pool-linux
 codex-pool-linux-*
 codex-pool-proxy-linux
@@ -43,6 +44,11 @@ tmp/
 bin/
 dist/
 coverage.out
+*.tsbuildinfo
+
+# Playwright e2e harness output (web/tests/e2e)
+web/test-results/
+web/playwright-report/
 
 # Python
 __pycache__/

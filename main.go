@@ -38,10 +38,15 @@ type config struct {
 	antigravityOnboardBase *url.URL
 	claudeBase             *url.URL // Claude API endpoint
 	kimiBase               *url.URL // Kimi API endpoint
+	kimiPlatformBase       *url.URL // Kimi/Moonshot Open Platform Anthropic-compatible endpoint (general pay-as-you-go key, distinct from the Coding Plan)
 	minimaxBase            *url.URL // MiniMax API endpoint
 	zaiBase                *url.URL // Z.ai Anthropic-compatible endpoint
 	xiaomiBase             *url.URL // Xiaomi MiMo Token Plan Anthropic-compatible endpoint
 	grokBase               *url.URL // Grok Code OpenAI-compatible endpoint
+	deepseekBase           *url.URL // DeepSeek Anthropic-compatible endpoint
+	qwenBase               *url.URL // Qwen (DashScope Coding Plan) Anthropic-compatible endpoint
+	openrouterBase         *url.URL // OpenRouter Anthropic-compatible endpoint
+	nvidiaBase             *url.URL // NVIDIA NIM OpenAI Chat Completions endpoint
 	poolDir                string
 
 	disableRefresh  bool
@@ -59,8 +64,10 @@ type config struct {
 	maxAttempts                int
 	storePath                  string
 	retentionDays              int
-	friendCode                 string
-	adminToken                 string
+	oauthGoogleClientID        string
+	oauthGoogleClientSecret    string
+	allowedEmails              []string
+	adminEmails                []string
 	requestTimeout             time.Duration // Timeout for non-streaming requests (0 = no timeout)
 	streamTimeout              time.Duration // Timeout for streaming/SSE requests (0 = no timeout)
 	streamIdleTimeout          time.Duration // Kill SSE streams idle for this long (0 = no idle timeout)
@@ -135,9 +142,14 @@ func buildConfig() *config {
 	cfg.antigravityOnboardBase = mustParse(getenv("UPSTREAM_ANTIGRAVITY_ONBOARD_BASE", "https://daily-cloudcode-pa.googleapis.com"))
 	cfg.claudeBase = mustParse(getenv("UPSTREAM_CLAUDE_BASE", "https://api.anthropic.com"))
 	cfg.kimiBase = mustParse(getenv("UPSTREAM_KIMI_BASE", "https://api.kimi.com/coding"))
+	cfg.kimiPlatformBase = mustParse(getenv("UPSTREAM_KIMI_PLATFORM_BASE", "https://api.moonshot.ai/anthropic"))
 	cfg.minimaxBase = mustParse(getenv("UPSTREAM_MINIMAX_BASE", "https://api.minimax.io/anthropic"))
 	cfg.zaiBase = mustParse(getenv("UPSTREAM_ZAI_BASE", "https://api.z.ai/api/anthropic"))
 	cfg.xiaomiBase = mustParse(getenv("UPSTREAM_XIAOMI_BASE", "https://token-plan-sgp.xiaomimimo.com/anthropic"))
+	cfg.deepseekBase = mustParse(getenv("UPSTREAM_DEEPSEEK_BASE", "https://api.deepseek.com/anthropic"))
+	cfg.qwenBase = mustParse(getenv("UPSTREAM_QWEN_BASE", "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"))
+	cfg.openrouterBase = mustParse(getenv("UPSTREAM_OPENROUTER_BASE", "https://openrouter.ai/api"))
+	cfg.nvidiaBase = mustParse(getenv("UPSTREAM_NVIDIA_BASE", "https://integrate.api.nvidia.com/v1"))
 	cfg.grokBase = mustParse(getConfigString("UPSTREAM_GROK_BASE", fileCfg.GrokBase, "https://cli-chat-proxy.grok.com/v1"))
 	cfg.poolDir = getConfigString("POOL_DIR", fileCfg.PoolDir, "pool")
 
@@ -181,8 +193,10 @@ func buildConfig() *config {
 	}
 	cfg.maxAttempts = getConfigInt("PROXY_MAX_ATTEMPTS", fileCfg.MaxAttempts, 3)
 	cfg.storePath = getConfigString("PROXY_DB_PATH", fileCfg.DBPath, "./data/proxy.db")
-	cfg.friendCode = getConfigString("FRIEND_CODE", fileCfg.FriendCode, "")
-	cfg.adminToken = getConfigString("ADMIN_TOKEN", fileCfg.AdminToken, "")
+	cfg.oauthGoogleClientID = getConfigString("OAUTH_GOOGLE_CLIENT_ID", fileCfg.OAuthGoogleClientID, "")
+	cfg.oauthGoogleClientSecret = getConfigString("OAUTH_GOOGLE_CLIENT_SECRET", fileCfg.OAuthGoogleClientSecret, "")
+	cfg.allowedEmails = getEmailList("ALLOWED_EMAILS", fileCfg.AllowedEmails)
+	cfg.adminEmails = getEmailList("ADMIN_EMAILS", fileCfg.AdminEmails)
 	cfg.retentionDays = 30
 	if v := getenv("PROXY_USAGE_RETENTION_DAYS", ""); v != "" {
 		if n, err := parseInt64(v); err == nil && n > 0 {
@@ -248,11 +262,16 @@ func main() {
 	geminiProvider := NewGeminiProvider(cfg.geminiBase, cfg.geminiAPIBase)
 	antigravityProvider := NewAntigravityProvider(cfg.antigravityDailyBase, cfg.antigravityProdBase)
 	kimiProvider := NewKimiProvider(cfg.kimiBase)
+	kimiPlatformProvider := NewKimiPlatformProvider(cfg.kimiPlatformBase)
 	minimaxProvider := NewMinimaxProvider(cfg.minimaxBase)
 	zaiProvider := NewZAIProvider(cfg.zaiBase)
 	xiaomiProvider := NewXiaomiProvider(cfg.xiaomiBase)
 	grokProvider := NewGrokProvider(cfg.grokBase)
-	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider)
+	deepseekProvider := NewDeepSeekProvider(cfg.deepseekBase)
+	qwenProvider := NewQwenProvider(cfg.qwenBase)
+	openrouterProvider := NewOpenRouterProvider(cfg.openrouterBase)
+	nvidiaProvider := NewNvidiaProvider(cfg.nvidiaBase)
+	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider)
 
 	log.Printf("loading pool from %s", cfg.poolDir)
 	accounts, err := loadPool(cfg.poolDir, registry)
@@ -266,10 +285,15 @@ func main() {
 	geminiCount := pool.countByType(AccountTypeGemini)
 	antigravityCount := pool.countByType(AccountTypeAntigravity)
 	kimiCount := pool.countByType(AccountTypeKimi)
+	kimiPlatformCount := pool.countByType(AccountTypeKimiPlatform)
 	minimaxCount := pool.countByType(AccountTypeMinimax)
 	zaiCount := pool.countByType(AccountTypeZAI)
 	xiaomiCount := pool.countByType(AccountTypeXiaomi)
 	grokCount := pool.countByType(AccountTypeGrok)
+	deepseekCount := pool.countByType(AccountTypeDeepSeek)
+	qwenCount := pool.countByType(AccountTypeQwen)
+	openrouterCount := pool.countByType(AccountTypeOpenRouter)
+	nvidiaCount := pool.countByType(AccountTypeNvidia)
 	if pool.count() == 0 {
 		log.Printf("warning: loaded 0 accounts from %s", cfg.poolDir)
 	}
@@ -373,8 +397,8 @@ func main() {
 
 	// Initialize pool users store if configured
 	var poolUsers *PoolUserStore
-	// Pool users require a JWT secret. Admin token or friend code provides access control.
-	if (cfg.adminToken != "" || cfg.friendCode != "") && getPoolJWTSecret() != "" {
+	// Pool users require a JWT secret and the Google OAuth gate for access control.
+	if cfg.oauthGoogleClientID != "" && getPoolJWTSecret() != "" {
 		poolUsersPath := getPoolUsersPath()
 		var err error
 		poolUsers, err = newPoolUserStore(poolUsersPath)
@@ -382,6 +406,16 @@ func main() {
 			log.Printf("warning: failed to load pool users: %v", err)
 		} else {
 			log.Printf("pool users enabled (%d users)", len(poolUsers.List()))
+		}
+	}
+
+	// Initialize admin MFA store if any admin emails are configured.
+	var adminTOTP *AdminTOTPStore
+	if len(cfg.adminEmails) > 0 {
+		var err error
+		adminTOTP, err = newAdminTOTPStore(getAdminMFAPath())
+		if err != nil {
+			log.Printf("warning: failed to load admin MFA store: %v", err)
 		}
 	}
 
@@ -426,6 +460,7 @@ func main() {
 		refreshTransport:     refreshTransport,
 		pool:                 pool,
 		poolUsers:            poolUsers,
+		adminTOTP:            adminTOTP,
 		registry:             registry,
 		store:                store,
 		analyticsStore:       analyticsStore,
@@ -486,13 +521,13 @@ func main() {
 		log.Printf("warning: failed to configure HTTP/2 server: %v", err)
 	}
 
-	if cfg.adminToken != "" {
-		log.Printf("admin token configured (len=%d)", len(cfg.adminToken))
+	if len(cfg.adminEmails) > 0 {
+		log.Printf("admin emails configured (count=%d)", len(cfg.adminEmails))
 	} else {
-		log.Printf("WARNING: no admin token configured")
+		log.Printf("WARNING: no admin emails configured, operator controls are unreachable")
 	}
-	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
-		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, minimaxCount, zaiCount, xiaomiCount, grokCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
+	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
+		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
 	if cfg.claudeTraceDir != "" {
 		log.Printf("claude traffic tracing enabled: dir=%s body_limit=%d include_secrets=%v", cfg.claudeTraceDir, cfg.claudeTraceBodyLimit, cfg.claudeTraceSecrets)
 	}
@@ -508,6 +543,7 @@ type proxyHandler struct {
 	refreshTransport     http.RoundTripper // Separate transport for refresh ops (may use proxy)
 	pool                 *poolState
 	poolUsers            *PoolUserStore
+	adminTOTP            *AdminTOTPStore
 	registry             *ProviderRegistry
 	store                *usageStore
 	analyticsStore       *AnalyticsStore
@@ -1175,6 +1211,15 @@ func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Prov
 		}
 		return p, p.UpstreamURL(path), nil
 	}
+	if isKimiPlatformModel(model) {
+		p := h.registry.ForType(AccountTypeKimiPlatform)
+		if p == nil {
+			return nil, nil, nil
+		}
+		canonical := kimiPlatformCanonicalModel(model)
+		rewritten := rewriteModelInBody(body, canonical)
+		return p, p.UpstreamURL(path), rewritten
+	}
 	if isMinimaxModel(model) {
 		p := h.registry.ForType(AccountTypeMinimax)
 		if p == nil {
@@ -1210,6 +1255,42 @@ func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Prov
 		}
 		canonical := grokCanonicalModel(model)
 		rewritten := rewriteAndSanitizeGrokRequestBody(body, canonical)
+		return p, p.UpstreamURL(path), rewritten
+	}
+	if isDeepSeekModel(model) {
+		p := h.registry.ForType(AccountTypeDeepSeek)
+		if p == nil {
+			return nil, nil, nil
+		}
+		canonical := deepseekCanonicalModel(model)
+		rewritten := rewriteModelInBody(body, canonical)
+		return p, p.UpstreamURL(path), rewritten
+	}
+	if isQwenModel(model) {
+		p := h.registry.ForType(AccountTypeQwen)
+		if p == nil {
+			return nil, nil, nil
+		}
+		canonical := qwenCanonicalModel(model)
+		rewritten := rewriteModelInBody(body, canonical)
+		return p, p.UpstreamURL(path), rewritten
+	}
+	if isOpenRouterModel(model) {
+		p := h.registry.ForType(AccountTypeOpenRouter)
+		if p == nil {
+			return nil, nil, nil
+		}
+		canonical := openrouterCanonicalModel(model)
+		rewritten := rewriteModelInBody(body, canonical)
+		return p, p.UpstreamURL(path), rewritten
+	}
+	if isNvidiaModel(model) {
+		p := h.registry.ForType(AccountTypeNvidia)
+		if p == nil {
+			return nil, nil, nil
+		}
+		canonical := nvidiaCanonicalModel(model)
+		rewritten := rewriteModelInBody(body, canonical)
 		return p, p.UpstreamURL(path), rewritten
 	}
 	// Cross-format model routing: detect if the model belongs to a different provider
@@ -1307,6 +1388,7 @@ func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, 
 	}
 	routes := []route{
 		{AccountTypeKimi, isKimiModel, func(model string) string { return model }},
+		{AccountTypeKimiPlatform, isKimiPlatformModel, kimiPlatformCanonicalModel},
 		{AccountTypeMinimax, isMinimaxModel, minimaxCanonicalModel},
 		{AccountTypeZAI, isZAIModel, zaiCanonicalModel},
 		{AccountTypeXiaomi, isXiaomiModel, xiaomiCanonicalModel},
@@ -1699,7 +1781,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		serveUnifiedGeminiModels(w, h.pool)
 		return
 	}
-	originID := hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode))
+	originID := hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret()))
 	originIP := getClientIP(r)
 	if h.store != nil && originID != "" && originIP != "" {
 		_ = h.store.recordOriginMetadata(originID, originIP, userID, r.UserAgent(), r.URL.Path, time.Now())
@@ -2603,7 +2685,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				writer = hw
 			}
 
-			var claudeAccum *RequestUsage
+			var usageAccum splitUsageAccumulator
 
 			usageCallback := func(data []byte) {
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
@@ -2629,33 +2711,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					return
 				}
 
-				if acc.Type == AccountTypeClaude {
-					if claudeAccum == nil {
-						claudeAccum = ru
-					} else {
-						claudeAccum.OutputTokens = ru.OutputTokens
-						claudeAccum.BillableTokens = clampNonNegative(
-							claudeAccum.InputTokens - claudeAccum.CachedInputTokens - claudeAccum.CacheCreationTokens + ru.OutputTokens)
-						ru = claudeAccum
-						claudeAccum = nil
-						ru.AccountID = acc.ID
-						ru.UserID = userID
-						ru.OriginID = originID
-						ru.AccountType = acc.Type
-						acc.mu.Lock()
-						ru.PlanType = acc.PlanType
-						acc.mu.Unlock()
-						if ru.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-							ru.PrimaryUsedPct = headerPrimaryPct
-						}
-						if ru.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-							ru.SecondaryUsedPct = headerSecondaryPct
-						}
-						if ru.Model == "" {
-							ru.Model = requestedModel
-						}
-						h.recordUsage(acc, *ru)
-					}
+				eventType, _ := obj["type"].(string)
+				ru = usageAccum.add(eventType, ru)
+				if ru == nil {
 					return
 				}
 				ru.AccountID = acc.ID
@@ -2719,7 +2777,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					}
 				} else {
 					needsPolicyInspection := accountType == AccountTypeCodex && !acc.CyberAccess
-					needsUsageInspection := sampleBuf != nil
+					// Write-through inspection parses complete SSE event boundaries without
+					// buffering the response or delaying bytes sent to the client.
+					needsUsageInspection := provider != nil
 					if needsPolicyInspection || needsUsageInspection {
 						interceptWriter := &sseInterceptWriter{
 							w:        writer,
@@ -2757,24 +2817,24 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				fw.stop()
 			}
 
-			if claudeAccum != nil {
-				claudeAccum.AccountID = acc.ID
-				claudeAccum.UserID = userID
-				claudeAccum.OriginID = originID
-				claudeAccum.AccountType = acc.Type
+			if pendingUsage := usageAccum.flush(); pendingUsage != nil {
+				pendingUsage.AccountID = acc.ID
+				pendingUsage.UserID = userID
+				pendingUsage.OriginID = originID
+				pendingUsage.AccountType = acc.Type
 				acc.mu.Lock()
-				claudeAccum.PlanType = acc.PlanType
+				pendingUsage.PlanType = acc.PlanType
 				acc.mu.Unlock()
-				if claudeAccum.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-					claudeAccum.PrimaryUsedPct = headerPrimaryPct
+				if pendingUsage.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
+					pendingUsage.PrimaryUsedPct = headerPrimaryPct
 				}
-				if claudeAccum.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-					claudeAccum.SecondaryUsedPct = headerSecondaryPct
+				if pendingUsage.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
+					pendingUsage.SecondaryUsedPct = headerSecondaryPct
 				}
-				if claudeAccum.Model == "" {
-					claudeAccum.Model = requestedModel
+				if pendingUsage.Model == "" {
+					pendingUsage.Model = requestedModel
 				}
-				h.recordUsage(acc, *claudeAccum)
+				h.recordUsage(acc, *pendingUsage)
 			}
 
 			if copyErr != nil {
@@ -3604,10 +3664,10 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		Closer: resp.Body,
 	}
 
-	// Claude sends usage across two SSE events (message_start: input, message_delta: output).
+	// Anthropic SSE splits usage across message_start (input) and message_delta (output).
 	// Accumulate them into a single RequestUsage before recording.
 	// Declared outside the if-block so it can be flushed after io.Copy completes.
-	var claudeAccum2 *RequestUsage
+	var streamedUsageAccum splitUsageAccumulator
 	cyberPinned := false
 	conversationID := extractConversationIDFromHeaders(r.Header)
 	// Use Claude Code session ID as fallback for conversation stickiness
@@ -3644,36 +3704,11 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 					return
 				}
 
-				// For Claude, accumulate input (message_start) and output (message_delta)
-				// into a single record before emitting.
-				if acc.Type == AccountTypeClaude {
-					if claudeAccum2 == nil {
-						claudeAccum2 = ru
-					} else {
-						claudeAccum2.OutputTokens = ru.OutputTokens
-						claudeAccum2.BillableTokens = clampNonNegative(
-							claudeAccum2.InputTokens - claudeAccum2.CachedInputTokens + ru.OutputTokens)
-						ru = claudeAccum2
-						claudeAccum2 = nil
-						ru.AccountID = acc.ID
-						ru.UserID = userID
-						ru.OriginID = originID
-						ru.AccountType = acc.Type
-						acc.mu.Lock()
-						ru.PlanType = acc.PlanType
-						acc.mu.Unlock()
-						// Bridge rate limits from response headers
-						if ru.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-							ru.PrimaryUsedPct = headerPrimaryPct
-						}
-						if ru.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-							ru.SecondaryUsedPct = headerSecondaryPct
-						}
-						h.recordUsage(acc, *ru)
-					}
+				eventType, _ := obj["type"].(string)
+				ru = streamedUsageAccum.add(eventType, ru)
+				if ru == nil {
 					return
 				}
-				// Non-Claude: record immediately
 				ru.AccountID = acc.ID
 				ru.UserID = userID
 				ru.OriginID = originID
@@ -3714,25 +3749,23 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		fw.stop()
 	}
 
-	// Flush any accumulated Claude usage that wasn't emitted (e.g., stream ended
+	// Flush any accumulated Anthropic usage that wasn't emitted (e.g., stream ended
 	// without message_delta, or only got message_start before error/disconnect).
-	if claudeAccum2 != nil {
-		claudeAccum2.AccountID = acc.ID
-		claudeAccum2.UserID = userID
-		claudeAccum2.OriginID = originID
-		claudeAccum2.AccountType = acc.Type
+	if pendingUsage := streamedUsageAccum.flush(); pendingUsage != nil {
+		pendingUsage.AccountID = acc.ID
+		pendingUsage.UserID = userID
+		pendingUsage.OriginID = originID
+		pendingUsage.AccountType = acc.Type
 		acc.mu.Lock()
-		claudeAccum2.PlanType = acc.PlanType
+		pendingUsage.PlanType = acc.PlanType
 		acc.mu.Unlock()
-		if claudeAccum2.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-			claudeAccum2.PrimaryUsedPct = headerPrimaryPct
+		if pendingUsage.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
+			pendingUsage.PrimaryUsedPct = headerPrimaryPct
 		}
-		if claudeAccum2.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-			claudeAccum2.SecondaryUsedPct = headerSecondaryPct
+		if pendingUsage.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
+			pendingUsage.SecondaryUsedPct = headerSecondaryPct
 		}
-		// Model should already be set from ParseUsage (extracted from message_start)
-		h.recordUsage(acc, *claudeAccum2)
-		claudeAccum2 = nil
+		h.recordUsage(acc, *pendingUsage)
 	}
 
 	if copyErr != nil {
@@ -4185,7 +4218,7 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
 		if providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-			h.writeClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode)), nil, r, bodyBytes, outReq, bodyBytes, nil, TranslateNone, nil, err.Error())
+			h.writeClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, bodyBytes, outReq, bodyBytes, nil, TranslateNone, nil, err.Error())
 		}
 		h.recent.add(err.Error())
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -4197,7 +4230,7 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
 			sampleLimit = h.claudeTraceSampleLimit(h.cfg.bodyLogLimit)
 		}
-		h.attachClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode)), nil, r, bodyBytes, outReq, bodyBytes, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
+		h.attachClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, bodyBytes, outReq, bodyBytes, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
 	}
 
 	respContentType := resp.Header.Get("Content-Type")
@@ -4374,7 +4407,7 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 			if reqSample != nil {
 				reqBody = reqSample.Bytes()
 			}
-			h.writeClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode)), nil, r, reqBody, outReq, reqBody, nil, TranslateNone, nil, err.Error())
+			h.writeClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, reqBody, outReq, reqBody, nil, TranslateNone, nil, err.Error())
 		}
 		h.recent.add(err.Error())
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -4390,7 +4423,7 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 		if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
 			sampleLimit = h.claudeTraceSampleLimit(h.cfg.bodyLogLimit)
 		}
-		h.attachClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode)), nil, r, reqBody, outReq, reqBody, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
+		h.attachClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, reqBody, outReq, reqBody, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
 	}
 
 	if h.cfg.logBodies && reqSample != nil && reqSample.Len() > 0 {

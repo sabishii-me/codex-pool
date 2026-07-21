@@ -7,11 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"mime"
-	"net"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,7 +41,7 @@ func (h *proxyHandler) serveCuteCodeLanding(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.friendCode != "" {
+	if h.cfg.oauthGoogleClientID != "" {
 		data, err := signalRoomContent.ReadFile("web/dist/index.html")
 		if err != nil {
 			http.Error(w, "internal error: signal room missing", http.StatusInternalServerError)
@@ -111,94 +108,31 @@ func (h *proxyHandler) serveHeroImage(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-func (h *proxyHandler) handleFriendClaim(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	if h.cfg.friendCode == "" {
-		http.Error(w, "feature disabled", http.StatusForbidden)
-		return
-	}
+// friendSessionResponse is the CLI-credential bundle plus identity/admin
+// status returned by GET /api/pool/session.
+type friendSessionResponse struct {
+	PublicURL            string `json:"public_url"`
+	Email                string `json:"email"`
+	IsAdmin              bool   `json:"is_admin"`
+	MFAEnrolled          bool   `json:"mfa_enrolled"`
+	OriginID             string `json:"origin_id"`
+	DownloadToken        string `json:"download_token"`
+	AuthJSON             string `json:"auth_json"`
+	GeminiAuthJSON       string `json:"gemini_auth_json"`
+	GeminiAPIKey         string `json:"gemini_api_key"`
+	ClaudeAPIKey         string `json:"claude_api_key"`
+	PiModelsJSON         string `json:"pi_models_json"`
+	CuteCodeSettingsJSON string `json:"cute_code_settings_json"`
+}
 
-	ip := getClientIP(r)
-	if h.bruteForce != nil && h.bruteForce.isBanned(ip) {
-		http.Error(w, "too many failed attempts, try again later", http.StatusTooManyRequests)
-		return
-	}
-
-	var req struct {
-		FriendCode string `json:"friend_code"`
-		Email      string `json:"user_email"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
-	}
-
-	if req.FriendCode != h.cfg.friendCode {
-		if h.bruteForce != nil {
-			h.bruteForce.recordFailure(ip)
-		}
-		respondJSONError(w, http.StatusForbidden, "Invalid Friend Code")
-		return
-	}
-
-	if h.bruteForce != nil {
-		h.bruteForce.recordSuccess(ip)
-	}
-
-	// Ensure pool users system is ready
-	if h.poolUsers == nil {
-		// If using friend code, we expect pool users to be usable if JWT secret is set.
-		if getPoolJWTSecret() == "" {
-			respondJSONError(w, http.StatusServiceUnavailable, "System error: Pool user system not configured (missing JWT secret).")
-			return
-		}
-		// Try to initialize on demand? (Not ideal, handled in main.go)
-		respondJSONError(w, http.StatusServiceUnavailable, "System error: User storage not initialized.")
-		return
-	}
-
-	// Determine email - use guest@<host> if none provided
-	email := req.Email
-	if email == "" {
-		guestDomain := "pool.local"
-		if pubURL := getPublicURL(); pubURL != "" {
-			if u, err := url.Parse(pubURL); err == nil && u.Host != "" {
-				host := u.Hostname()
-				// Only use if not an IP address
-				if net.ParseIP(host) == nil {
-					guestDomain = host
-				}
-			}
-		}
-		email = "guest@" + guestDomain
-	}
-
-	// Check for existing user with this email
-	var newUser *PoolUser
-	if existing := h.poolUsers.GetByEmail(email); existing != nil {
-		newUser = existing
-	} else {
-		// Create new user
-		newUser = &PoolUser{
-			ID:        randomHex(8),
-			Token:     randomHex(16),
-			Email:     email,
-			PlanType:  "pro",
-			CreatedAt: time.Now(),
-		}
-		if err := h.poolUsers.Create(newUser); err != nil {
-			log.Printf("failed to create friend user: %v", err)
-			respondJSONError(w, http.StatusInternalServerError, "Failed to create user account.")
-			return
-		}
-	}
-
-	// Generate Auth JSON
+// writeFriendSessionJSON builds the CLI-credential bundle for an already
+// resolved, already-authorized pool user and writes it as JSON. This is what
+// GET /api/pool/session returns once the Google OAuth gate has established a
+// session (see oauth_login.go) - the identity check happens before this is
+// called, not inside it.
+func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Request, user *PoolUser) {
 	secret := getPoolJWTSecret()
-	authData, err := generateCodexAuth(secret, newUser)
+	authData, err := generateCodexAuth(secret, user)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate credentials.")
 		return
@@ -206,7 +140,7 @@ func (h *proxyHandler) handleFriendClaim(w http.ResponseWriter, r *http.Request)
 	authJSONBytes, _ := json.MarshalIndent(authData, "", "  ")
 
 	// Generate Gemini Auth JSON
-	geminiAuthData, err := generateGeminiAuth(secret, newUser)
+	geminiAuthData, err := generateGeminiAuth(secret, user)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate gemini credentials.")
 		return
@@ -214,7 +148,7 @@ func (h *proxyHandler) handleFriendClaim(w http.ResponseWriter, r *http.Request)
 	geminiJSONBytes, _ := json.MarshalIndent(geminiAuthData, "", "  ")
 
 	// Generate Claude Auth - returns JWT for use as API key
-	claudeAuthData, err := generateClaudeAuth(secret, newUser)
+	claudeAuthData, err := generateClaudeAuth(secret, user)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate claude credentials.")
 		return
@@ -236,21 +170,32 @@ func (h *proxyHandler) handleFriendClaim(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Generate Gemini API key for API key mode (bypasses OAuth)
-	geminiAPIKey := generateGeminiAPIKey(secret, newUser)
+	geminiAPIKey := generateGeminiAPIKey(secret, user)
 
 	publicURL := h.getEffectivePublicURL(r)
 
+	isAdmin := adminEmailAllowed(h.cfg.adminEmails, user.Email)
+	mfaEnrolled := false
+	if isAdmin && h.adminTOTP != nil {
+		if entry := h.adminTOTP.Get(user.Email); entry != nil && entry.Confirmed {
+			mfaEnrolled = true
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"public_url":              publicURL,
-		"origin_id":               hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode)),
-		"download_token":          newUser.Token,
-		"auth_json":               string(authJSONBytes),
-		"gemini_auth_json":        string(geminiJSONBytes),
-		"gemini_api_key":          geminiAPIKey,               // API key for Gemini CLI API key mode
-		"claude_api_key":          claudeAuthData.AccessToken, // JWT token to use as API key
-		"pi_models_json":          string(piModelsJSON),
-		"cute_code_settings_json": string(cuteCodeSettingsJSON),
+	json.NewEncoder(w).Encode(friendSessionResponse{
+		PublicURL:            publicURL,
+		Email:                user.Email,
+		IsAdmin:              isAdmin,
+		MFAEnrolled:          mfaEnrolled,
+		OriginID:             hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())),
+		DownloadToken:        user.Token,
+		AuthJSON:             string(authJSONBytes),
+		GeminiAuthJSON:       string(geminiJSONBytes),
+		GeminiAPIKey:         geminiAPIKey,               // API key for Gemini CLI API key mode
+		ClaudeAPIKey:         claudeAuthData.AccessToken, // JWT token to use as API key
+		PiModelsJSON:         string(piModelsJSON),
+		CuteCodeSettingsJSON: string(cuteCodeSettingsJSON),
 	})
 }
 
@@ -2155,7 +2100,7 @@ func (h *proxyHandler) handleWhoami(w http.ResponseWriter, r *http.Request) {
 	var userType string
 	authHeader := r.Header.Get("Authorization")
 	secret := getPoolJWTSecret()
-	originID := hashRequestOrigin(r, poolHashSalt(h.cfg.friendCode))
+	originID := hashRequestOrigin(r, poolHashSalt(secret))
 
 	// Check for Claude pool tokens first (sk-ant-oat01-pool-* or legacy sk-ant-api-pool-*)
 	if secret != "" {

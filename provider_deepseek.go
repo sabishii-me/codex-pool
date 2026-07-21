@@ -11,54 +11,54 @@ import (
 	"time"
 )
 
-// ZAIProvider handles Z.ai GLM Coding Plan accounts through the Anthropic-compatible API.
-type ZAIProvider struct {
-	zaiBase *url.URL
+// DeepSeekProvider handles DeepSeek accounts through DeepSeek's Anthropic-compatible API.
+type DeepSeekProvider struct {
+	deepseekBase *url.URL
 }
 
-// NewZAIProvider creates a new Z.ai provider.
-func NewZAIProvider(zaiBase *url.URL) *ZAIProvider {
-	return &ZAIProvider{
-		zaiBase: zaiBase,
+// NewDeepSeekProvider creates a new DeepSeek provider.
+func NewDeepSeekProvider(deepseekBase *url.URL) *DeepSeekProvider {
+	return &DeepSeekProvider{
+		deepseekBase: deepseekBase,
 	}
 }
 
-func (p *ZAIProvider) Type() AccountType {
-	return AccountTypeZAI
+func (p *DeepSeekProvider) Type() AccountType {
+	return AccountTypeDeepSeek
 }
 
-type ZAIAuthJSON struct {
+type DeepSeekAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
-	var zj ZAIAuthJSON
-	if err := json.Unmarshal(data, &zj); err != nil {
+func (p *DeepSeekProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+	var dj DeepSeekAuthJSON
+	if err := json.Unmarshal(data, &dj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if zj.APIKey == "" {
+	if dj.APIKey == "" {
 		return nil, nil
 	}
 
 	acc := &Account{
-		Type:        AccountTypeZAI,
+		Type:        AccountTypeDeepSeek,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
-		AccessToken: zj.APIKey,
-		PlanType:    "zai",
+		AccessToken: dj.APIKey,
+		PlanType:    "deepseek",
 	}
 	return acc, nil
 }
 
-func (p *ZAIProvider) SetAuthHeaders(req *http.Request, acc *Account) {
-	req.Header.Set("X-Api-Key", acc.AccessToken)
+func (p *DeepSeekProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *ZAIProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *DeepSeekProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
 	return nil
 }
 
-func (p *ZAIProvider) ParseUsage(obj map[string]any) *RequestUsage {
+func (p *DeepSeekProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	eventType, _ := obj["type"].(string)
 
 	if eventType == "message_delta" {
@@ -104,34 +104,34 @@ func (p *ZAIProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *ZAIProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
-	// Z.ai's Anthropic-compatible endpoint does not currently expose quota headers.
+func (p *DeepSeekProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+	// DeepSeek's Anthropic-compatible endpoint does not currently expose quota headers.
 }
 
-func (p *ZAIProvider) UpstreamURL(path string) *url.URL {
-	return p.zaiBase
+func (p *DeepSeekProvider) UpstreamURL(path string) *url.URL {
+	return p.deepseekBase
 }
 
-func (p *ZAIProvider) MatchesPath(path string) bool {
-	// Z.ai is model-routed.
+func (p *DeepSeekProvider) MatchesPath(path string) bool {
+	// DeepSeek is model-routed.
 	return false
 }
 
-func (p *ZAIProvider) NormalizePath(path string) string {
+func (p *DeepSeekProvider) NormalizePath(path string) string {
 	return path
 }
 
-func (p *ZAIProvider) DetectsSSE(path string, contentType string) bool {
+func (p *DeepSeekProvider) DetectsSSE(path string, contentType string) bool {
 	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
 }
 
-func isZAIModel(model string) bool {
-	_, ok := modelForProvider(AccountTypeZAI, model)
+func isDeepSeekModel(model string) bool {
+	_, ok := modelForProvider(AccountTypeDeepSeek, model)
 	return ok
 }
 
-func zaiCanonicalModel(model string) string {
-	if found, ok := modelForProvider(AccountTypeZAI, model); ok {
+func deepseekCanonicalModel(model string) string {
+	if found, ok := modelForProvider(AccountTypeDeepSeek, model); ok {
 		return found.ID
 	}
 	return model

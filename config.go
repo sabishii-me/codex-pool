@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -18,11 +19,14 @@ type ConfigFile struct {
 	Debug           bool    `toml:"debug"`
 	PublicURL       string  `toml:"public_url"`
 	GrokBase        string  `toml:"grok_base"`
-	FriendCode      string  `toml:"friend_code"`
 	FriendName      string  `toml:"friend_name"`
 	FriendTagline   string  `toml:"friend_tagline"`
-	AdminToken      string  `toml:"admin_token"`
 	TierThreshold   float64 `toml:"tier_threshold"` // Secondary usage % threshold for tier preference (default 0.15)
+
+	OAuthGoogleClientID     string   `toml:"oauth_google_client_id"`
+	OAuthGoogleClientSecret string   `toml:"oauth_google_client_secret"`
+	AllowedEmails           []string `toml:"allowed_emails"`
+	AdminEmails             []string `toml:"admin_emails"`
 
 	ModelAliases map[string]string `toml:"model_aliases"`
 
@@ -49,6 +53,28 @@ func getFriendTagline() string {
 		return globalConfigFile.FriendTagline
 	}
 	return "For the few who know, the pool awaits. Unlimited resources. Zero friction."
+}
+
+// getEmailList returns a lowercased, trimmed list of emails (or, for
+// allowed_emails, bare domains) from either a comma-separated env var or a
+// config.toml array. The env var, when set, replaces the config file list
+// entirely (same precedence convention as getConfigString). Used for both
+// ALLOWED_EMAILS (login gate) and ADMIN_EMAILS (operator gate).
+func getEmailList(envKey string, fileEmails []string) []string {
+	var raw []string
+	if v := os.Getenv(envKey); v != "" {
+		raw = strings.Split(v, ",")
+	} else {
+		raw = fileEmails
+	}
+	out := make([]string, 0, len(raw))
+	for _, email := range raw {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if email != "" {
+			out = append(out, email)
+		}
+	}
+	return out
 }
 
 // PoolUsersConfig is the [pool_users] section.

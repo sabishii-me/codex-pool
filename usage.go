@@ -15,6 +15,54 @@ func clampNonNegative(n int64) int64 {
 	return n
 }
 
+// splitUsageAccumulator merges Anthropic's split streaming usage events into
+// one request record. message_start carries input/cache usage while
+// message_delta carries final output usage.
+type splitUsageAccumulator struct {
+	pending *RequestUsage
+}
+
+func (a *splitUsageAccumulator) add(eventType string, usage *RequestUsage) *RequestUsage {
+	if usage == nil {
+		return nil
+	}
+	switch eventType {
+	case "message_start":
+		a.pending = usage
+		return nil
+	case "message_delta":
+		if a.pending == nil {
+			return usage
+		}
+		merged := a.pending
+		a.pending = nil
+		// Some compatible providers repeat the final input/cache usage in
+		// message_delta; prefer that authoritative terminal snapshot when present.
+		if usage.InputTokens > 0 {
+			merged.InputTokens = usage.InputTokens
+			merged.CachedInputTokens = usage.CachedInputTokens
+			merged.CacheCreationTokens = usage.CacheCreationTokens
+		}
+		merged.OutputTokens = usage.OutputTokens
+		merged.ReasoningTokens = usage.ReasoningTokens
+		if merged.Model == "" {
+			merged.Model = usage.Model
+		}
+		merged.BillableTokens = clampNonNegative(
+			merged.InputTokens - merged.CachedInputTokens - merged.CacheCreationTokens + merged.OutputTokens,
+		)
+		return merged
+	default:
+		return usage
+	}
+}
+
+func (a *splitUsageAccumulator) flush() *RequestUsage {
+	pending := a.pending
+	a.pending = nil
+	return pending
+}
+
 const (
 	codexFiveHourWindowMinutes = 5 * 60
 	codexWeeklyWindowMinutes   = 7 * 24 * 60

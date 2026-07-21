@@ -13,6 +13,13 @@ services:
       - PROXY_LISTEN_ADDR=0.0.0.0:8989
       - PROXY_MAX_ATTEMPTS=3
       - PROXY_USAGE_REFRESH_SECONDS=300
+      - UPSTREAM_KIMI_PLATFORM_BASE=${UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
+      - ADMIN_EMAILS=${ADMIN_EMAILS:-}
+      - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8989}
+      - POOL_JWT_SECRET=${POOL_JWT_SECRET:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
       interval: 30s

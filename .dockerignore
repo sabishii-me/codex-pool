@@ -1,0 +1,43 @@
+# Version control and editor state
+.git
+.gitignore
+.vscode
+.idea
+.code
+
+# Secrets and mutable runtime state
+.env
+.env.*
+config.toml
+pool
+data
+dev
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.log
+
+# Dependencies, builds, and test output
+node_modules
+web/node_modules
+web/dist
+bin
+dist
+tmp
+coverage.out
+*.tsbuildinfo
+web/test-results
+web/playwright-report
+.playwright-mcp
+
+# Local tooling and notes
+.localnotes
+.desloppify
+.conductor
+.claude
+security-audit-results.tsv
+
+# Platform noise
+.DS_Store
+Thumbs.db

@@ -89,6 +89,17 @@ pool/
 go build && ./codex-pool
 ```
 
+### Isolated development
+
+When the main gateway is in active use, run development as a separate Compose project with its own image, port, credentials, and databases. See [Isolated Development Instance](docs/development-instance.md).
+
+```bash
+cp .env.dev.example .env.dev
+docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml up -d --build
+```
+
+The development endpoint is `http://127.0.0.1:18990`; it never mounts the production `pool/` or `data/` directories.
+
 ### 3. Point your CLI
 
 **Codex** - `~/.codex/config.toml`:

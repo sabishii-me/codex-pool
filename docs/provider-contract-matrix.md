@@ -15,7 +15,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 
 | Provider | Protocol | Routing | Stream | JSON | Cache read | Cache write | Reasoning | Translation | Large body | Exactly once |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | N/A | Verified | Verified | Partial | Partial |
+| Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
 | Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Verified | Verified | Partial | Verified |
 | Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | Partial | Verified | Verified |
 | Antigravity | Gemini custom | model | Verified | Partial | Verified | N/A | Verified | Partial | Gap | Gap |
@@ -32,7 +32,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 
 ## Phase 0 closure work
 
-1. Add end-to-end custom-engine proxy fixtures for Codex and Antigravity; Claude, Gemini, and Grok now participate in canonical proxy harnesses.
+1. Add an end-to-end Antigravity custom-engine proxy fixture; all other providers now participate in canonical proxy harnesses.
 2. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
 3. Add canonical exactly-once event assertions for every custom protocol path.
 4. Characterize Antigravity large-body behavior and close Gemini/Antigravity translation parity.

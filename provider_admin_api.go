@@ -15,6 +15,18 @@ type ProviderAdminAPI struct {
 	refresh        func(http.ResponseWriter, string)
 }
 
+func validProviderConnectionPathID(id string) bool {
+	return strings.TrimSpace(id) != "" && !strings.Contains(id, "/")
+}
+
+func rejectInvalidProviderConnectionPathID(w http.ResponseWriter, id string) bool {
+	if validProviderConnectionPathID(id) {
+		return false
+	}
+	http.Error(w, "invalid provider connection ID", http.StatusBadRequest)
+	return true
+}
+
 func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	if api == nil || r == nil {
 		return false
@@ -28,6 +40,9 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 			return true
 		}
 		connectionID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v2/provider-connections/"), "/identity")
+		if rejectInvalidProviderConnectionPathID(w, connectionID) {
+			return true
+		}
 		api.rename(w, r, connectionID)
 		return true
 	}
@@ -44,7 +59,11 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 		if !requireMethod(w, r, http.MethodPatch) {
 			return true
 		}
-		api.rename(w, r, strings.TrimSuffix(path, "/identity"))
+		connectionID := strings.TrimSuffix(path, "/identity")
+		if rejectInvalidProviderConnectionPathID(w, connectionID) {
+			return true
+		}
+		api.rename(w, r, connectionID)
 		return true
 	case strings.HasSuffix(path, "/enable"), strings.HasSuffix(path, "/disable"):
 		if !api.authorizeAdmin(w, r) {
@@ -55,6 +74,9 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 		}
 		disabled := strings.HasSuffix(path, "/disable")
 		connectionID := strings.TrimSuffix(strings.TrimSuffix(path, "/disable"), "/enable")
+		if rejectInvalidProviderConnectionPathID(w, connectionID) {
+			return true
+		}
 		api.setDisabled(w, connectionID, disabled)
 		return true
 	case strings.HasSuffix(path, "/resurrect"):
@@ -64,7 +86,11 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 		if !requireMethod(w, r, http.MethodPost) {
 			return true
 		}
-		api.resurrect(w, strings.TrimSuffix(path, "/resurrect"))
+		connectionID := strings.TrimSuffix(path, "/resurrect")
+		if rejectInvalidProviderConnectionPathID(w, connectionID) {
+			return true
+		}
+		api.resurrect(w, connectionID)
 		return true
 	case strings.HasSuffix(path, "/refresh"):
 		if !api.authorizeAdmin(w, r) {
@@ -73,7 +99,11 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 		if !requireMethod(w, r, http.MethodPost) {
 			return true
 		}
-		api.refresh(w, strings.TrimSuffix(path, "/refresh"))
+		connectionID := strings.TrimSuffix(path, "/refresh")
+		if rejectInvalidProviderConnectionPathID(w, connectionID) {
+			return true
+		}
+		api.refresh(w, connectionID)
 		return true
 	default:
 		return false

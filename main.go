@@ -2795,8 +2795,8 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			if h.cfg.logBodies && len(respSample) > 0 {
 				log.Printf("[%s] response body sample (%d bytes): %s", reqID, len(respSample), safeText(respSample))
 			}
-			if !isSSE && len(respSample) > 0 {
-				h.updateUsageFromBody(acc, respSample, userID, originID, reqID)
+			if !isSSE && sampleBuf != nil && sampleBuf.Len() > 0 {
+				h.updateUsageFromCapture(acc, sampleBuf, requestedModel, userID, originID, reqID)
 			}
 		}
 
@@ -4399,7 +4399,7 @@ func (h *proxyHandler) tryOnce(
 	userID string,
 	originID string,
 	conversationID string,
-) (*http.Response, *bytes.Buffer, bool, error) {
+) (*http.Response, *responseBodyCapture, bool, error) {
 	if acc == nil {
 		return nil, nil, false, errors.New("nil account")
 	}
@@ -4780,17 +4780,17 @@ func (h *proxyHandler) tryOnce(
 		sampleLimit = h.cfg.bodyLogLimit
 	}
 	sampleLimit = h.claudeTraceSampleLimit(sampleLimit)
-	var buf *bytes.Buffer
+	var buf *responseBodyCapture
 	if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-		buf = &bytes.Buffer{}
-		h.attachClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, outReq, bodyBytes, resp, translateDir, buf, sampleLimit)
+		buf = newResponseBodyCapture(sampleLimit)
+		h.attachClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, outReq, bodyBytes, resp, translateDir, &buf.prefix, sampleLimit)
 	} else if shouldSampleResponseBodyForRequest(provider, acc, in.URL.Path, resp, translateDir, conversationID, h.cfg.logBodies) {
-		buf = &bytes.Buffer{}
+		buf = newResponseBodyCapture(sampleLimit)
 		resp.Body = struct {
 			io.Reader
 			io.Closer
 		}{
-			Reader: io.TeeReader(resp.Body, &limitedWriter{w: buf, n: sampleLimit}),
+			Reader: io.TeeReader(resp.Body, buf),
 			Closer: resp.Body,
 		}
 	}
@@ -4961,6 +4961,50 @@ func (h *proxyHandler) waitForRefreshSlot(ctx context.Context) error {
 		case <-timer.C:
 		}
 	}
+}
+
+func (h *proxyHandler) updateUsageFromCapture(a *ProviderConnection, capture *responseBodyCapture, defaultModel, userID, originID, reqID string) {
+	if capture == nil || capture.Len() == 0 {
+		return
+	}
+	h.updateUsageFromBody(a, capture.Bytes(), userID, originID, reqID)
+	if !capture.Truncated() || h.registry == nil || a == nil {
+		return
+	}
+	provider := h.registry.ForType(a.Type)
+	if provider == nil {
+		return
+	}
+	object := protocolUsageObjectFromJSONTail(capture.TailBytes(), defaultModel)
+	if object == nil {
+		return
+	}
+	ru := provider.ParseUsage(object)
+	if ru == nil {
+		// A bounded suffix does not retain an Anthropic response's top-level
+		// type field, which appears near the document prefix. Retry as the
+		// protocol's non-streaming message envelope only after native parsing.
+		anthropicObject := make(map[string]any, len(object)+1)
+		for key, value := range object {
+			anthropicObject[key] = value
+		}
+		anthropicObject["type"] = "message"
+		ru = provider.ParseUsage(anthropicObject)
+	}
+	if ru == nil {
+		return
+	}
+	if ru.Model == "" {
+		ru.Model = defaultModel
+	}
+	ru.ConnectionID = a.ID
+	ru.UserID = userID
+	ru.OriginID = originID
+	ru.ProviderID = a.Type
+	a.mu.Lock()
+	ru.PlanType = a.PlanType
+	a.mu.Unlock()
+	h.recordUsageForRequest(a, *ru, reqID)
 }
 
 func (h *proxyHandler) updateUsageFromBody(a *ProviderConnection, sample []byte, userID, originID, reqID string) {

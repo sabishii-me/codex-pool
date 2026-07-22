@@ -36,6 +36,10 @@ func localDevRequestAllowed(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
+	remoteHost, _, err := net.SplitHostPort(strings.TrimSpace(r.RemoteAddr))
+	if err != nil || !loopbackHostname(remoteHost) {
+		return false
+	}
 	host := r.Host
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
 		host = parsedHost

@@ -35,12 +35,21 @@ func TestLocalDevSessionRequiresLoopbackRequestHost(t *testing.T) {
 	}
 	handler := &proxyHandler{cfg: &config{localDevSession: true}, poolUsers: store}
 	for _, rawURL := range []string{"http://127.0.0.1:18990/api/pool/session", "http://localhost:18990/api/pool/session"} {
-		if user, ok := handler.sessionUser(httptest.NewRequest(http.MethodGet, rawURL, nil)); !ok || user.ID != localDevelopmentUserID {
+		request := httptest.NewRequest(http.MethodGet, rawURL, nil)
+		request.RemoteAddr = "127.0.0.1:54321"
+		if user, ok := handler.sessionUser(request); !ok || user.ID != localDevelopmentUserID {
 			t.Fatalf("loopback request did not resolve local user: %s", rawURL)
 		}
 	}
-	if _, ok := handler.sessionUser(httptest.NewRequest(http.MethodGet, "https://pool.example.com/api/pool/session", nil)); ok {
+	publicRequest := httptest.NewRequest(http.MethodGet, "https://pool.example.com/api/pool/session", nil)
+	publicRequest.RemoteAddr = "203.0.113.10:54321"
+	if _, ok := handler.sessionUser(publicRequest); ok {
 		t.Fatal("public request host resolved local development user")
+	}
+	spoofedHost := httptest.NewRequest(http.MethodGet, "http://localhost:18990/api/pool/session", nil)
+	spoofedHost.RemoteAddr = "203.0.113.10:54321"
+	if _, ok := handler.sessionUser(spoofedHost); ok {
+		t.Fatal("non-loopback peer spoofed a loopback Host")
 	}
 }
 
@@ -70,6 +79,7 @@ func TestLocalDevModeReturnsSyntheticSessionOnlyWhenEnabled(t *testing.T) {
 	}
 	handler := &proxyHandler{cfg: &config{localDevSession: true}, poolUsers: store}
 	request := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:18990/api/pool/session", nil)
+	request.RemoteAddr = "127.0.0.1:54321"
 	response := httptest.NewRecorder()
 	handler.handlePoolSession(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"email":"developer@localhost.invalid"`) {

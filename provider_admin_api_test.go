@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -75,7 +76,15 @@ func TestProviderAdminAPIAuthorizesBeforeMethodAndMutation(t *testing.T) {
 }
 
 func TestProviderAdminAPIRejectsWrongMethodAndUnknownPaths(t *testing.T) {
-	api := &ProviderAdminAPI{authorizeAdmin: func(http.ResponseWriter, *http.Request) bool { return true }}
+	api := &ProviderAdminAPI{
+		authorizeAdmin: func(http.ResponseWriter, *http.Request) bool { return true },
+		rename: func(http.ResponseWriter, *http.Request, string) {
+			t.Fatal("invalid ID reached rename mutation")
+		},
+		setDisabled: func(http.ResponseWriter, string, bool) {
+			t.Fatal("invalid ID reached disable mutation")
+		},
+	}
 	response := httptest.NewRecorder()
 	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/accounts/c1/disable", nil)) || response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("wrong method status=%d", response.Code)
@@ -83,6 +92,21 @@ func TestProviderAdminAPIRejectsWrongMethodAndUnknownPaths(t *testing.T) {
 	for _, path := range []string{"/admin/accounts", "/admin/accounts/c1/delete", "/api/v2/provider-connections", "/v1/messages"} {
 		if api.TryServe(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil)) {
 			t.Fatalf("claimed unknown/read/gateway path %s", path)
+		}
+	}
+	for _, path := range []string{
+		"/api/v2/provider-connections//identity",
+		"/api/v2/provider-connections/nested/id/identity",
+		"/admin/accounts//identity",
+		"/admin/accounts//disable",
+	} {
+		method := http.MethodPatch
+		if strings.HasSuffix(path, "/disable") {
+			method = http.MethodPost
+		}
+		response := httptest.NewRecorder()
+		if !api.TryServe(response, httptest.NewRequest(method, path, nil)) || response.Code != http.StatusBadRequest {
+			t.Fatalf("invalid path=%s status=%d", path, response.Code)
 		}
 	}
 }

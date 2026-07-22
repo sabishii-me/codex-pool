@@ -277,6 +277,8 @@ Exit criterion: every successful provider request produces exactly one durable e
 
 ### Phase 3 — Extract protocol engines
 
+Status: in progress. The Anthropic Messages usage engine is the first extracted protocol capability: Claude, DeepSeek, Z.ai, MiniMax, Qwen, OpenRouter, Kimi, Kimi Platform, and Xiaomi delegate streaming/non-streaming normalization to one implementation, while mixed-protocol adapters retain only genuine top-level fallback formats. Phase 0 provider contracts remain the non-regression boundary.
+
 - Move Anthropic Messages, OpenAI Chat, OpenAI Responses, and Gemini behavior behind tested protocol contracts.
 - Keep Codex and Antigravity custom implementations.
 

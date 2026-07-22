@@ -62,7 +62,7 @@ func (p *KimiProvider) RefreshToken(ctx context.Context, acc *ProviderConnection
 }
 
 func (p *KimiProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usage := parseAnthropicUsage(obj); usage != nil {
+	if usage := anthropicMessagesEngine.ParseUsage(obj); usage != nil {
 		return usage
 	}
 	// Kimi proxies Anthropic/OpenAI-style responses, so parse both formats.
@@ -86,43 +86,6 @@ func (p *KimiProvider) ParseUsage(obj map[string]any) *RequestUsage {
 		if m, ok := obj["model"].(string); ok && m != "" {
 			ru.Model = m
 		}
-		return ru
-	}
-
-	// Anthropic-style: message_start / message_delta
-	eventType, _ := obj["type"].(string)
-	if eventType == "message_delta" {
-		usageMap, ok := obj["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.OutputTokens = readInt64(usageMap, "output_tokens")
-		if ru.OutputTokens == 0 {
-			return nil
-		}
-		ru.BillableTokens = ru.OutputTokens
-		return ru
-	}
-	if eventType == "message_start" {
-		msg, ok := obj["message"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		usageMap, ok := msg["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.InputTokens = readInt64(usageMap, "input_tokens")
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-		if ru.InputTokens == 0 {
-			return nil
-		}
-		if model, ok := msg["model"].(string); ok {
-			ru.Model = model
-		}
-		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens)
 		return ru
 	}
 

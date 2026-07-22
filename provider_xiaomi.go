@@ -61,7 +61,7 @@ func (p *XiaomiProvider) RefreshToken(ctx context.Context, acc *ProviderConnecti
 }
 
 func (p *XiaomiProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usage := parseAnthropicUsage(obj); usage != nil {
+	if usage := anthropicMessagesEngine.ParseUsage(obj); usage != nil {
 		return usage
 	}
 	if usageMap, ok := obj["usage"].(map[string]any); ok {
@@ -70,40 +70,6 @@ func (p *XiaomiProvider) ParseUsage(obj map[string]any) *RequestUsage {
 			return nil
 		}
 		if model, ok := obj["model"].(string); ok {
-			ru.Model = model
-		}
-		return ru
-	}
-
-	eventType, _ := obj["type"].(string)
-	if eventType == "message_delta" {
-		usageMap, ok := obj["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.OutputTokens = readInt64(usageMap, "output_tokens")
-		if ru.OutputTokens == 0 {
-			return nil
-		}
-		ru.BillableTokens = ru.OutputTokens
-		return ru
-	}
-
-	if eventType == "message_start" {
-		msg, ok := obj["message"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		usageMap, ok := msg["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := xiaomiUsageFromMap(usageMap)
-		if ru == nil {
-			return nil
-		}
-		if model, ok := msg["model"].(string); ok {
 			ru.Model = model
 		}
 		return ru

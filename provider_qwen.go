@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // QwenProvider handles Qwen (Alibaba DashScope Coding Plan) accounts through
@@ -60,48 +59,7 @@ func (p *QwenProvider) RefreshToken(ctx context.Context, acc *ProviderConnection
 }
 
 func (p *QwenProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usage := parseAnthropicUsage(obj); usage != nil {
-		return usage
-	}
-	eventType, _ := obj["type"].(string)
-
-	if eventType == "message_delta" {
-		usageMap, ok := obj["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.OutputTokens = readInt64(usageMap, "output_tokens")
-		if ru.OutputTokens == 0 {
-			return nil
-		}
-		ru.BillableTokens = ru.OutputTokens
-		return ru
-	}
-
-	if eventType == "message_start" {
-		msg, ok := obj["message"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		usageMap, ok := msg["usage"].(map[string]any)
-		if !ok {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.InputTokens = readInt64(usageMap, "input_tokens")
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-		if ru.InputTokens == 0 {
-			return nil
-		}
-		if model, ok := msg["model"].(string); ok {
-			ru.Model = model
-		}
-		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens)
-		return ru
-	}
-
-	return nil
+	return anthropicMessagesEngine.ParseUsage(obj)
 }
 
 func (p *QwenProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

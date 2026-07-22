@@ -113,54 +113,7 @@ func (p *ClaudeProvider) RefreshToken(ctx context.Context, acc *ProviderConnecti
 }
 
 func (p *ClaudeProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usage := parseAnthropicUsage(obj); usage != nil {
-		return usage
-	}
-	eventType, _ := obj["type"].(string)
-
-	// Handle message_delta event (has final output tokens)
-	if eventType == "message_delta" {
-		usageMap, ok := obj["usage"].(map[string]any)
-		if !ok || usageMap == nil {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.OutputTokens = readInt64(usageMap, "output_tokens")
-		if ru.OutputTokens == 0 {
-			return nil
-		}
-		ru.BillableTokens = ru.OutputTokens
-		return ru
-	}
-
-	// Handle message_start event (has input tokens)
-	if eventType == "message_start" {
-		msg, ok := obj["message"].(map[string]any)
-		if !ok || msg == nil {
-			return nil
-		}
-		usageMap, ok := msg["usage"].(map[string]any)
-		if !ok || usageMap == nil {
-			return nil
-		}
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.InputTokens = readInt64(usageMap, "input_tokens")
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-		ru.CacheCreationTokens = readInt64(usageMap, "cache_creation_input_tokens")
-		if ru.InputTokens == 0 {
-			return nil
-		}
-		// Extract model from message object (e.g., "claude-sonnet-4-5-20250929")
-		if model, ok := msg["model"].(string); ok {
-			ru.Model = model
-		}
-		// Billable = input minus all cached tokens (both read and creation are
-		// "free" from the input price perspective; each has its own price tier).
-		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens - ru.CacheCreationTokens)
-		return ru
-	}
-
-	return nil
+	return anthropicMessagesEngine.ParseUsage(obj)
 }
 
 func (p *ClaudeProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

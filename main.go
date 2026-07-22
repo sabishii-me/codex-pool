@@ -1351,14 +1351,23 @@ func shouldPeekStreamedModelRoute(r *http.Request) bool {
 	if r == nil || r.ContentLength < streamedModelRoutePeekBytes {
 		return false
 	}
-	return r.Method == http.MethodPost && r.URL.Path == "/v1/messages"
+	return r.Method == http.MethodPost && supportsStreamedModelRoutePath(r.URL.Path)
+}
+
+func supportsStreamedModelRoutePath(path string) bool {
+	switch path {
+	case "/v1/messages", "/v1/chat/completions", "/v1/responses":
+		return true
+	default:
+		return false
+	}
 }
 
 func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provider, targetBase *url.URL, reqID string) (Provider, *url.URL, error) {
 	if r == nil || r.Body == nil || h == nil || h.registry == nil {
 		return provider, targetBase, nil
 	}
-	if r.Method != http.MethodPost || r.URL.Path != "/v1/messages" {
+	if r.Method != http.MethodPost || !supportsStreamedModelRoutePath(r.URL.Path) {
 		return provider, targetBase, nil
 	}
 	if strings.TrimSpace(r.Header.Get("Content-Encoding")) != "" {
@@ -5152,8 +5161,18 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 			}
 		}
 
-		// Legacy: direct usage object
-		if ru := parseRequestUsage(obj); ru != nil {
+		// The selected provider owns usage normalization. Generic parsing remains
+		// a fallback for legacy event shapes not recognized by that provider.
+		var ru *RequestUsage
+		if h.registry != nil {
+			if provider := h.registry.ForType(a.Type); provider != nil {
+				ru = provider.ParseUsage(obj)
+			}
+		}
+		if ru == nil {
+			ru = parseRequestUsage(obj)
+		}
+		if ru != nil {
 			ru.AccountID = a.ID
 			ru.UserID = userID
 			ru.OriginID = originID

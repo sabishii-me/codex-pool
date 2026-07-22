@@ -28,7 +28,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 | DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Qwen | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
-| NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | N/A | Verified | Verified | Partial | Gap |
+| NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
 
 ## Phase 0 closure work
 

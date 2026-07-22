@@ -1,6 +1,10 @@
 # Codex OAuth Blocker Plan
 
-Status: blocking implementation
+Status: resolved and production-validated
+
+Resolved by: `2a73a7e` (`fix: automate durable Codex OAuth callbacks`)
+
+Validation date: 2026-07-22
 
 ## Problem statement
 
@@ -15,7 +19,7 @@ The gateway runs in Docker. Publishing either port on the gateway container rese
 
 Device authorization is not an acceptable substitute because it requires a separate ChatGPT security setting and is a different user flow.
 
-Codex OAuth is a release blocker. General architecture and UI implementation must not resume until the acceptance criteria in this document pass.
+Codex OAuth was treated as a release blocker. General architecture and UI implementation resumed only after the acceptance criteria in this document passed.
 
 ## Decision
 
@@ -200,6 +204,22 @@ Starting with zero Codex credentials:
 8. Restart the gateway after starting a fourth OAuth session, then complete it successfully.
 9. Confirm Pi/Codex CLI can subsequently acquire 1455.
 10. Run Go, frontend, integration, and Playwright suites.
+
+## Production acceptance result
+
+Validated on the Windows/Docker deployment:
+
+- Three Codex accounts were added consecutively without restarting the broker or running a relay command.
+- Reauthorizing the same upstream account updated its deterministic credential file instead of creating a duplicate.
+- Three distinct upstream accounts produced three full SHA-256 credential filenames.
+- The broker selected `1455` normally and `1457` when `1455` was deliberately occupied.
+- Both callback ports were bindable immediately after each flow.
+- A pending gateway OAuth session remained pollable after restarting the development gateway.
+- The browser successfully called the broker control API under real Chromium private-network/CORS rules.
+- Full Go tests, `go vet`, 11 frontend tests, frontend build, and all three authenticated/signed-out Playwright tests passed.
+- Codex requests through Anthropic Messages translation returned HTTP 200 after onboarding.
+
+The broker is installed as the per-user Windows scheduled task `CodexPoolOAuthBroker`; its control endpoint is `127.0.0.1:1460`. Callback ports are leased only for active authorization.
 
 ## Delivery sequence
 

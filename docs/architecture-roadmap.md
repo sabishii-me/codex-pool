@@ -4,6 +4,8 @@ Status: proposed
 
 Baseline commit: `267e80b` (`feat: expand provider gateway and usage accounting`)
 
+Related implementation learnings: [`engineering-learnings.md`](engineering-learnings.md)
+
 ## Purpose
 
 Make the gateway maintainable while preserving its current protocol coverage and deployment simplicity. The first goal is a modular monolith with explicit contracts. Separate deployed services should come only after those contracts are stable.

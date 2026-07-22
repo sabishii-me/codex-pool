@@ -8,7 +8,9 @@
     "generate:api-types": "node scripts/generate-api-types.mjs",
     "build": "npm run generate:api-types && tsc -b && vite build",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:baseline": "playwright test tests/e2e/legacy-baseline.spec.ts",
+    "test:e2e:baseline:soak": "node scripts/run-baseline-soak.mjs"
   },
   "dependencies": {
     "clsx": "2.1.1",

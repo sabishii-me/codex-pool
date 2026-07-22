@@ -1,10 +1,16 @@
 import type { OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
-  const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
+  const text = await response.text();
+  let data: T | { error?: string } | null = null;
+  if (text) {
+    try { data = JSON.parse(text) as T | { error?: string }; }
+    catch { data = null; }
+  }
   if (!response.ok) {
-    const message = data && typeof data === "object" && "error" in data ? data.error : null;
-    throw new Error(message || `${response.status} ${response.statusText}`);
+    const structured = data && typeof data === "object" && "error" in data ? data.error : null;
+    const plain = data === null ? text.trim() : "";
+    throw new Error(structured || plain || `${response.status} ${response.statusText}`);
   }
   return data as T;
 }
@@ -45,6 +51,39 @@ export async function loadSignalAnalytics(): Promise<SignalAnalytics> {
 export async function loadModelCatalog(): Promise<ModelCatalog> {
   const catalog = await decode<ModelCatalog>(await fetch("/api/pool/catalog", { cache: "no-store" }));
   return { models: catalog.models ?? [] };
+}
+
+export interface DashboardResources {
+  stats?: PoolStats;
+  signal?: SignalAnalytics;
+  catalog?: ModelCatalog;
+  errors: string[];
+}
+
+function rejectionMessage(label: string, result: PromiseRejectedResult) {
+  const detail = result.reason instanceof Error ? result.reason.message : "unavailable";
+  return `${label}: ${detail}`;
+}
+
+// Dashboard resources have different durability and refresh costs. A transient
+// analytics or catalog failure must not discard fresh pool statistics (or vice
+// versa), so callers can preserve each last-known-good resource independently.
+export async function loadDashboardResources(): Promise<DashboardResources> {
+  const [stats, signal, catalog] = await Promise.allSettled([
+    loadPoolStats(),
+    loadSignalAnalytics(),
+    loadModelCatalog(),
+  ]);
+  return {
+    stats: stats.status === "fulfilled" ? stats.value : undefined,
+    signal: signal.status === "fulfilled" ? signal.value : undefined,
+    catalog: catalog.status === "fulfilled" ? catalog.value : undefined,
+    errors: [
+      ...(stats.status === "rejected" ? [rejectionMessage("pool stats", stats)] : []),
+      ...(signal.status === "rejected" ? [rejectionMessage("analytics", signal)] : []),
+      ...(catalog.status === "rejected" ? [rejectionMessage("model catalog", catalog)] : []),
+    ],
+  };
 }
 
 export async function loadLivePiModels(downloadToken: string): Promise<string> {

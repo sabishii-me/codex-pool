@@ -356,6 +356,12 @@ Gateway → durable usage events → usage/analytics service → data API → UI
 
 Do not split deployment merely to compensate for unclear package boundaries.
 
+### Pre-Phase 9 — Legacy UI compatibility baseline
+
+Status: complete. The existing Signal Room remains the stable control client for long daily-use testing while a future UI is developed separately. This was a compatibility pass, not a redesign: primary navigation, labels, workflows, and visual structure remain unchanged. Dashboard resources now refresh independently so a transient analytics or catalog failure does not discard fresh/last-known-good pool data; plain-text backend errors remain actionable; startup no longer issues a duplicate resource refresh. The live loopback baseline exercises every existing view, canonical v2 provider identities including unknown runtime providers, refresh degradation, repeated sync cycles, JavaScript/console/network failures, and application-shell uniqueness against the isolated gateway. Setup/config downloads were verified against the live development session. Repeatable daily and soak commands plus incident classification are documented in `docs/legacy-ui-baseline.md`.
+
+Keep this baseline available in parallel with Phase 9 until the replacement UI matches its route coverage, reliability, setup workflows, provider contribution paths, and operator recovery behavior.
+
 ### Phase 9 — UI/UX redesign
 
 Review and redesign the UI separately after the domain language and data API are agreed. The UI should organize around users, providers, provider connections, models, usage, and system health—not the current overloaded account abstraction.

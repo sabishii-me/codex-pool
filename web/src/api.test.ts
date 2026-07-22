@@ -1,7 +1,35 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadProviderConnectionsV2, prepareCodexOAuthBroker, renameProviderConnection, startAccountOAuth } from "./api";
+import { loadDashboardResources, loadProviderConnectionsV2, prepareCodexOAuthBroker, renameProviderConnection, startAccountOAuth } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe("API compatibility errors", () => {
+  it("preserves plain-text backend errors", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("provider connection not found\n", { status: 404, statusText: "Not Found" })));
+    await expect(loadProviderConnectionsV2()).rejects.toThrow("provider connection not found");
+  });
+});
+
+describe("dashboard compatibility hydration", () => {
+  it("keeps successful resources when a secondary endpoint fails", async () => {
+    const stats = { total_accounts: 1 };
+    const catalog = { models: [] };
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.includes("/stats")) return new Response(JSON.stringify(stats), { status: 200 });
+      if (url.includes("/signal")) return new Response(JSON.stringify({ error: "rollup unavailable" }), { status: 503 });
+      if (url.includes("/catalog")) return new Response(JSON.stringify(catalog), { status: 200 });
+      throw new Error(`unexpected URL ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resources = await loadDashboardResources();
+    expect(resources.stats).toEqual(stats);
+    expect(resources.catalog).toEqual(catalog);
+    expect(resources.signal).toBeUndefined();
+    expect(resources.errors).toEqual(["analytics: rollup unavailable"]);
+  });
+});
 
 describe("Codex OAuth broker handshake", () => {
   it("prepares the local broker before creating a gateway session", async () => {

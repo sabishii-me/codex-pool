@@ -27,13 +27,11 @@ import {
   enrollMFA,
   exchangeAccountOAuth,
 	  exchangeAntigravityOAuth,
+  loadDashboardResources,
   loadProviderConnectionsV2,
 	loadLiveCuteCodeSettings,
 	loadLivePiModels,
-	loadModelCatalog,
-  loadPoolStats,
   loadSession,
-  loadSignalAnalytics,
   logout,
   mutateAccount,
   prepareCodexOAuthBroker,
@@ -240,11 +238,11 @@ export function App() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-	  const [nextStats, nextSignal, nextCatalog] = await Promise.all([loadPoolStats(), loadSignalAnalytics(), loadModelCatalog()]);
-      setStats(nextStats);
-      setSignal(nextSignal);
-	  setModels(nextCatalog.models);
-      setError("");
+      const resources = await loadDashboardResources();
+      if (resources.stats) setStats(resources.stats);
+      if (resources.signal) setSignal(resources.signal);
+      if (resources.catalog) setModels(resources.catalog.models);
+      setError(resources.errors.join(" // "));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Signal lost");
     } finally {
@@ -286,7 +284,6 @@ export function App() {
       .then(async (fresh) => {
         setSession(fresh);
         if (fresh) {
-          await refresh();
           await refreshAdminState(fresh.is_admin);
         }
       })

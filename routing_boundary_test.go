@@ -70,6 +70,21 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestProviderLifecycleRoutesStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"/api/v2/provider-connections/", "/admin/accounts/", "renameProviderConnection(", "setAccountDisabled(", "resurrectAccount(", "forceRefreshAccount("} {
+		if strings.Contains(string(data), fragment) {
+			t.Errorf("router.go directly owns provider lifecycle fragment %q; use ProviderAdminAPI", fragment)
+		}
+	}
+	if !strings.Contains(string(data), "h.providerAdminAPIService().TryServe(w, r)") {
+		t.Fatal("proxy router does not delegate to ProviderAdminAPI")
+	}
+}
+
 func TestAccessPolicyDecisionsStayOutOfProxyRouter(t *testing.T) {
 	data, err := os.ReadFile("router.go")
 	if err != nil {

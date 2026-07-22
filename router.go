@@ -207,6 +207,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.dataAPIService().TryServe(w, r) {
 		return
 	}
+	if h.providerAdminAPIService().TryServe(w, r) {
+		return
+	}
 
 	// Static routes
 	switch r.URL.Path {
@@ -325,85 +328,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.purgeAnonymousUsers(w)
-		return
-	}
-
-	// Canonical provider-connection mutations remain in the administration
-	// router. Read-only collection routes are owned by DataAPI.
-	if strings.HasPrefix(r.URL.Path, "/api/v2/provider-connections/") && strings.HasSuffix(r.URL.Path, "/identity") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPatch {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/api/v2/provider-connections/")
-		connectionID := strings.TrimSuffix(path, "/identity")
-		h.renameProviderConnection(w, r, connectionID)
-		return
-	}
-
-	// Provider connection rename: /admin/accounts/:id/identity
-	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") && strings.HasSuffix(r.URL.Path, "/identity") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPatch {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/admin/accounts/")
-		connectionID := strings.TrimSuffix(path, "/identity")
-		h.renameProviderConnection(w, r, connectionID)
-		return
-	}
-
-	// Account enable/disable: /admin/accounts/:id/{enable,disable}
-	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") &&
-		(strings.HasSuffix(r.URL.Path, "/enable") || strings.HasSuffix(r.URL.Path, "/disable")) {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/admin/accounts/")
-		disabled := strings.HasSuffix(path, "/disable")
-		accountID := strings.TrimSuffix(strings.TrimSuffix(path, "/disable"), "/enable")
-		h.setAccountDisabled(w, accountID, disabled)
-		return
-	}
-
-	// Account resurrect: /admin/accounts/:id/resurrect
-	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") && strings.HasSuffix(r.URL.Path, "/resurrect") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		// Extract account ID from path
-		path := strings.TrimPrefix(r.URL.Path, "/admin/accounts/")
-		accountID := strings.TrimSuffix(path, "/resurrect")
-		h.resurrectAccount(w, accountID)
-		return
-	}
-
-	// Account force refresh: /admin/accounts/:id/refresh
-	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") && strings.HasSuffix(r.URL.Path, "/refresh") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		path := strings.TrimPrefix(r.URL.Path, "/admin/accounts/")
-		accountID := strings.TrimSuffix(path, "/refresh")
-		h.forceRefreshAccount(w, accountID)
 		return
 	}
 

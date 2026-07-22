@@ -594,6 +594,7 @@ type proxyHandler struct {
 	connections          *ConnectionSelector
 	connectionViews      *ConnectionViewService
 	dataAPI              *DataAPI
+	providerAdminAPI     *ProviderAdminAPI
 	access               *AccessPolicy
 	store                *usageStore
 	analyticsStore       *AnalyticsStore

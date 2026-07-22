@@ -2483,7 +2483,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						}
 						ru.UserID = userID
 						ru.OriginID = originID
-						ru.AccountType = acc.Type
+						ru.ProviderID = acc.Type
 						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
@@ -2564,7 +2564,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						}
 						ru.UserID = userID
 						ru.OriginID = originID
-						ru.AccountType = acc.Type
+						ru.ProviderID = acc.Type
 						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
@@ -2616,7 +2616,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						}
 						ru.UserID = userID
 						ru.OriginID = originID
-						ru.AccountType = acc.Type
+						ru.ProviderID = acc.Type
 						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
@@ -2771,10 +2771,10 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				if ru == nil {
 					return
 				}
-				ru.AccountID = acc.ID
+				ru.ConnectionID = acc.ID
 				ru.UserID = userID
 				ru.OriginID = originID
-				ru.AccountType = acc.Type
+				ru.ProviderID = acc.Type
 				acc.mu.Lock()
 				ru.PlanType = acc.PlanType
 				acc.mu.Unlock()
@@ -2873,10 +2873,10 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 
 			if pendingUsage := usageAccum.flush(); pendingUsage != nil {
-				pendingUsage.AccountID = acc.ID
+				pendingUsage.ConnectionID = acc.ID
 				pendingUsage.UserID = userID
 				pendingUsage.OriginID = originID
-				pendingUsage.AccountType = acc.Type
+				pendingUsage.ProviderID = acc.Type
 				acc.mu.Lock()
 				pendingUsage.PlanType = acc.PlanType
 				acc.mu.Unlock()
@@ -3764,10 +3764,10 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 				if ru == nil {
 					return
 				}
-				ru.AccountID = acc.ID
+				ru.ConnectionID = acc.ID
 				ru.UserID = userID
 				ru.OriginID = originID
-				ru.AccountType = acc.Type
+				ru.ProviderID = acc.Type
 				acc.mu.Lock()
 				ru.PlanType = acc.PlanType
 				acc.mu.Unlock()
@@ -3807,10 +3807,10 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	// Flush any accumulated Anthropic usage that wasn't emitted (e.g., stream ended
 	// without message_delta, or only got message_start before error/disconnect).
 	if pendingUsage := streamedUsageAccum.flush(); pendingUsage != nil {
-		pendingUsage.AccountID = acc.ID
+		pendingUsage.ConnectionID = acc.ID
 		pendingUsage.UserID = userID
 		pendingUsage.OriginID = originID
-		pendingUsage.AccountType = acc.Type
+		pendingUsage.ProviderID = acc.Type
 		acc.mu.Lock()
 		pendingUsage.PlanType = acc.PlanType
 		acc.mu.Unlock()
@@ -5132,10 +5132,10 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 		if objType, _ := obj["type"].(string); objType == "token_count" {
 			ru := parseTokenCountEvent(obj)
 			if ru != nil {
-				ru.AccountID = a.ID
+				ru.ConnectionID = a.ID
 				ru.UserID = userID
 				ru.OriginID = originID
-				ru.AccountType = a.Type
+				ru.ProviderID = a.Type
 				a.mu.Lock()
 				ru.PlanType = a.PlanType
 				a.mu.Unlock()
@@ -5159,10 +5159,10 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 				a.applyRateLimitObject(rl)
 			}
 			if ru := parseRequestUsage(resp); ru != nil {
-				ru.AccountID = a.ID
+				ru.ConnectionID = a.ID
 				ru.UserID = userID
 				ru.OriginID = originID
-				ru.AccountType = a.Type
+				ru.ProviderID = a.Type
 				a.mu.Lock()
 				ru.PlanType = a.PlanType
 				a.mu.Unlock()
@@ -5182,10 +5182,10 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 			ru = parseRequestUsage(obj)
 		}
 		if ru != nil {
-			ru.AccountID = a.ID
+			ru.ConnectionID = a.ID
 			ru.UserID = userID
 			ru.OriginID = originID
-			ru.AccountType = a.Type
+			ru.ProviderID = a.Type
 			a.mu.Lock()
 			ru.PlanType = a.PlanType
 			a.mu.Unlock()

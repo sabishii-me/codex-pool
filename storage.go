@@ -206,6 +206,7 @@ func (s *usageStore) recordIfNew(u RequestUsage) (bool, error) {
 	if s == nil || s.db == nil {
 		return true, nil
 	}
+	u = u.canonicalIdentity()
 
 	// Calculate rate limit deltas
 	var primaryDelta, secondaryDelta float64
@@ -591,7 +592,11 @@ func (s *usageStore) backfillOriginWeeklyUsage(startedAt time.Time) {
 				return nil
 			}
 			var usage RequestUsage
-			if err := json.Unmarshal(value, &usage); err != nil || usage.OriginID == "" {
+			if err := json.Unmarshal(value, &usage); err != nil {
+				return nil
+			}
+			usage = usage.canonicalIdentity()
+			if usage.OriginID == "" {
 				return nil
 			}
 			key := originWeeklyKey(usage)

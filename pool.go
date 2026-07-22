@@ -170,7 +170,10 @@ type UsageSnapshot struct {
 // RequestUsage captures per-request token consumption parsed from SSE events.
 type RequestUsage struct {
 	Timestamp           time.Time
-	AccountID           string
+	ConnectionID        string     `json:"connection_id,omitempty"`
+	ProviderID          ProviderID `json:"provider_id,omitempty"`
+	AccountID           string     `json:"account_id,omitempty"`   // Deprecated compatibility field.
+	AccountType         ProviderID `json:"account_type,omitempty"` // Deprecated compatibility field.
 	PlanType            string
 	UserID              string
 	OriginID            string
@@ -192,8 +195,23 @@ type RequestUsage struct {
 	PrimaryWindowMinutes   int
 	SecondaryWindowMinutes int
 	// Model and provider info
-	Model       string      `json:"model,omitempty"`        // e.g., "claude-sonnet-4-5-20250929", "o4-mini"
-	AccountType AccountType `json:"account_type,omitempty"` // "claude", "codex", "gemini"
+	Model string `json:"model,omitempty"` // e.g., "claude-sonnet-4-5-20250929", "o4-mini"
+}
+
+func (usage RequestUsage) canonicalIdentity() RequestUsage {
+	if usage.ConnectionID == "" {
+		usage.ConnectionID = usage.AccountID
+	}
+	if usage.AccountID == "" {
+		usage.AccountID = usage.ConnectionID
+	}
+	if usage.ProviderID == "" {
+		usage.ProviderID = usage.AccountType
+	}
+	if usage.AccountType == "" {
+		usage.AccountType = usage.ProviderID
+	}
+	return usage
 }
 
 // AccountUsage stores aggregates for an account with time windows.

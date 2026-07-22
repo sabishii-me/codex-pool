@@ -1623,8 +1623,8 @@ func (h *proxyHandler) recordAntigravityUsage(account *Account, usage *RequestUs
 	if usage == nil {
 		return
 	}
-	usage.Model, usage.UserID, usage.OriginID, usage.RequestID, usage.AccountType = model, userID, originID, reqID, AccountTypeAntigravity
-	usage.AccountID = account.ID
+	usage.Model, usage.UserID, usage.OriginID, usage.RequestID, usage.ProviderID = model, userID, originID, reqID, AccountTypeAntigravity
+	usage.ConnectionID = account.ID
 	account.mu.Lock()
 	usage.PlanType = account.PlanType
 	account.mu.Unlock()

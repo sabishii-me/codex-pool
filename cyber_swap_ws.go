@@ -380,8 +380,8 @@ func (s *codexRelayState) recordCompletedUsage(data []byte) {
 	}
 
 	account := s.activeAccount
-	ru.AccountID = account.ID
-	ru.AccountType = account.Type
+	ru.ConnectionID = account.ID
+	ru.ProviderID = account.Type
 	ru.UserID = s.opts.UserID
 	ru.OriginID = s.opts.OriginID
 	account.mu.Lock()

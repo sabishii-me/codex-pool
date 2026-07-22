@@ -318,6 +318,7 @@ func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 	if a == nil {
 		return
 	}
+	ru = ru.canonicalIdentity()
 	a.mu.Lock()
 	if ru.PrimaryResetAt.IsZero() {
 		ru.PrimaryResetAt = a.Usage.PrimaryResetAt

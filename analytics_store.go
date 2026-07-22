@@ -35,10 +35,11 @@ type UsageEvent struct {
 }
 
 func usageEventFromRequest(usage RequestUsage, costUSD float64) UsageEvent {
+	usage = usage.canonicalIdentity()
 	return UsageEvent{
 		RequestID: usage.RequestID, StartedAt: usage.Timestamp, CompletedAt: usage.Timestamp,
-		UserID: usage.UserID, OriginID: usage.OriginID, ProviderID: usage.AccountType,
-		ConnectionID: usage.AccountID, ModelID: usage.Model, PlanType: usage.PlanType,
+		UserID: usage.UserID, OriginID: usage.OriginID, ProviderID: usage.ProviderID,
+		ConnectionID: usage.ConnectionID, ModelID: usage.Model, PlanType: usage.PlanType,
 		InputTokens: usage.InputTokens, CacheReadTokens: usage.CachedInputTokens,
 		CacheWriteTokens: usage.CacheCreationTokens, OutputTokens: usage.OutputTokens,
 		ReasoningTokens: usage.ReasoningTokens, BillableTokens: usage.BillableTokens, CostUSD: costUSD,
@@ -690,6 +691,7 @@ func (s *AnalyticsStore) seedFromBoltDB(store *usageStore, pricing *PricingData)
 			if err := json.Unmarshal(v, &ru); err != nil {
 				return nil // skip bad records
 			}
+			ru = ru.canonicalIdentity()
 			if ru.InputTokens == 0 && ru.OutputTokens == 0 {
 				return nil
 			}

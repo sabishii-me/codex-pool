@@ -1444,7 +1444,7 @@ function oauthCode(value: string) {
 function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdded: () => Promise<void> }) {
   const [provider, setProvider] = useState<ContributableProvider>("codex");
   const [credential, setCredential] = useState("");
-	  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; automaticCallback?: boolean } | null>(null);
+	  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; relayRequired?: boolean } | null>(null);
 	  const oauthCompleted = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1494,7 +1494,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
 	      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude");
 	      if (!result.oauth_url || (provider === "antigravity" ? !result.session_id : !result.verifier)) throw new Error("Provider did not return an OAuth session");
 	      oauthCompleted.current = false;
-	      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url, automaticCallback: result.automatic_callback });
+	      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url, relayRequired: result.relay_required });
       authorizationWindow?.location.replace(result.oauth_url);
     } catch (cause) {
       authorizationWindow?.close();
@@ -1558,13 +1558,15 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
         {selected.mode === "oauth" ? (
           <div className="contribution-oauth">
             {!oauth ? (
-              <button type="button" className="oauth-launch" disabled={busy} onClick={startOAuth}>{busy ? "TUNING…" : `OPEN ${selected.label.toUpperCase()} AUTHORIZATION ↗`}</button>
+              <>
+                {provider === "codex" && <small>Start the single-use callback relay first: <code>docker compose --profile oauth run --rm --service-ports codex-oauth-relay</code></small>}
+                <button type="button" className="oauth-launch" disabled={busy} onClick={startOAuth}>{busy ? "TUNING…" : `OPEN ${selected.label.toUpperCase()} AUTHORIZATION ↗`}</button>
+              </>
             ) : (
               <>
                 <a href={oauth.url} target="_blank" rel="noreferrer">Authorization opened. Reopen it here ↗</a>
-                {provider === "codex" && oauth.automaticCallback && <small>Waiting for Codex to return to this gateway automatically. No dedicated callback port is reserved.</small>}
-                {provider === "codex" && !oauth.automaticCallback && <small>This gateway is not on the browser's loopback host. After authorization, copy the failed localhost callback URL here.</small>}
-                <label className="contribution-field"><span>{provider === "codex" && oauth.automaticCallback ? "Callback URL (fallback only)" : "Authorization code or callback URL"}</span><input value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus={provider !== "codex" || !oauth.automaticCallback} autoComplete="off" /></label>
+                {provider === "codex" && oauth.relayRequired && <small>Waiting for the temporary Codex callback relay. It exits and releases the callback port immediately after authorization.</small>}
+                <label className="contribution-field"><span>{provider === "codex" ? "Callback URL (fallback if the relay is not running)" : "Authorization code or callback URL"}</span><input value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus={provider !== "codex"} autoComplete="off" /></label>
               </>
             )}
           </div>

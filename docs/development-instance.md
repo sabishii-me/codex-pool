@@ -84,6 +84,23 @@ rm -rf dev/pool dev/data
 
 The bind-mounted state directories are not removed by `down --volumes`; remove them explicitly only when a clean development state is intended.
 
+## Codex OAuth callback relay
+
+OpenAI only accepts Codex browser OAuth callbacks on `localhost:1455` or `localhost:1457`. The gateway does not hold either port. Start the single-use development relay before pressing **Codex authorization** in the dashboard:
+
+```bash
+docker compose \
+  --env-file .env.dev \
+  -p codex-pool-dev \
+  -f docker-compose.dev.yml \
+  --profile oauth \
+  run --rm --service-ports codex-oauth-relay
+```
+
+The command waits for one callback, forwards the browser to the development gateway, exits, and releases the host port. If `1455` is occupied, set `DEV_CODEX_OAUTH_PORT=1457` in `.env.dev` and recreate the development gateway before starting the relay so the authorization URL and listener use the same port.
+
+The callback URL can still be pasted into the dashboard if a relay cannot run on the browser's machine.
+
 ## Provider credentials
 
 Development starts with an empty provider pool. Prefer fixtures and protocol test servers while implementing UI, routing, and accounting changes.

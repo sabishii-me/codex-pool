@@ -291,7 +291,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/auth/callback/google":
 		h.handleGoogleLoginCallback(w, r)
 		return
-	case "/auth/callback":
+	case "/auth/callback/codex":
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return

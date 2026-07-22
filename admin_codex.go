@@ -22,7 +22,6 @@ import (
 // Codex OAuth constants (from codex-rs/login/src/server.rs)
 const (
 	CodexOAuthClientID     = "app_EMoamEEZ73f0CkXaXp7hrann"
-	CodexOAuthRedirectURI  = "http://localhost:1455/auth/callback"
 	CodexOAuthTokenURL     = "https://auth.openai.com/oauth/token"
 	CodexOAuthAuthorizeURL = "https://auth.openai.com/oauth/authorize"
 )
@@ -137,11 +136,10 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
-	redirectURI := codexOAuthRedirectURI(h, r)
+	redirectURI := codexOAuthRedirectURI()
 
-	// Build OAuth URL. Codex's native OAuth client permits loopback ports, so
-	// send the callback to the gateway's existing port instead of reserving
-	// localhost:1455. Remote deployments retain the manual-paste fallback.
+	// OpenAI allowlists only Codex's loopback callback ports. A separate relay
+	// binds this address for one authorization and immediately releases it.
 	u, _ := url.Parse(CodexOAuthAuthorizeURL)
 	q := u.Query()
 	q.Set("response_type", "code")
@@ -175,13 +173,13 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 	go cleanupOldCodexSessions()
 
 	respondJSON(w, map[string]any{
-		"oauth_url":          u.String(),
-		"verifier":           verifier,
-		"state":              state,
-		"session_id":         verifier,
-		"status":             "pending",
-		"redirect_uri":       redirectURI,
-		"automatic_callback": redirectURI != CodexOAuthRedirectURI,
+		"oauth_url":      u.String(),
+		"verifier":       verifier,
+		"state":          state,
+		"session_id":     verifier,
+		"status":         "pending",
+		"redirect_uri":   redirectURI,
+		"relay_required": true,
 	})
 }
 
@@ -211,23 +209,12 @@ func (h *proxyHandler) handleCodexStatus(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func codexOAuthRedirectURI(h *proxyHandler, r *http.Request) string {
-	if configured := strings.TrimSpace(os.Getenv("CODEX_OAUTH_REDIRECT_URI")); configured != "" {
-		return configured
+func codexOAuthRedirectURI() string {
+	port := strings.TrimSpace(os.Getenv("CODEX_OAUTH_PORT"))
+	if port != "1457" {
+		port = "1455"
 	}
-	publicURL, err := url.Parse(h.getEffectivePublicURL(r))
-	if err != nil {
-		return CodexOAuthRedirectURI
-	}
-	hostname := strings.ToLower(publicURL.Hostname())
-	if hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1" {
-		return CodexOAuthRedirectURI
-	}
-	host := "localhost"
-	if port := publicURL.Port(); port != "" {
-		host += ":" + port
-	}
-	return "http://" + host + "/auth/callback"
+	return "http://localhost:" + port + "/auth/callback"
 }
 
 func codexOAuthTargetOrigin(r *http.Request, h *proxyHandler) string {
@@ -242,9 +229,9 @@ func codexOAuthTargetOrigin(r *http.Request, h *proxyHandler) string {
 	return "*"
 }
 
-// GET /auth/callback completes Codex OAuth on the gateway's existing loopback
-// port. It deliberately does not require a session cookie: the random OAuth
-// state and PKCE verifier authenticate the callback.
+// GET /auth/callback/codex receives the callback forwarded by the temporary
+// loopback relay. It deliberately does not require a session cookie: the
+// random OAuth state and PKCE verifier authenticate the callback.
 func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Request) {
 	state := strings.TrimSpace(r.URL.Query().Get("state"))
 	codexOAuthSessions.Lock()

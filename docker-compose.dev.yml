@@ -35,6 +35,7 @@ services:
       OAUTH_GOOGLE_CLIENT_ID: ${DEV_OAUTH_GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${DEV_OAUTH_GOOGLE_CLIENT_SECRET:-}
       OAUTH_GOOGLE_REDIRECT_URI: ${DEV_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.1:18990/auth/callback/google}
+      CODEX_OAUTH_PORT: ${DEV_CODEX_OAUTH_PORT:-1455}
       ALLOWED_EMAILS: ${DEV_ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${DEV_ADMIN_EMAILS:-}
       UPSTREAM_KIMI_PLATFORM_BASE: ${DEV_UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}
@@ -45,3 +46,18 @@ services:
       retries: 12
       start_period: 5s
     restart: unless-stopped
+
+  codex-oauth-relay:
+    profiles: ["oauth"]
+    image: codex-pool:dev
+    command:
+      - codex-oauth-relay
+      - --listen
+      - 0.0.0.0:${DEV_CODEX_OAUTH_PORT:-1455}
+      - --gateway
+      - http://127.0.0.1:18990
+    ports:
+      - "127.0.0.1:${DEV_CODEX_OAUTH_PORT:-1455}:${DEV_CODEX_OAUTH_PORT:-1455}"
+    healthcheck:
+      disable: true
+    restart: "no"

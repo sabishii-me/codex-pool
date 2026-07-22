@@ -20,9 +20,25 @@ services:
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8989}
       - POOL_JWT_SECRET=${POOL_JWT_SECRET:-}
+      - CODEX_OAUTH_PORT=${CODEX_OAUTH_PORT:-1455}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
     restart: unless-stopped
+
+  codex-oauth-relay:
+    profiles: ["oauth"]
+    image: codex-pool:latest
+    command:
+      - codex-oauth-relay
+      - --listen
+      - 0.0.0.0:${CODEX_OAUTH_PORT:-1455}
+      - --gateway
+      - http://localhost:8989
+    ports:
+      - "127.0.0.1:${CODEX_OAUTH_PORT:-1455}:${CODEX_OAUTH_PORT:-1455}"
+    healthcheck:
+      disable: true
+    restart: "no"

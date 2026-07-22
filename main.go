@@ -253,6 +253,13 @@ func buildConfig() *config {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "codex-oauth-relay" {
+		if err := runCodexOAuthRelay(os.Args[2:]); err != nil {
+			log.Fatalf("Codex OAuth relay: %v", err)
+		}
+		return
+	}
+
 	cfg := buildConfig()
 	startCodexFingerprintUpdater()
 

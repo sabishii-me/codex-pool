@@ -128,7 +128,7 @@ export interface AccountContributionResult {
   state?: string;
 	  session_id?: string;
 	  status?: "pending" | "exchanging" | "complete" | "error";
-  automatic_callback?: boolean;
+  relay_required?: boolean;
 	  error?: string;
 }
 

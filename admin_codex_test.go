@@ -23,42 +23,24 @@ func resetCodexOAuthSessions(t *testing.T) {
 	})
 }
 
-func TestCodexOAuthRedirectUsesExistingLoopbackGatewayPort(t *testing.T) {
-	t.Setenv("CODEX_OAUTH_REDIRECT_URI", "")
-	t.Setenv("PUBLIC_URL", "http://127.0.0.1:18990")
-
-	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18990/api/pool/accounts/codex/add", nil)
-	if got := codexOAuthRedirectURI(h, req); got != "http://localhost:18990/auth/callback" {
-		t.Fatalf("redirect URI = %q", got)
+func TestCodexOAuthRedirectUsesAllowlistedTemporaryRelayPort(t *testing.T) {
+	t.Setenv("CODEX_OAUTH_PORT", "")
+	if got := codexOAuthRedirectURI(); got != "http://localhost:1455/auth/callback" {
+		t.Fatalf("default redirect URI = %q", got)
+	}
+	t.Setenv("CODEX_OAUTH_PORT", "1457")
+	if got := codexOAuthRedirectURI(); got != "http://localhost:1457/auth/callback" {
+		t.Fatalf("fallback redirect URI = %q", got)
+	}
+	t.Setenv("CODEX_OAUTH_PORT", "9999")
+	if got := codexOAuthRedirectURI(); got != "http://localhost:1455/auth/callback" {
+		t.Fatalf("invalid-port redirect URI = %q", got)
 	}
 }
 
-func TestCodexOAuthRedirectKeepsLegacyFallbackForRemoteGateway(t *testing.T) {
-	t.Setenv("CODEX_OAUTH_REDIRECT_URI", "")
-	t.Setenv("PUBLIC_URL", "https://pool.example.test")
-
-	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodPost, "https://pool.example.test/api/pool/accounts/codex/add", nil)
-	if got := codexOAuthRedirectURI(h, req); got != CodexOAuthRedirectURI {
-		t.Fatalf("redirect URI = %q, want remote/manual fallback %q", got, CodexOAuthRedirectURI)
-	}
-}
-
-func TestCodexOAuthRedirectAllowsExplicitOverride(t *testing.T) {
-	t.Setenv("CODEX_OAUTH_REDIRECT_URI", "http://localhost:4567/auth/callback")
-	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodPost, "https://pool.example.test/api/pool/accounts/codex/add", nil)
-	if got := codexOAuthRedirectURI(h, req); got != "http://localhost:4567/auth/callback" {
-		t.Fatalf("redirect URI = %q", got)
-	}
-}
-
-func TestHandleCodexAddReturnsPollableSessionAndDynamicRedirect(t *testing.T) {
+func TestHandleCodexAddReturnsPollableRelaySession(t *testing.T) {
 	resetCodexOAuthSessions(t)
-	t.Setenv("CODEX_OAUTH_REDIRECT_URI", "")
-	t.Setenv("PUBLIC_URL", "http://localhost:8989")
-
+	t.Setenv("CODEX_OAUTH_PORT", "1457")
 	h := &proxyHandler{}
 	req := httptest.NewRequest(http.MethodPost, "http://localhost:8989/api/pool/accounts/codex/add", strings.NewReader("{}"))
 	req.Header.Set("Origin", "http://localhost:8989")
@@ -68,21 +50,21 @@ func TestHandleCodexAddReturnsPollableSessionAndDynamicRedirect(t *testing.T) {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 	var result struct {
-		OAuthURL          string `json:"oauth_url"`
-		Verifier          string `json:"verifier"`
-		SessionID         string `json:"session_id"`
-		Status            string `json:"status"`
-		RedirectURI       string `json:"redirect_uri"`
-		AutomaticCallback bool   `json:"automatic_callback"`
+		OAuthURL      string `json:"oauth_url"`
+		Verifier      string `json:"verifier"`
+		SessionID     string `json:"session_id"`
+		Status        string `json:"status"`
+		RedirectURI   string `json:"redirect_uri"`
+		RelayRequired bool   `json:"relay_required"`
 	}
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if result.SessionID == "" || result.SessionID != result.Verifier || result.Status != "pending" {
+	if result.SessionID == "" || result.SessionID != result.Verifier || result.Status != "pending" || !result.RelayRequired {
 		t.Fatalf("unexpected OAuth session response: %+v", result)
 	}
-	if result.RedirectURI != "http://localhost:8989/auth/callback" || !result.AutomaticCallback {
-		t.Fatalf("redirect URI = %q, automatic = %v", result.RedirectURI, result.AutomaticCallback)
+	if result.RedirectURI != "http://localhost:1457/auth/callback" {
+		t.Fatalf("redirect URI = %q", result.RedirectURI)
 	}
 	authorize, err := url.Parse(result.OAuthURL)
 	if err != nil {
@@ -93,12 +75,12 @@ func TestHandleCodexAddReturnsPollableSessionAndDynamicRedirect(t *testing.T) {
 	}
 }
 
-func TestCodexCallbackRejectsMissingCodeAndUpdatesStatus(t *testing.T) {
+func TestCodexGatewayCallbackRejectsMissingCodeAndUpdatesStatus(t *testing.T) {
 	resetCodexOAuthSessions(t)
 	session := &CodexOAuthSession{
 		Verifier:     "verifier",
 		State:        "state",
-		RedirectURI:  "http://localhost:8989/auth/callback",
+		RedirectURI:  "http://localhost:1455/auth/callback",
 		TargetOrigin: "http://localhost:8989",
 		Status:       "pending",
 		CreatedAt:    time.Now(),
@@ -107,9 +89,8 @@ func TestCodexCallbackRejectsMissingCodeAndUpdatesStatus(t *testing.T) {
 	codexOAuthSessions.sessions[session.Verifier] = session
 	codexOAuthSessions.Unlock()
 
-	h := &proxyHandler{}
 	response := httptest.NewRecorder()
-	h.handleCodexCallback(response, httptest.NewRequest(http.MethodGet, "http://localhost:8989/auth/callback?state=state", nil))
+	(&proxyHandler{}).handleCodexCallback(response, httptest.NewRequest(http.MethodGet, "http://localhost:8989/auth/callback/codex?state=state", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "error") {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}

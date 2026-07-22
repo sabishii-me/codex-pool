@@ -375,6 +375,8 @@ func (s *codexRelayState) recordCompletedUsage(data []byte) {
 	if responseID != "" {
 		s.recordedResponses[responseID] = struct{}{}
 		ru.RequestID = responseID
+	} else {
+		ru.RequestID = s.opts.ReqID
 	}
 
 	account := s.activeAccount

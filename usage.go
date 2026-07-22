@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"strings"
 	"time"
 )
 
@@ -331,12 +332,27 @@ func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 		ru.SecondaryWindowMinutes = a.Usage.SecondaryWindowMinutes
 	}
 	a.mu.Unlock()
-	if h.store != nil {
-		recorded, err := h.store.recordIfNew(ru)
-		if err != nil {
-			log.Printf("usage persistence failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
+
+	var costUSD float64
+	if h.pricing != nil && ru.Model != "" {
+		costUSD = h.pricing.calculateCost(ru)
+	}
+
+	// SQLite is the authoritative event boundary. No projection changes until
+	// this immutable event commits, and duplicate identities stop here.
+	if h.analyticsStore != nil {
+		if strings.TrimSpace(ru.RequestID) == "" {
+			log.Printf("canonical usage rejected without request identity account=%s", ru.AccountID)
 			if h.recent != nil {
-				h.recent.add("usage persistence failed: " + err.Error())
+				h.recent.add("canonical usage rejected without request identity")
+			}
+			return
+		}
+		recorded, err := h.analyticsStore.recordUsageEvent(usageEventFromRequest(ru, costUSD))
+		if err != nil {
+			log.Printf("canonical usage persistence failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
+			if h.recent != nil {
+				h.recent.add("canonical usage persistence failed: " + err.Error())
 			}
 			return
 		}
@@ -344,25 +360,28 @@ func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 			return
 		}
 	}
-	a.applyRequestUsage(ru)
 
-	// Calculate and record cost
-	var costUSD float64
-	if h.pricing != nil && ru.Model != "" {
-		costUSD = h.pricing.calculateCost(ru)
-		if costUSD > 0 {
-			a.mu.Lock()
-			a.Totals.TotalCostEstimate += costUSD
-			a.mu.Unlock()
+	// BoltDB remains a compatibility projection during migration. If SQLite is
+	// unavailable it temporarily retains its old authority for local-mode tests.
+	if h.store != nil {
+		recorded, err := h.store.recordIfNew(ru)
+		if err != nil {
+			log.Printf("legacy usage projection failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
+			if h.recent != nil {
+				h.recent.add("legacy usage projection failed: " + err.Error())
+			}
+			if h.analyticsStore == nil {
+				return
+			}
+		} else if !recorded && h.analyticsStore == nil {
+			return
 		}
 	}
-	if h.analyticsStore != nil {
-		if err := h.analyticsStore.recordRequest(ru, costUSD); err != nil {
-			log.Printf("analytics persistence failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
-			if h.recent != nil {
-				h.recent.add("analytics persistence failed: " + err.Error())
-			}
-		}
+	a.applyRequestUsage(ru)
+	if costUSD > 0 {
+		a.mu.Lock()
+		a.Totals.TotalCostEstimate += costUSD
+		a.mu.Unlock()
 	}
 
 	if h.cfg != nil && h.cfg.debug.Load() {

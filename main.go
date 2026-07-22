@@ -445,6 +445,25 @@ func main() {
 	} else {
 		defer analyticsStore.Close()
 		analyticsStore.seedFromBoltDB(store, pricing)
+		if err := backfillLegacyUsageEvents(analyticsStore.db); err != nil {
+			log.Printf("warning: failed to backfill canonical usage events: %v", err)
+		}
+		if persisted, loadErr := analyticsStore.loadConnectionTotals(); loadErr != nil {
+			log.Printf("warning: failed to restore canonical connection totals: %v", loadErr)
+		} else if len(persisted) > 0 {
+			pool.mu.RLock()
+			restored := 0
+			for _, account := range pool.accounts {
+				if usage, ok := persisted[account.ID]; ok {
+					account.mu.Lock()
+					account.Totals = usage
+					account.mu.Unlock()
+					restored++
+				}
+			}
+			pool.mu.RUnlock()
+			log.Printf("restored canonical usage totals for %d/%d connections", restored, len(persisted))
+		}
 		analyticsStore.startDailyRollup()
 		log.Printf("analytics store initialized at %s", analyticsDBPath)
 	}

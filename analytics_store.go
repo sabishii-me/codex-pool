@@ -15,7 +15,37 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// AnalyticsStore persists request cost data in SQLite for analytics queries.
+type UsageEvent struct {
+	RequestID        string
+	StartedAt        time.Time
+	CompletedAt      time.Time
+	UserID           string
+	OriginID         string
+	ProviderID       AccountType
+	ConnectionID     string
+	ModelID          string
+	PlanType         string
+	InputTokens      int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	OutputTokens     int64
+	ReasoningTokens  int64
+	BillableTokens   int64
+	CostUSD          float64
+}
+
+func usageEventFromRequest(usage RequestUsage, costUSD float64) UsageEvent {
+	return UsageEvent{
+		RequestID: usage.RequestID, StartedAt: usage.Timestamp, CompletedAt: usage.Timestamp,
+		UserID: usage.UserID, OriginID: usage.OriginID, ProviderID: usage.AccountType,
+		ConnectionID: usage.AccountID, ModelID: usage.Model, PlanType: usage.PlanType,
+		InputTokens: usage.InputTokens, CacheReadTokens: usage.CachedInputTokens,
+		CacheWriteTokens: usage.CacheCreationTokens, OutputTokens: usage.OutputTokens,
+		ReasoningTokens: usage.ReasoningTokens, BillableTokens: usage.BillableTokens, CostUSD: costUSD,
+	}
+}
+
+// AnalyticsStore persists canonical usage events and compatibility projections.
 type AnalyticsStore struct {
 	db *sql.DB
 	mu sync.Mutex // serialize writes
@@ -100,6 +130,29 @@ func newAnalyticsStore(dbPath string) (*AnalyticsStore, error) {
 
 func createAnalyticsTables(db *sql.DB) error {
 	schema := `
+	CREATE TABLE IF NOT EXISTS usage_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		request_id TEXT NOT NULL,
+		started_at TEXT NOT NULL,
+		completed_at TEXT NOT NULL,
+		user_id TEXT,
+		origin_id TEXT,
+		provider_id TEXT NOT NULL,
+		connection_id TEXT NOT NULL,
+		model_id TEXT,
+		plan_type TEXT,
+		input_tokens INTEGER NOT NULL DEFAULT 0,
+		cache_read_tokens INTEGER NOT NULL DEFAULT 0,
+		cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+		output_tokens INTEGER NOT NULL DEFAULT 0,
+		reasoning_tokens INTEGER NOT NULL DEFAULT 0,
+		billable_tokens INTEGER NOT NULL DEFAULT 0,
+		cost_usd REAL NOT NULL DEFAULT 0
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_events_request ON usage_events(connection_id, request_id) WHERE request_id != '';
+	CREATE INDEX IF NOT EXISTS idx_usage_events_completed ON usage_events(completed_at);
+	CREATE INDEX IF NOT EXISTS idx_usage_events_provider_completed ON usage_events(provider_id, completed_at);
+
 	CREATE TABLE IF NOT EXISTS request_costs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		timestamp TEXT NOT NULL,
@@ -148,32 +201,112 @@ func createAnalyticsTables(db *sql.DB) error {
 		}
 	}
 	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_request_costs_request ON request_costs(account_id, request_id) WHERE request_id != ''`)
+	if err != nil {
+		return err
+	}
+	return backfillLegacyUsageEvents(db)
+}
+
+func backfillLegacyUsageEvents(db *sql.DB) error {
+	// One-time compatibility backfill. Historical request_costs rows predate
+	// request IDs and cache-write persistence, so they receive stable synthetic
+	// identities while preserving every available token dimension.
+	_, err := db.Exec(`
+		INSERT OR IGNORE INTO usage_events (
+			request_id, started_at, completed_at, user_id, origin_id, provider_id,
+			connection_id, model_id, plan_type, input_tokens, cache_read_tokens,
+			cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd)
+		SELECT CASE WHEN request_id != '' THEN request_id ELSE 'legacy-' || id END,
+			timestamp, timestamp, COALESCE(user_id,''), '', account_type,
+			account_id, COALESCE(model,''), '', input_tokens, cached_tokens,
+			COALESCE(cache_creation_tokens,0), output_tokens, reasoning_tokens,
+			MAX(0, input_tokens - cached_tokens - COALESCE(cache_creation_tokens,0) + output_tokens), cost_usd
+		FROM request_costs`)
 	return err
 }
 
-// recordRequest inserts a request cost record.
+func (s *AnalyticsStore) loadConnectionTotals() (map[string]AccountUsage, error) {
+	rows, err := s.db.Query(`
+		SELECT connection_id, COALESCE(SUM(input_tokens),0), COALESCE(SUM(cache_read_tokens),0),
+			COALESCE(SUM(output_tokens),0), COALESCE(SUM(reasoning_tokens),0),
+			COALESCE(SUM(billable_tokens),0), COUNT(*), COALESCE(SUM(cost_usd),0), MAX(completed_at)
+		FROM usage_events GROUP BY connection_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := make(map[string]AccountUsage)
+	for rows.Next() {
+		var connectionID, lastUpdated string
+		var usage AccountUsage
+		if err := rows.Scan(&connectionID, &usage.TotalInputTokens, &usage.TotalCachedTokens,
+			&usage.TotalOutputTokens, &usage.TotalReasoningTokens, &usage.TotalBillableTokens,
+			&usage.RequestCount, &usage.TotalCostEstimate, &lastUpdated); err != nil {
+			return nil, err
+		}
+		usage.LastUpdated, _ = time.Parse(time.RFC3339Nano, lastUpdated)
+		result[connectionID] = usage
+	}
+	return result, rows.Err()
+}
+
+// recordRequest retains the legacy API while writing through the canonical
+// usage event transaction.
 func (s *AnalyticsStore) recordRequest(ru RequestUsage, costUSD float64) error {
+	_, err := s.recordUsageEvent(usageEventFromRequest(ru, costUSD))
+	return err
+}
+
+// recordUsageEvent inserts one immutable canonical event and updates the
+// request_costs compatibility projection in the same SQLite transaction.
+// It returns false for an already-persisted connection/request identity.
+func (s *AnalyticsStore) recordUsageEvent(event UsageEvent) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	_, err := s.db.Exec(`
+	tx, err := s.db.Begin()
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	result, err := tx.Exec(`
+		INSERT OR IGNORE INTO usage_events (
+			request_id, started_at, completed_at, user_id, origin_id, provider_id,
+			connection_id, model_id, plan_type, input_tokens, cache_read_tokens,
+			cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		event.RequestID, event.StartedAt.UTC().Format(time.RFC3339Nano), event.CompletedAt.UTC().Format(time.RFC3339Nano),
+		event.UserID, event.OriginID, string(event.ProviderID), event.ConnectionID, event.ModelID, event.PlanType,
+		event.InputTokens, event.CacheReadTokens, event.CacheWriteTokens, event.OutputTokens,
+		event.ReasoningTokens, event.BillableTokens, event.CostUSD,
+	)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if rows == 0 {
+		if err := tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	_, err = tx.Exec(`
 		INSERT OR IGNORE INTO request_costs (timestamp, account_id, account_type, user_id, request_id, model,
 			input_tokens, cached_tokens, cache_creation_tokens, output_tokens, reasoning_tokens, cost_usd)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		ru.Timestamp.UTC().Format(time.RFC3339),
-		ru.AccountID,
-		string(ru.AccountType),
-		ru.UserID,
-		ru.RequestID,
-		ru.Model,
-		ru.InputTokens,
-		ru.CachedInputTokens,
-		ru.CacheCreationTokens,
-		ru.OutputTokens,
-		ru.ReasoningTokens,
-		costUSD,
+		event.CompletedAt.UTC().Format(time.RFC3339), event.ConnectionID, string(event.ProviderID), event.UserID,
+		event.RequestID, event.ModelID, event.InputTokens, event.CacheReadTokens, event.CacheWriteTokens,
+		event.OutputTokens, event.ReasoningTokens, event.CostUSD,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // getCostByAccount returns total cost per account for the last N days.

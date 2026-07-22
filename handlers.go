@@ -133,19 +133,24 @@ func (h *proxyHandler) reloadAccounts() {
 		log.Printf("warning: loaded 0 accounts from %s", h.cfg.poolDir)
 	}
 
-	// Restore persisted usage totals so hot-reloads don't lose data
-	if h.store != nil {
-		if persisted, err := h.store.loadAllAccountUsage(); err == nil && len(persisted) > 0 {
-			h.pool.mu.RLock()
-			for _, a := range h.pool.accounts {
-				if usage, ok := persisted[a.ID]; ok {
-					a.mu.Lock()
-					a.Totals = usage
-					a.mu.Unlock()
-				}
+	// Restore authoritative canonical totals. BoltDB is a fallback compatibility
+	// projection only when SQLite analytics is unavailable.
+	var persisted map[string]AccountUsage
+	if h.analyticsStore != nil {
+		persisted, err = h.analyticsStore.loadConnectionTotals()
+	} else if h.store != nil {
+		persisted, err = h.store.loadAllAccountUsage()
+	}
+	if err == nil && len(persisted) > 0 {
+		h.pool.mu.RLock()
+		for _, a := range h.pool.accounts {
+			if usage, ok := persisted[a.ID]; ok {
+				a.mu.Lock()
+				a.Totals = usage
+				a.mu.Unlock()
 			}
-			h.pool.mu.RUnlock()
 		}
+		h.pool.mu.RUnlock()
 	}
 }
 

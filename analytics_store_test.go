@@ -183,6 +183,90 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 	}
 }
 
+func TestLegacyBackfillPreservesExistingRequestIdentity(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "analytics.db")
+	store, err := newAnalyticsStore(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.db.Exec(`INSERT INTO request_costs
+		(timestamp, account_id, account_type, user_id, request_id, model, input_tokens, cached_tokens,
+		 cache_creation_tokens, output_tokens, reasoning_tokens, cost_usd)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		time.Now().UTC().Format(time.RFC3339), "connection", "deepseek", "user", "real-request", "model", 10, 2, 1, 3, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backfillLegacyUsageEvents(store.db); err != nil {
+		t.Fatal(err)
+	}
+	var requestID string
+	if err := store.db.QueryRow(`SELECT request_id FROM usage_events WHERE connection_id = ?`, "connection").Scan(&requestID); err != nil {
+		t.Fatal(err)
+	}
+	if requestID != "real-request" {
+		t.Fatalf("backfilled request ID = %q, want real-request", requestID)
+	}
+	store.db.Close()
+}
+
+func TestCanonicalConnectionTotalsRebuildFromUsageEvents(t *testing.T) {
+	store, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	for _, usage := range []RequestUsage{
+		{Timestamp: time.Now(), RequestID: "one", AccountID: "connection", AccountType: AccountTypeDeepSeek, InputTokens: 100, CachedInputTokens: 20, CacheCreationTokens: 10, OutputTokens: 30, ReasoningTokens: 5, BillableTokens: 100},
+		{Timestamp: time.Now(), RequestID: "two", AccountID: "connection", AccountType: AccountTypeDeepSeek, InputTokens: 50, CachedInputTokens: 5, OutputTokens: 10, ReasoningTokens: 2, BillableTokens: 55},
+	} {
+		if recorded, err := store.recordUsageEvent(usageEventFromRequest(usage, 0.5)); err != nil || !recorded {
+			t.Fatalf("recorded=%v err=%v", recorded, err)
+		}
+	}
+	totals, err := store.loadConnectionTotals()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := totals["connection"]
+	if got.RequestCount != 2 || got.TotalInputTokens != 150 || got.TotalCachedTokens != 25 || got.TotalOutputTokens != 40 || got.TotalReasoningTokens != 7 || got.TotalBillableTokens != 155 || got.TotalCostEstimate != 1 {
+		t.Fatalf("rebuilt totals = %+v", got)
+	}
+}
+
+func TestCanonicalUsageEventPersistsCompleteIdentityAndTokenSemantics(t *testing.T) {
+	store, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	usage := RequestUsage{
+		Timestamp: time.Now(), RequestID: "request-1", UserID: "user", OriginID: "origin",
+		AccountID: "connection", AccountType: AccountTypeDeepSeek, PlanType: "plan", Model: "model",
+		InputTokens: 100, CachedInputTokens: 20, CacheCreationTokens: 10,
+		OutputTokens: 30, ReasoningTokens: 5, BillableTokens: 100,
+	}
+	recorded, err := store.recordUsageEvent(usageEventFromRequest(usage, 1.25))
+	if err != nil || !recorded {
+		t.Fatalf("recorded = %v, err = %v", recorded, err)
+	}
+	var requestID, userID, originID, providerID, connectionID, modelID, planType string
+	var input, cacheRead, cacheWrite, output, reasoning, billable int64
+	var cost float64
+	err = store.db.QueryRow(`SELECT request_id, user_id, origin_id, provider_id, connection_id, model_id, plan_type,
+		input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd
+		FROM usage_events WHERE connection_id = ?`, "connection").Scan(
+		&requestID, &userID, &originID, &providerID, &connectionID, &modelID, &planType,
+		&input, &cacheRead, &cacheWrite, &output, &reasoning, &billable, &cost,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestID != "request-1" || userID != "user" || originID != "origin" || providerID != "deepseek" || connectionID != "connection" || modelID != "model" || planType != "plan" || input != 100 || cacheRead != 20 || cacheWrite != 10 || output != 30 || reasoning != 5 || billable != 100 || cost != 1.25 {
+		t.Fatalf("canonical event mismatch: %q %q %q %q %q %q %q %d %d %d %d %d %d %f", requestID, userID, originID, providerID, connectionID, modelID, planType, input, cacheRead, cacheWrite, output, reasoning, billable, cost)
+	}
+}
+
 func TestAnalyticsStoreRequestIDDeduplicatesAndPersistsCacheCreation(t *testing.T) {
 	store, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 	if err != nil {

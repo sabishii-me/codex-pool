@@ -69,6 +69,7 @@ type config struct {
 	retentionDays              int
 	oauthGoogleClientID        string
 	oauthGoogleClientSecret    string
+	localDevSession            bool
 	allowedEmails              []string
 	adminEmails                []string
 	requestTimeout             time.Duration // Timeout for non-streaming requests (0 = no timeout)
@@ -199,6 +200,10 @@ func buildConfig() *config {
 	cfg.storePath = getConfigString("PROXY_DB_PATH", fileCfg.DBPath, "./data/proxy.db")
 	cfg.oauthGoogleClientID = getConfigString("OAUTH_GOOGLE_CLIENT_ID", fileCfg.OAuthGoogleClientID, "")
 	cfg.oauthGoogleClientSecret = getConfigString("OAUTH_GOOGLE_CLIENT_SECRET", fileCfg.OAuthGoogleClientSecret, "")
+	cfg.localDevSession = parseBoolEnv("LOCAL_DEV_SESSION", false)
+	if cfg.localDevSession && !localDevSessionURLAllowed(getPublicURL()) {
+		log.Fatalf("LOCAL_DEV_SESSION requires PUBLIC_URL to use localhost or a loopback IP")
+	}
 	cfg.allowedEmails = getEmailList("ALLOWED_EMAILS", fileCfg.AllowedEmails)
 	cfg.adminEmails = getEmailList("ADMIN_EMAILS", fileCfg.AdminEmails)
 	cfg.retentionDays = 30
@@ -418,16 +423,21 @@ func main() {
 		log.Printf("refresh operations will use proxy: %s", proxyURL.Host)
 	}
 
-	// Initialize pool users store if configured
+	// Initialize gateway users for OAuth deployments or explicit loopback-only
+	// local development sessions.
 	var poolUsers *GatewayUserStore
-	// Pool users require a JWT secret and the Google OAuth gate for access control.
-	if cfg.oauthGoogleClientID != "" && getPoolJWTSecret() != "" {
+	if (cfg.oauthGoogleClientID != "" || cfg.localDevSession) && getPoolJWTSecret() != "" {
 		poolUsersPath := getPoolUsersPath()
 		var err error
 		poolUsers, err = newGatewayUserStore(poolUsersPath)
 		if err != nil {
 			log.Printf("warning: failed to load pool users: %v", err)
 		} else {
+			if cfg.localDevSession {
+				if err := ensureLocalDevelopmentUser(poolUsers); err != nil {
+					log.Fatalf("initialize local development user: %v", err)
+				}
+			}
 			log.Printf("pool users enabled (%d users)", len(poolUsers.List()))
 		}
 	}

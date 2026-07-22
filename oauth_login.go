@@ -226,6 +226,9 @@ func (h *proxyHandler) handlePoolSession(w http.ResponseWriter, r *http.Request)
 // sessionUser resolves the pool_session cookie to a live, enabled GatewayUser.
 // Used both by handlePoolSession and by checkAdminOrSessionAuth in router.go.
 func (h *proxyHandler) sessionUser(r *http.Request) (*GatewayUser, bool) {
+	if user, ok := h.localDevelopmentUser(r); ok {
+		return user, true
+	}
 	if h.poolUsers == nil {
 		return nil, false
 	}

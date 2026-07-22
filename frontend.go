@@ -41,7 +41,7 @@ func (h *proxyHandler) serveCuteCodeLanding(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.oauthGoogleClientID != "" {
+	if h.cfg.oauthGoogleClientID != "" || h.cfg.localDevSession {
 		data, err := signalRoomContent.ReadFile("web/dist/index.html")
 		if err != nil {
 			http.Error(w, "internal error: signal room missing", http.StatusInternalServerError)

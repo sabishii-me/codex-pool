@@ -32,7 +32,9 @@ On PowerShell:
 Copy-Item .env.dev.example .env.dev
 ```
 
-Edit `.env.dev`:
+Development uses `DEV_LOCAL_SESSION=true` by default. This serves the same current React signal-room shell as production and creates an isolated synthetic `developer@localhost.invalid` member in `dev/data/pool_users.json`; it does not require Google OAuth merely to inspect empty development state. The server rejects local-session mode unless both `DEV_PUBLIC_URL` and the incoming request host are loopback (`127.0.0.1`, `::1`, or `localhost`). This mode does not grant administrator elevation.
+
+For testing the real authentication flow, set `DEV_LOCAL_SESSION=false`, then:
 
 1. Generate a development-only `DEV_POOL_JWT_SECRET`.
 2. Add your address to `DEV_ALLOWED_EMAILS` and, if needed, `DEV_ADMIN_EMAILS`.
@@ -42,7 +44,7 @@ Edit `.env.dev`:
 http://127.0.0.1:18990/auth/callback/google
 ```
 
-Do not reuse production session/JWT secrets. OAuth client separation is recommended so callback configuration and credential rotation cannot disrupt production.
+Do not reuse production session/JWT secrets. OAuth client separation is recommended so callback configuration and credential rotation cannot disrupt production. `DEV_LOCAL_SESSION=true` is for loopback development only and must never be enabled in production Compose.
 
 ## Start and stop
 

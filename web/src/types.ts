@@ -228,6 +228,8 @@ export interface AdminAccount {
   public_id: string;
   type: Provider;
   plan_type: string;
+  account_id?: string;
+  id_token_chatgpt_account_id?: string;
   disabled: boolean;
   dead: boolean;
   inflight: number;

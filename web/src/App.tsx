@@ -1261,6 +1261,11 @@ function Usage({ stats, signal, session }: { stats: PoolStats | null; signal: Si
   );
 }
 
+function upstreamAccountID(account: AdminAccount | null) {
+  if (!account) return "";
+  return account.account_id || account.id_token_chatgpt_account_id || "";
+}
+
 function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
   stats: PoolStats | null;
   adminAccounts: AdminAccount[];
@@ -1323,7 +1328,7 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             const rowID = adminMatch?.id ?? account.id;
             return (
               <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span>{adminElevated && adminMatch ? adminMatch.id : account.id}</span></small></span>
+                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={adminElevated && adminMatch ? upstreamAccountID(adminMatch) || adminMatch.id : account.id}>{adminElevated && adminMatch ? upstreamAccountID(adminMatch) || adminMatch.id : account.id}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1346,8 +1351,10 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             {selectedAccount ? (
               <>
                 <span className="inspector-code">ACCOUNT // SIGNAL VIEW</span>
-                <h2>{selectedAccount.id}</h2>
+                <h2>{upstreamAccountID(selectedAdmin) || selectedAccount.id}</h2>
                 <div className="inspector-provider" style={{ color: PROVIDERS[selectedAccount.type].color }}>{PROVIDERS[selectedAccount.type].label.toUpperCase()} / {selectedAccount.plan_type}</div>
+                {selectedAdmin && upstreamAccountID(selectedAdmin) && <div className="account-admission">UPSTREAM ACCOUNT ID // {upstreamAccountID(selectedAdmin)}</div>}
+                <div className="account-admission">CONNECTION HASH // {selectedAdmin?.id || selectedAccount.id}</div>
                 <div className="account-admission">IN POOL {formatAdmission(selectedAccount.account_added_at)} // SPEND {money.format(selectedAccount.subscription_spend)}</div>
                 <div className="inspector-windows" aria-label="Account usage reset windows">
                   <ResetWindow label="PRIMARY WINDOW" available={selectedAccount.primary_window_available} used={selectedAccount.primary_window_used_pct} resetMinutes={selectedAccount.primary_reset_minutes} paceRatio={selectedAccount.primary_pace_ratio} showPace />

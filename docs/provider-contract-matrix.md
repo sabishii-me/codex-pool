@@ -17,7 +17,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | N/A | Verified | Verified | Partial | Partial |
 | Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Verified | Verified | Partial | Verified |
-| Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | Partial | Gap | Gap |
+| Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | Partial | Verified | Verified |
 | Antigravity | Gemini custom | model | Verified | Partial | Verified | N/A | Verified | Partial | Gap | Gap |
 | Kimi Coding | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Kimi Platform | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
@@ -32,9 +32,9 @@ Adding a registered provider without a complete declared row fails `TestProvider
 
 ## Phase 0 closure work
 
-1. Add end-to-end custom-engine proxy fixtures for Codex, Gemini, and Antigravity; Claude and Grok now participate in canonical proxy harnesses.
+1. Add end-to-end custom-engine proxy fixtures for Codex and Antigravity; Claude, Gemini, and Grok now participate in canonical proxy harnesses.
 2. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
 3. Add canonical exactly-once event assertions for every custom protocol path.
-4. Characterize Gemini/Antigravity large-body behavior and translation parity.
+4. Characterize Antigravity large-body behavior and close Gemini/Antigravity translation parity.
 
 Phase 0 exits only when every applicable cell is **Verified** or explicitly **N/A**.

@@ -1898,13 +1898,37 @@ type responsesToClaudeWriter struct {
 	finishReason      string
 	inputTokens       int64
 	outputTokens      int64
+	terminal          bool
+	writeErr          error
 }
 
 func (rw *responsesToClaudeWriter) Write(p []byte) (int, error) {
+	if rw.writeErr != nil {
+		return 0, rw.writeErr
+	}
 	origLen := len(p)
 	rw.buf = append(rw.buf, p...)
 	rw.scanAndTranslate()
+	if rw.writeErr != nil {
+		return 0, rw.writeErr
+	}
 	return origLen, nil
+}
+
+// Finalize processes a final SSE event even when the upstream omitted the
+// optional trailing blank line. If Codex ended without any terminal response
+// event, emit a protocol error rather than letting Anthropic clients diagnose
+// the ambiguous EOF as a missing message_stop.
+func (rw *responsesToClaudeWriter) Finalize() error {
+	rw.scanAndTranslate()
+	if trailing := bytes.TrimSpace(rw.buf); len(trailing) > 0 {
+		rw.buf = nil
+		rw.processEvent(trailing)
+	}
+	if rw.writeErr == nil && !rw.terminal {
+		rw.emitClaudeEvent("error", `{"type":"error","error":{"type":"api_error","message":"Codex stream ended before a terminal response event"}}`)
+	}
+	return rw.writeErr
 }
 
 func (rw *responsesToClaudeWriter) scanAndTranslate() {
@@ -2064,7 +2088,8 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 			}
 		}
 
-	case "response.completed":
+	case "response.completed", "response.incomplete":
+		rw.terminal = true
 		resp, _ := obj["response"].(map[string]any)
 		if resp != nil {
 			if usage, ok := resp["usage"].(map[string]any); ok {
@@ -2079,7 +2104,9 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 		}
 		// Determine stop reason
 		stopReason := "end_turn"
-		if resp != nil {
+		if eventType == "response.incomplete" {
+			stopReason = "max_tokens"
+		} else if resp != nil {
 			if status, ok := resp["status"].(string); ok && status == "incomplete" {
 				stopReason = "max_tokens"
 			}
@@ -2095,6 +2122,7 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 		rw.emitClaudeEvent("message_stop", `{"type":"message_stop"}`)
 
 	case "response.failed":
+		rw.terminal = true
 		resp, _ := obj["response"].(map[string]any)
 		errMsg := "response failed"
 		if resp != nil {
@@ -2156,7 +2184,11 @@ func (rw *responsesToClaudeWriter) emitClaudeEvent(eventType, data string) {
 		}
 		log.Printf("[%s] responses->claude EMIT: %s (len=%d) %s", rw.reqID, eventType, len(data), preview)
 	}
+	if rw.writeErr != nil {
+		return
+	}
 	if _, err := rw.w.Write([]byte(out)); err != nil {
+		rw.writeErr = err
 		if rw.debug {
 			log.Printf("[%s] responses->claude write error: %v", rw.reqID, err)
 		}

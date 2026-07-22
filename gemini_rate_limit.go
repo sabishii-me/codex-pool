@@ -10,7 +10,26 @@ import (
 	"time"
 )
 
-var geminiRetryInPattern = regexp.MustCompile(`(?i)please retry in\s+([0-9]+(?:\.[0-9]+)?)s`)
+var (
+	geminiRetryInPattern = regexp.MustCompile(`(?i)please retry in\s+([0-9]+(?:\.[0-9]+)?)s`)
+	zaiResetAtPattern    = regexp.MustCompile(`(?i)usage limit reached[^]]*reset at\s+([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2})`)
+)
+
+func parseZAIRateLimitReset(body []byte, now time.Time) (time.Time, bool) {
+	match := zaiResetAtPattern.FindSubmatch(body)
+	if len(match) != 2 {
+		return time.Time{}, false
+	}
+	// Z.ai emits this timestamp in China Standard Time (UTC+8), as confirmed
+	// by the timestamp prefix in the same provider request ID. A fixed zone
+	// avoids depending on host/container timezone databases.
+	location := time.FixedZone("ZAI-CST", 8*60*60)
+	resetAt, err := time.ParseInLocation("2006-01-02 15:04:05", string(match[1]), location)
+	if err != nil || !resetAt.After(now) {
+		return time.Time{}, false
+	}
+	return resetAt, true
+}
 
 func parseGeminiRateLimitReset(body []byte, now time.Time) (time.Time, bool) {
 	var payload struct {
@@ -57,10 +76,20 @@ func nextGeminiPacificMidnight(now time.Time) (time.Time, bool) {
 }
 
 func (h *proxyHandler) applyRateLimitResponse(a *ProviderConnection, headers http.Header, body []byte) time.Duration {
-	if a == nil || a.Type != AccountTypeGemini {
+	if a == nil {
+		return 0
+	}
+	now := time.Now()
+	var resetAt time.Time
+	var ok bool
+	switch a.Type {
+	case AccountTypeGemini:
+		resetAt, ok = parseGeminiRateLimitReset(body, now)
+	case AccountTypeZAI:
+		resetAt, ok = parseZAIRateLimitReset(body, now)
+	default:
 		return h.applyRateLimit(a, headers)
 	}
-	resetAt, ok := parseGeminiRateLimitReset(body, time.Now())
 	if !ok {
 		return h.applyRateLimit(a, headers)
 	}

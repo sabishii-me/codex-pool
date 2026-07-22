@@ -2666,6 +2666,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				}
 			}
 
+			var responsesClaudeWriter *responsesToClaudeWriter
 			if isSSE {
 				if translateDir == TranslateCompletionsToResponses {
 					writer = &responsesToCompletionsWriter{
@@ -2691,12 +2692,13 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					}
 				} else if translateDir == TranslateClaudeToResponses {
 					// Responses API SSE → Claude SSE
-					writer = &responsesToClaudeWriter{
+					responsesClaudeWriter = &responsesToClaudeWriter{
 						w:        writer,
 						callback: usageCallback,
 						debug:    h.cfg.debug.Load(),
 						reqID:    reqID,
 					}
+					writer = responsesClaudeWriter
 				} else if translateDir != TranslateNone {
 					// Response direction is opposite of request direction:
 					// TranslateOAIToClaude request → response comes in Claude format → translate to OAI
@@ -2747,6 +2749,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			_, copyErr := io.Copy(writer, resp.Body)
 			resp.Body.Close()
+			if responsesClaudeWriter != nil {
+				if finalizeErr := responsesClaudeWriter.Finalize(); copyErr == nil {
+					copyErr = finalizeErr
+				}
+			}
 			if hw != nil {
 				hw.Stop()
 			}

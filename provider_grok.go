@@ -287,6 +287,9 @@ func grokUsageFromMap(obj map[string]any, usageMap map[string]any) *RequestUsage
 	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && ru.CachedInputTokens == 0 {
 		ru.CachedInputTokens = readInt64(details, "cached_tokens")
 	}
+	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok {
+		ru.ReasoningTokens = readInt64(details, "reasoning_tokens")
+	}
 	if ru.InputTokens == 0 && ru.OutputTokens == 0 {
 		return nil
 	}

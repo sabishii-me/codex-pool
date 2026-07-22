@@ -89,14 +89,7 @@ func TestAnthropicCompatibleProvidersProxyNonStreamingExactlyOnce(t *testing.T) 
 			if totals.RequestCount != 1 || totals.TotalInputTokens != 120 || totals.TotalCachedTokens != 30 || totals.TotalOutputTokens != 40 || totals.TotalReasoningTokens != 7 || totals.TotalBillableTokens != 110 {
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
-			var count, input, cached, output, reasoning int64
-			var persistedRequestID string
-			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(cached_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(reasoning_tokens),0), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &input, &cached, &output, &reasoning, &persistedRequestID); err != nil {
-				t.Fatal(err)
-			}
-			if count != 1 || input != 120 || cached != 30 || output != 40 || reasoning != 7 || persistedRequestID != "contract-"+string(test.ProviderType) {
-				t.Fatalf("persisted usage count=%d input=%d cached=%d output=%d reasoning=%d request=%q", count, input, cached, output, reasoning, persistedRequestID)
-			}
+			assertCanonicalContractUsage(t, analytics, account, "contract-"+string(test.ProviderType))
 		})
 	}
 }
@@ -161,14 +154,7 @@ func TestAnthropicCompatibleProvidersProxyStreamingExactlyOnce(t *testing.T) {
 			if totals.RequestCount != 1 || totals.TotalInputTokens != 120 || totals.TotalCachedTokens != 30 || totals.TotalOutputTokens != 40 || totals.TotalReasoningTokens != 7 || totals.TotalBillableTokens != 110 {
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
-			var count int64
-			var persistedRequestID string
-			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &persistedRequestID); err != nil {
-				t.Fatal(err)
-			}
-			if count != 1 || persistedRequestID != "stream-contract-"+string(test.ProviderType) {
-				t.Fatalf("persisted stream request count=%d ID=%q", count, persistedRequestID)
-			}
+			assertCanonicalContractUsage(t, analytics, account, "stream-contract-"+string(test.ProviderType))
 		})
 	}
 }
@@ -247,15 +233,31 @@ func TestAnthropicCompatibleProvidersProxyLargeBodyRouteAndUsage(t *testing.T) {
 			if totals.RequestCount != 1 || totals.TotalBillableTokens != 110 || totals.TotalReasoningTokens != 7 {
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
-			var count int64
-			var persistedRequestID string
-			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &persistedRequestID); err != nil {
-				t.Fatal(err)
-			}
-			if count != 1 || persistedRequestID != "large-contract-"+string(test.ProviderType) {
-				t.Fatalf("persisted large request count=%d ID=%q", count, persistedRequestID)
-			}
+			assertCanonicalContractUsage(t, analytics, account, "large-contract-"+string(test.ProviderType))
 		})
+	}
+}
+
+func assertCanonicalContractUsage(t *testing.T, analytics *AnalyticsStore, account *Account, requestID string) {
+	t.Helper()
+	var count, input, cacheRead, cacheWrite, output, reasoning, billable int64
+	var persistedRequestID, userID, providerID, connectionID string
+	err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(input_tokens),0),
+		COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0),
+		COALESCE(SUM(output_tokens),0), COALESCE(SUM(reasoning_tokens),0),
+		COALESCE(SUM(billable_tokens),0), COALESCE(MAX(request_id),''),
+		COALESCE(MAX(user_id),''), COALESCE(MAX(provider_id),''), COALESCE(MAX(connection_id),'')
+		FROM usage_events WHERE connection_id = ?`, account.ID).Scan(
+		&count, &input, &cacheRead, &cacheWrite, &output, &reasoning, &billable,
+		&persistedRequestID, &userID, &providerID, &connectionID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || input != 120 || cacheRead != 30 || cacheWrite != 20 || output != 40 || reasoning != 7 || billable != 110 || persistedRequestID != requestID || userID != "contract-user" || providerID != string(account.Type) || connectionID != account.ID {
+		t.Fatalf("canonical usage count=%d input=%d cache-read=%d cache-write=%d output=%d reasoning=%d billable=%d request=%q user=%q provider=%q connection=%q",
+			count, input, cacheRead, cacheWrite, output, reasoning, billable,
+			persistedRequestID, userID, providerID, connectionID)
 	}
 }
 

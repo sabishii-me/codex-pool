@@ -15,26 +15,26 @@ Adding a registered provider without a complete declared row fails `TestProvider
 
 | Provider | Protocol | Routing | Stream | JSON | Cache read | Cache write | Reasoning | Translation | Large body | Exactly once |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | Gap | Verified | Verified | Partial | Partial |
-| Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Partial | Verified | Partial | Partial |
-| Gemini | Gemini | path | Verified | Verified | Verified | Gap | Verified | Partial | Gap | Gap |
-| Antigravity | Gemini custom | model | Verified | Partial | Verified | Gap | Verified | Partial | Gap | Gap |
-| Kimi Coding | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| Kimi Platform | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| MiniMax | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| Z.ai | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| Xiaomi | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Verified | Partial |
-| Grok | OpenAI Responses custom | model | Verified | Verified | Verified | Gap | Verified | Verified | Gap | Gap |
-| DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| Qwen | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
-| NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | Gap | Verified | Verified | Partial | Gap |
+| Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | N/A | Verified | Verified | Partial | Partial |
+| Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Verified | Verified | Partial | Verified |
+| Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | Partial | Gap | Gap |
+| Antigravity | Gemini custom | model | Verified | Partial | Verified | N/A | Verified | Partial | Gap | Gap |
+| Kimi Coding | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Kimi Platform | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| MiniMax | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Z.ai | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Xiaomi | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Grok | OpenAI Responses custom | model | Verified | Verified | Verified | N/A | Verified | Verified | Gap | Gap |
+| DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Qwen | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | N/A | Verified | Verified | Partial | Gap |
 
 ## Phase 0 closure work
 
-1. Persist cache-creation tokens in analytics and aggregate projections, not only parser/request records.
-2. Add custom-engine fixtures for Codex, Claude, Gemini, Antigravity, and Grok to the shared harness.
-3. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
-4. Replace legacy analytics exactly-once assertions with one canonical event assertion and request ID for every row.
+1. Add end-to-end custom-engine proxy fixtures for Codex, Gemini, Antigravity, and Grok; Claude now participates in the canonical Anthropic harness.
+2. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
+3. Add canonical exactly-once event assertions for every custom protocol path.
+4. Characterize Gemini/Antigravity large-body behavior and translation parity.
 
 Phase 0 exits only when every applicable cell is **Verified** or explicitly **N/A**.

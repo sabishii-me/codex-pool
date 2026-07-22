@@ -61,9 +61,9 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 		contextWindow int
 		maxTokens     int
 	}{
-		"gpt-5.6-sol":         {contextWindow: 372000, maxTokens: 128000},
-		"gpt-5.6-terra":       {contextWindow: 372000, maxTokens: 128000},
-		"gpt-5.6-luna":        {contextWindow: 372000, maxTokens: 128000},
+		"gpt-5.6-sol":         {contextWindow: 272000, maxTokens: 128000},
+		"gpt-5.6-terra":       {contextWindow: 272000, maxTokens: 128000},
+		"gpt-5.6-luna":        {contextWindow: 272000, maxTokens: 128000},
 		"gpt-5.5":             {contextWindow: 272000, maxTokens: 128000},
 		"gpt-5.4":             {contextWindow: 272000, maxTokens: 128000},
 		"gpt-5.4-mini":        {contextWindow: 272000, maxTokens: 128000},

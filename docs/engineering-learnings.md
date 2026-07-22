@@ -88,6 +88,14 @@ Never persist the authorization code. Use a 15-minute expiry and an exactly-once
 - Run frontend build and Go tests sequentially because Vite clears `web/dist`, which Go embeds at compile time; parallel execution creates transient missing-embed failures.
 - Windows `os.Stat().Mode().Perm()` does not reliably represent Unix owner-only permission semantics. Assert `0600` on Unix/Linux, while production container execution remains the security boundary.
 
+## Context-window metadata
+
+- Client-facing `contextWindow` is an operational input budget, not necessarily the provider's largest total token envelope.
+- Pi uses this value to trigger proactive compaction at `contextWindow - reserveTokens`.
+- GPT-5.6 Sol/Terra/Luna must advertise the conservative Codex client input budget of `272000`, not `372000`; otherwise Pi waits too long and upstream can reject context before proactive compaction.
+- Keep generated Pi configuration, Codex model injection, and executable catalog tests synchronized.
+- Structured overflow errors still let Pi compact and retry, but correct metadata prevents overflow recovery from becoming the normal compaction path.
+
 ## Isolated development deployment
 
 - Development uses image `codex-pool:dev`, endpoint `127.0.0.1:18990`, and separate `dev/pool` and `dev/data` mounts.

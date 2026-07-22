@@ -838,8 +838,8 @@ func TestInjectClaudeModelsAddsMissingCodexFallbackModels(t *testing.T) {
 		if found[slug] == nil {
 			t.Fatalf("missing %s in injected catalog: %#v", slug, models)
 		}
-		if got := int(found[slug]["context_window"].(float64)); got != 372000 {
-			t.Fatalf("%s context_window = %d, want 372000", slug, got)
+		if got := int(found[slug]["context_window"].(float64)); got != 272000 {
+			t.Fatalf("%s context_window = %d, want 272000", slug, got)
 		}
 	}
 	if found["claude-sonnet-5"] == nil {

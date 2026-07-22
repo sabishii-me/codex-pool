@@ -43,6 +43,7 @@ type codexCyberSwapOptions struct {
 type codexCyberSwapResult struct {
 	statusCode   int
 	err          error
+	termination  webSocketTermination
 	swapped      bool
 	finalAccount *ProviderConnection
 }
@@ -108,6 +109,9 @@ func (h *proxyHandler) relayCodexWithCyberSwap(
 		return codexCyberSwapResult{err: fmt.Errorf("accept client WS: %w", err), finalAccount: opts.InitialAccount}
 	}
 	clientConn.SetReadLimit(opts.ReadLimit)
+	registry := h.webSocketRegistry()
+	session := registry.register(clientConn)
+	defer registry.unregister(session)
 
 	log.Printf("[ws-relay %s] connected to %s, relaying messages (codex cyber-aware)", opts.LogLabel, opts.InitialOutURL.Host)
 
@@ -128,13 +132,16 @@ func (h *proxyHandler) relayCodexWithCyberSwap(
 		subprotocols:  subprotocols,
 		clientCh:      startWebSocketReader(relayCtx, clientConn),
 		upstreamCh:    startWebSocketReader(relayCtx, upstreamConn),
+		session:       session,
 		// Already on a cyber account — no further swap is meaningful.
 		swapDone: opts.InitialAccount.CyberAccess,
 	}
 	defer state.closeAll()
 
 	statusCode, relayErr := state.run()
-	return state.result(statusCode, relayErr)
+	termination := normalizeCompletedWebSocketTermination(classifyWebSocketTermination(relayErr), session)
+	state.closePeer(termination)
+	return state.result(statusCode, relayErr, termination)
 }
 
 type codexRelayState struct {
@@ -161,6 +168,7 @@ type codexRelayState struct {
 	lastResponseCreate []byte
 	requestedModel     string
 	recordedResponses  map[string]struct{}
+	session            *trackedWebSocketSession
 }
 
 func (s *codexRelayState) run() (int, error) {
@@ -208,8 +216,10 @@ func (s *codexRelayState) relayOnce() error {
 	roundCtx, roundCancel := context.WithCancel(s.ctx)
 	defer roundCancel()
 
-	stopHeartbeat := startWebSocketHeartbeat(roundCtx, s.clientWriter, s.opts.DownstreamHeartbeatInterval)
-	defer stopHeartbeat()
+	clientHeartbeatErr, stopClientHeartbeat := startWebSocketHeartbeatReporting(roundCtx, s.clientWriter, s.opts.DownstreamHeartbeatInterval, "client")
+	defer stopClientHeartbeat()
+	upstreamHeartbeatErr, stopUpstreamHeartbeat := startWebSocketHeartbeatReporting(roundCtx, upstreamWriter, s.opts.DownstreamHeartbeatInterval, "upstream")
+	defer stopUpstreamHeartbeat()
 
 	upstreamErrCh := make(chan error, 1)
 	clientErrCh := make(chan error, 1)
@@ -217,10 +227,10 @@ func (s *codexRelayState) relayOnce() error {
 
 	debug := s.h != nil && s.h.cfg != nil && s.h.cfg.debug.Load()
 	go func() {
-		upstreamErrCh <- pumpFrames(roundCtx, s.upstreamCh, s.clientWriter, s.opts.LogLabel, "upstream->client", debug, s.inspectUpstream, activityCh)
+		upstreamErrCh <- pumpFrames(roundCtx, s.upstreamCh, s.clientWriter, s.opts.LogLabel, "upstream->client", debug, s.inspectUpstream, s.markUpstreamForwarded, activityCh)
 	}()
 	go func() {
-		clientErrCh <- pumpFrames(roundCtx, s.clientCh, upstreamWriter, s.opts.LogLabel, "client->upstream", debug, s.inspectClient, activityCh)
+		clientErrCh <- pumpFrames(roundCtx, s.clientCh, upstreamWriter, s.opts.LogLabel, "client->upstream", debug, s.inspectClient, s.markClientForwarded, activityCh)
 	}()
 
 	var idleTimer *time.Timer
@@ -234,11 +244,15 @@ func (s *codexRelayState) relayOnce() error {
 		select {
 		case err := <-upstreamErrCh:
 			roundCancel()
-			<-clientErrCh
 			return err
 		case err := <-clientErrCh:
 			roundCancel()
-			<-upstreamErrCh
+			return err
+		case err := <-clientHeartbeatErr:
+			roundCancel()
+			return err
+		case err := <-upstreamHeartbeatErr:
+			roundCancel()
 			return err
 		case <-activityCh:
 			if idleTimer != nil {
@@ -252,8 +266,6 @@ func (s *codexRelayState) relayOnce() error {
 			}
 		case <-idleCh:
 			roundCancel()
-			<-upstreamErrCh
-			<-clientErrCh
 			return fmt.Errorf("websocket idle timeout after %s", s.opts.IdleTimeout)
 		}
 	}
@@ -270,6 +282,7 @@ func pumpFrames(
 	logLabel, label string,
 	debug bool,
 	inspect func([]byte) ([]byte, error),
+	afterForward func([]byte),
 	activity chan<- struct{},
 ) error {
 	for {
@@ -304,8 +317,30 @@ func pumpFrames(
 			if err := dst.Write(ctx, frame.msgType, data); err != nil {
 				return fmt.Errorf("%s write: %w", label, err)
 			}
+			if afterForward != nil {
+				afterForward(data)
+			}
 		}
 	}
+}
+
+func (s *codexRelayState) markClientForwarded(data []byte) {
+	if s.session != nil && isCodexResponseCreate(data) {
+		s.session.setActive(true)
+	}
+}
+
+func (s *codexRelayState) markUpstreamForwarded(data []byte) {
+	if s.session != nil && isTerminalCodexWebSocketEvent(data) {
+		s.session.setActive(false)
+	}
+}
+
+func isTerminalCodexWebSocketEvent(data []byte) bool {
+	var event struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(data, &event) == nil && (event.Type == "response.completed" || event.Type == "response.failed")
 }
 
 func (s *codexRelayState) inspectUpstream(data []byte) ([]byte, error) {
@@ -568,19 +603,31 @@ func (s *codexRelayState) closeAll() {
 	s.upstreamConn.CloseNow()
 }
 
-func (s *codexRelayState) result(statusCode int, relayErr error) codexCyberSwapResult {
+func (s *codexRelayState) closePeer(termination webSocketTermination) {
+	code, reason := termination.wireCloseCode(), termination.wireReason()
+	switch termination.Side {
+	case "upstream":
+		s.upstreamConn.CloseNow()
+		beginWebSocketClose(s.clientConn, code, reason)
+	case "client":
+		s.clientConn.CloseNow()
+		beginWebSocketClose(s.upstreamConn, code, reason)
+	default:
+		beginWebSocketClose(s.clientConn, code, reason)
+		beginWebSocketClose(s.upstreamConn, code, reason)
+	}
+}
+
+func (s *codexRelayState) result(statusCode int, relayErr error, termination webSocketTermination) codexCyberSwapResult {
 	// swapped reflects whether the active upstream actually changed.
 	// run() always returns nil error on the cyber_policy passthrough
 	// path, so caller bookkeeping (cyberPinned -> skip pin) sees an
 	// honest swapped=false there.
 	swapped := s.activeAccount != s.opts.InitialAccount
-	if relayErr != nil && (errors.Is(relayErr, context.Canceled) ||
-		strings.Contains(relayErr.Error(), "closed") ||
-		strings.Contains(relayErr.Error(), "EOF") ||
-		websocket.CloseStatus(relayErr) != -1) {
+	if relayErr != nil && !termination.accountFailure() {
 		relayErr = nil
 	}
-	return codexCyberSwapResult{statusCode: statusCode, err: relayErr, swapped: swapped, finalAccount: s.activeAccount}
+	return codexCyberSwapResult{statusCode: statusCode, err: relayErr, termination: termination, swapped: swapped, finalAccount: s.activeAccount}
 }
 
 func (h *proxyHandler) dialSwappedUpstream(

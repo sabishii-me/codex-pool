@@ -4,7 +4,7 @@ Status: executable baseline
 
 Source of truth: `provider_contract_test.go`
 
-This matrix characterizes current behavior before architectural extraction. It is intentionally not all green.
+This matrix characterizes behavior at the Phase 0 review boundary. Every applicable capability is executable and verified; unsupported protocol dimensions are explicitly N/A.
 
 - **Verified**: executable focused or end-to-end coverage exists.
 - **Partial**: implementation exists, but a required path or assertion remains incomplete.
@@ -16,9 +16,9 @@ Adding a registered provider without a complete declared row fails `TestProvider
 | Provider | Protocol | Routing | Stream | JSON | Cache read | Cache write | Reasoning | Translation | Large body | Exactly once |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | Codex | OpenAI Responses custom | path + model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
-| Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Verified | Verified | Partial | Verified |
-| Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | Partial | Verified | Verified |
-| Antigravity | Gemini custom | model | Verified | Partial | Verified | N/A | Verified | Partial | Gap | Gap |
+| Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
+| Gemini | Gemini | path | Verified | Verified | Verified | N/A | Verified | N/A | Verified | Verified |
+| Antigravity | Gemini custom | model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
 | Kimi Coding | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Kimi Platform | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | MiniMax | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
@@ -30,11 +30,13 @@ Adding a registered provider without a complete declared row fails `TestProvider
 | OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
 
-## Phase 0 closure work
+## Phase 0 closure
 
-1. Add an end-to-end Antigravity custom-engine proxy fixture; all other providers now participate in canonical proxy harnesses.
-2. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
-3. Add canonical exactly-once event assertions for every custom protocol path.
-4. Characterize Antigravity large-body behavior and close Gemini/Antigravity translation parity.
+`TestProviderContractPhaseZeroIsClosed` fails if any capability regresses to **Partial** or **Gap**. The executable matrix now requires every applicable capability to remain **Verified** or explicitly **N/A**.
 
-Phase 0 exits only when every applicable cell is **Verified** or explicitly **N/A**.
+Completed closure work:
+
+1. Canonical SQLite events assert root request identity, provider, connection, user, cache read/write, reasoning, billable tokens, and exactly-once persistence.
+2. Every provider participates in shared parser fixtures and an end-to-end canonical proxy contract.
+3. Native large-body routes preserve payload integrity; protocols requiring whole-body transformation or sanitization explicitly reject oversized requests before upstream transmission.
+4. Cross-protocol translation is executable for applicable providers; Gemini-native routing declares translation N/A.

@@ -168,6 +168,7 @@ func TestAnthropicCompatibleProvidersProxyLargeBodyRouteAndUsage(t *testing.T) {
 		Canonical    string
 	}
 	cases := []largeBodyCase{
+		{AccountTypeClaude, "claude-contract-model", "claude-contract-model"},
 		{AccountTypeKimi, "kimi-for-coding", "kimi-for-coding"},
 		{AccountTypeKimiPlatform, "kimi-platform/kimi-k3", "kimi-k3"},
 		{AccountTypeMinimax, "minimax", "MiniMax-M3"},

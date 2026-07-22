@@ -1407,13 +1407,13 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 	}
 	rewrittenPrefix := prefix
 	delta := 0
-	if routeProvider.Type() == AccountTypeGrok {
+	if routeProvider.Type() == AccountTypeGrok || routeProvider.Type() == AccountTypeAntigravity {
 		limit := int64(streamedModelRoutePeekBytes)
 		if h.cfg != nil && h.cfg.maxInMemoryBodyBytes > 0 {
 			limit = h.cfg.maxInMemoryBodyBytes
 		}
 		restoreBody(prefix)
-		return provider, targetBase, fmt.Errorf("large Grok request requires full-body sanitization; reduce the request below %d bytes", limit)
+		return provider, targetBase, fmt.Errorf("large %s request requires full-body translation or sanitization; reduce the request below %d bytes", routeProvider.Type(), limit)
 	}
 	if canonicalModel != requestedModel {
 		rewrittenPrefix, delta, err = replaceJSONStringToken(prefix, valueStart, valueEnd, canonicalModel)
@@ -1437,6 +1437,7 @@ func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, 
 		canonical   func(string) string
 	}
 	routes := []route{
+		{AccountTypeAntigravity, shouldRouteAntigravityModel, antigravityCanonicalModel},
 		{AccountTypeKimi, isKimiModel, func(model string) string { return model }},
 		{AccountTypeKimiPlatform, isKimiPlatformModel, kimiPlatformCanonicalModel},
 		{AccountTypeMinimax, isMinimaxModel, minimaxCanonicalModel},

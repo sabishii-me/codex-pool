@@ -12,9 +12,10 @@ import (
 func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 	base, _ := url.Parse("https://streamed-route.test")
 	registry := anthropicContractRegistry(base)
-	registry.providers = append(registry.providers, NewGrokProvider(base), NewNvidiaProvider(base))
-	registry.byType[AccountTypeGrok] = registry.providers[len(registry.providers)-2]
-	registry.byType[AccountTypeNvidia] = registry.providers[len(registry.providers)-1]
+	registry.providers = append(registry.providers, NewGrokProvider(base), NewNvidiaProvider(base), NewAntigravityProvider(base, base))
+	registry.byType[AccountTypeGrok] = registry.providers[len(registry.providers)-3]
+	registry.byType[AccountTypeNvidia] = registry.providers[len(registry.providers)-2]
+	registry.byType[AccountTypeAntigravity] = registry.providers[len(registry.providers)-1]
 	handler := &proxyHandler{cfg: &config{}, registry: registry, aliases: newModelAliases(nil)}
 	fallback := registry.ForType(AccountTypeClaude)
 
@@ -24,6 +25,7 @@ func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 		wantType  AccountType
 		canonical string
 	}{
+		{"antigravity", "antigravity/gemini-3-flash", AccountTypeAntigravity, "gemini-3-flash"},
 		{"kimi", "kimi-for-coding", AccountTypeKimi, "kimi-for-coding"},
 		{"kimi-platform", "kimi-platform/kimi-k3", AccountTypeKimiPlatform, "kimi-k3"},
 		{"minimax", "minimax", AccountTypeMinimax, "MiniMax-M3"},
@@ -42,9 +44,9 @@ func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 			original := []byte(`{"model":"` + test.model + `","messages":[{"role":"user","content":"` + padding + `"}]}`)
 			request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: "/v1/messages"}, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(original)), ContentLength: int64(len(original))}
 			provider, routedBase, err := handler.applyStreamedModelRoute(request, fallback, base, "route-contract")
-			if test.wantType == AccountTypeGrok {
-				if err == nil || !strings.Contains(err.Error(), "requires full-body sanitization") {
-					t.Fatalf("large Grok route error = %v, want explicit sanitization rejection", err)
+			if test.wantType == AccountTypeGrok || test.wantType == AccountTypeAntigravity {
+				if err == nil || !strings.Contains(err.Error(), "requires full-body translation or sanitization") {
+					t.Fatalf("large custom route error = %v, want explicit full-body rejection", err)
 				}
 				return
 			}

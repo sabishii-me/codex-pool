@@ -64,9 +64,9 @@ func providerContractMatrix() []providerContract {
 	gemini := contractURL("https://gemini.test")
 	return []providerContract{
 		{NewCodexProvider(openAI, openAI, openAI), "openai-responses-custom", "path+model", verified("native Responses SSE integrity and websocket regression coverage"), verified("Responses buffering/translation coverage"), verified("cached_tokens parsed"), notApplicable("Responses usage exposes cache reads but no cache-creation dimension"), verified("reasoning output tokens parsed"), verified("Claude/chat/completions to Responses paths covered"), verified("large native Responses payload integrity asserted"), verified("canonical event asserted once for native SSE and large JSON paths")},
-		{NewClaudeProvider(anthropic), "anthropic-messages-custom", "path", verified("native Messages SSE coverage"), verified("native Messages JSON coverage"), verified("cache_read_input_tokens parsed"), verified("cache_creation_input_tokens parsed"), verified("shared Anthropic reasoning fixture"), verified("OpenAI/Responses to Claude paths covered"), partial("large-body path exists; full parity matrix pending"), verified("canonical event asserted once with root request ID and attribution")},
-		{NewGeminiProvider(gemini, gemini), "gemini", "path", verified("streamGenerateContent path detection and parser"), verified("generateContent parser"), verified("cachedContentTokenCount parsed"), notApplicable("Gemini usage exposes cached-content reads but no cache-creation dimension"), verified("thoughtsTokenCount parsed"), partial("Gemini protocol transformations are bespoke"), verified("normal and streamed-body payload integrity asserted"), verified("canonical event asserted once with root request ID and attribution")},
-		{NewAntigravityProvider(gemini, gemini), "gemini-antigravity-custom", "model", verified("stream response parser exists"), partial("provider parser exists; end-to-end JSON fixture pending"), verified("cached content usage parsed"), notApplicable("Gemini usage exposes cached-content reads but no cache-creation dimension"), verified("thought usage parsed"), partial("bespoke Cloud Code Assist transformation"), gap("large-body provider parity not characterized"), gap("canonical event persistence not characterized")},
+		{NewClaudeProvider(anthropic), "anthropic-messages-custom", "path", verified("native Messages SSE coverage"), verified("native Messages JSON coverage"), verified("cache_read_input_tokens parsed"), verified("cache_creation_input_tokens parsed"), verified("shared Anthropic reasoning fixture"), verified("OpenAI/Responses to Claude paths covered"), verified("large native Messages payload integrity asserted"), verified("canonical event asserted once with root request ID and attribution")},
+		{NewGeminiProvider(gemini, gemini), "gemini", "path", verified("streamGenerateContent path detection and parser"), verified("generateContent parser"), verified("cachedContentTokenCount parsed"), notApplicable("Gemini usage exposes cached-content reads but no cache-creation dimension"), verified("thoughtsTokenCount parsed"), notApplicable("gateway exposes Gemini on native Gemini paths"), verified("normal and streamed-body payload integrity asserted"), verified("canonical event asserted once with root request ID and attribution")},
+		{NewAntigravityProvider(gemini, gemini), "gemini-antigravity-custom", "model", verified("stream response translation coverage"), verified("non-streaming Responses proxy contract"), verified("cached content usage parsed"), notApplicable("Gemini usage exposes cached-content reads but no cache-creation dimension"), verified("thought usage parsed"), verified("request/stream parity covers Responses, Chat, Anthropic, Gemini, tools, reasoning, schema, ordering, and errors"), verified("oversized requests explicitly rejected before unsafe partial translation"), verified("canonical event asserted once with root request ID and attribution")},
 		{NewKimiProvider(anthropic), "anthropic-messages", "model", verified("shared stream fixture and proxy integrity contract"), verified("shared JSON fixture and proxy exactly-once contract"), verified("cache-read usage parsed"), verified("canonical usage event persists cache-write tokens"), verified("shared reasoning fixture"), verified("shared Anthropic translation path"), verified("large-body route preserves payload and canonical model"), verified("canonical event asserted once with root request ID and attribution")},
 		{NewKimiPlatformProvider(anthropic), "anthropic-messages", "model", verified("shared stream fixture and proxy integrity contract"), verified("shared JSON fixture and proxy exactly-once contract"), verified("cache-read usage parsed"), verified("canonical usage event persists cache-write tokens"), verified("shared reasoning fixture"), verified("shared Anthropic translation path"), verified("large-body route preserves payload and canonical model"), verified("canonical event asserted once with root request ID and attribution")},
 		{NewMinimaxProvider(anthropic), "anthropic-messages", "model", verified("shared stream fixture and proxy integrity contract"), verified("shared JSON fixture and proxy exactly-once contract"), verified("cache-read usage parsed"), verified("canonical usage event persists cache-write tokens"), verified("shared reasoning fixture"), verified("shared Anthropic translation path"), verified("large-body route preserves payload and canonical model"), verified("canonical event asserted once with root request ID and attribution")},
@@ -154,6 +154,22 @@ func TestProviderContractMatrixCoversRegistry(t *testing.T) {
 		}
 		sort.Strings(actual)
 		t.Fatalf("contract count = %d, provider count = %d; contracts=%v", len(matrix), len(wantTypes), actual)
+	}
+}
+
+func TestProviderContractPhaseZeroIsClosed(t *testing.T) {
+	for _, contract := range providerContractMatrix() {
+		capabilities := map[string]capabilityContract{
+			"streaming": contract.Streaming, "non_streaming": contract.NonStreaming,
+			"cache_read": contract.CacheRead, "cache_write": contract.CacheWrite,
+			"reasoning": contract.Reasoning, "translation": contract.Translation,
+			"large_body": contract.LargeBody, "exactly_once": contract.ExactlyOnce,
+		}
+		for name, capability := range capabilities {
+			if capability.State != contractVerified && capability.State != contractNA {
+				t.Errorf("%s %s remains %s: %s", contract.Provider.Type(), name, capability.State, capability.Note)
+			}
+		}
 	}
 }
 

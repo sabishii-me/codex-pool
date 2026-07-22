@@ -85,7 +85,7 @@ func TestGrokLargeBodyIsRejectedBeforeUpstream(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("contract-secret", "contract-user"))
 	response := httptest.NewRecorder()
 	handler.proxyRequest(response, request, "grok-large-contract")
-	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "requires full-body sanitization") {
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "requires full-body translation or sanitization") {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 	if calls != 0 {

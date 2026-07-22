@@ -238,6 +238,8 @@ The backend returns normalized values such as processed tokens, cache reads/writ
 
 ### Phase 0 — Characterize behavior
 
+Executable baseline: [`provider-contract-matrix.md`](provider-contract-matrix.md)
+
 - Build a table-driven provider contract harness.
 - Cover streaming and non-streaming responses.
 - Cover cache read, cache write, reasoning, translation, and large request routing.

@@ -70,6 +70,28 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestPoolStatsHandlerUsesDetachedConnectionViews(t *testing.T) {
+	data, err := os.ReadFile("frontend.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	start := strings.Index(source, "func (h *proxyHandler) handlePoolStats")
+	end := strings.Index(source[start:], "\nfunc (h *proxyHandler) computeCyberPolicyStats")
+	if start < 0 || end < 0 {
+		t.Fatal("could not locate pool stats handler")
+	}
+	handler := source[start : start+end]
+	for _, fragment := range []string{"allAccounts(", ".mu.Lock(", ".mu.RLock("} {
+		if strings.Contains(handler, fragment) {
+			t.Errorf("pool stats handler reads mutable connections via %q; use ConnectionViewService", fragment)
+		}
+	}
+	if !strings.Contains(handler, "PoolStatsConnections(") {
+		t.Fatal("pool stats handler does not consume detached ConnectionViewService snapshots")
+	}
+}
+
 func TestSystemAdminRoutesStayOutOfProxyRouter(t *testing.T) {
 	data, err := os.ReadFile("router.go")
 	if err != nil {

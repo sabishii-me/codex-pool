@@ -1,0 +1,54 @@
+package main
+
+import (
+	"testing"
+	"time"
+)
+
+func TestPoolStatsConnectionsReturnsDetachedReadModels(t *testing.T) {
+	connection := &ProviderConnection{
+		ID: "connection-1", Type: AccountTypeCodex,
+		Identity:              ConnectionIdentity{DisplayName: "Primary", Attributes: map[string]string{"workspace": "alpha"}},
+		PlanType:              "plus",
+		Totals:                AccountUsage{TotalInputTokens: 100, TotalCachedTokens: 25},
+		Usage:                 UsageSnapshot{PrimaryUsed: 0.4, primarySet: true},
+		RateLimitResetCredits: []RateLimitResetCredit{{ExpiresAt: time.Now().Add(time.Hour)}},
+	}
+	service := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection}, false))
+	views := service.PoolStatsConnections(time.Now(), false)
+	if len(views) != 1 || views[0].ConnectionID != connection.ID || views[0].View.DisplayName != "Primary" {
+		t.Fatalf("unexpected snapshot: %+v", views)
+	}
+	views[0].View.IdentityAttributes["workspace"] = "changed"
+	views[0].View.ResetCreditExpirations[0] = "changed"
+	connection.mu.Lock()
+	defer connection.mu.Unlock()
+	if connection.Identity.Attributes["workspace"] != "alpha" {
+		t.Fatal("snapshot identity attributes alias mutable connection state")
+	}
+	if connection.RateLimitResetCredits[0].ExpiresAt.IsZero() {
+		t.Fatal("snapshot reset-credit data mutated connection state")
+	}
+}
+
+func TestPoolStatsConnectionsMarksPrimaryAndCyberEligibility(t *testing.T) {
+	now := time.Now()
+	low := &ProviderConnection{ID: "low", Type: AccountTypeCodex, Penalty: 1}
+	high := &ProviderConnection{ID: "high", Type: AccountTypeCodex, CyberAccess: true, ExpiresAt: now.Add(time.Hour)}
+	views := NewConnectionViewService(newProviderPool([]*ProviderConnection{low, high}, false)).PoolStatsConnections(now, false)
+	if len(views) != 2 {
+		t.Fatalf("len=%d", len(views))
+	}
+	primary, cyber := 0, 0
+	for _, view := range views {
+		if view.View.IsPrimary {
+			primary++
+		}
+		if view.CyberEligible {
+			cyber++
+		}
+	}
+	if primary != 1 || cyber != 1 {
+		t.Fatalf("primary=%d cyber=%d views=%+v", primary, cyber, views)
+	}
+}

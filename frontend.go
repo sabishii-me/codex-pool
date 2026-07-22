@@ -1723,12 +1723,13 @@ func quotaPaceRatio(usedPercent float64, resetMinutes, windowMinutes int) float6
 }
 
 func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
-	accounts := h.pool.allAccounts()
-
+	now := time.Now()
+	disableRefresh := h.cfg != nil && h.cfg.disableRefresh
+	snapshots := h.connectionViewService().PoolStatsConnections(now, disableRefresh)
 	stats := PoolStats{
-		TotalAccounts: len(accounts),
-		Accounts:      []ProviderConnectionStats{},
-		GeneratedAt:   time.Now(),
+		TotalAccounts: len(snapshots),
+		Accounts:      make([]ProviderConnectionStats, 0, len(snapshots)),
+		GeneratedAt:   now,
 	}
 
 	if h.poolUsers != nil {
@@ -1738,128 +1739,26 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 	var totalInput, totalCached, totalOutput, totalReasoning, totalBillable int64
 	var primarySum, secondarySum float64
 	var primaryCount, secondaryCount int
-	activeCount := 0
-
-	for _, acc := range accounts {
-		acc.mu.Lock()
-
-		status := "healthy"
-		if acc.Dead || acc.Disabled {
-			status = "dead"
-		} else if accountCoolingDownLocked(acc, stats.GeneratedAt) || accountUsageExhaustedLocked(acc) {
-			status = "cooldown"
-		} else if acc.Penalty > 2.0 {
-			status = "degraded"
+	for _, snapshot := range snapshots {
+		view := snapshot.View
+		stats.Accounts = append(stats.Accounts, view)
+		if view.Status == "healthy" || view.Status == "degraded" {
+			stats.ActiveAccounts++
 		}
-		if status == "healthy" || status == "degraded" {
-			activeCount++
-		}
-
-		accType := string(acc.Type)
-
-		cacheHitRate := float64(0)
-		if acc.Totals.TotalInputTokens > 0 {
-			cacheHitRate = float64(acc.Totals.TotalCachedTokens) / float64(acc.Totals.TotalInputTokens) * 100
-		}
-
-		primaryReset := 0
-		secondaryReset := 0
-		if !acc.Usage.PrimaryResetAt.IsZero() {
-			primaryReset = int(time.Until(acc.Usage.PrimaryResetAt).Minutes())
-			if primaryReset < 0 {
-				primaryReset = 0
-			}
-		}
-		if !acc.Usage.SecondaryResetAt.IsZero() {
-			secondaryReset = int(time.Until(acc.Usage.SecondaryResetAt).Minutes())
-			if secondaryReset < 0 {
-				secondaryReset = 0
-			}
-		}
-
-		primaryUsed := accountPrimaryUsageLocked(acc) * 100
-		secondaryUsed := accountSecondaryUsageLocked(acc) * 100
-
-		breakdown := scoreBreakdown{}
-		score := float64(0)
-		if !acc.Dead && !acc.Disabled {
-			breakdown = scoreAccountBreakdownLocked(acc, stats.GeneratedAt)
-			score = breakdown.Score
-		}
-		scoreTooltip := scoreTooltipFromBreakdownLocked(acc, stats.GeneratedAt, breakdown)
-
-		identity := acc.connectionIdentityLocked()
-		as := ProviderConnectionStats{
-			ID:                       hashAccountID(acc.ID),
-			DisplayName:              identity.DisplayName,
-			ExternalSubject:          identity.ExternalSubject,
-			IdentityAttributes:       identity.Attributes,
-			UpstreamAccountID:        acc.AccountID,
-			AccountEmail:             acc.Email,
-			Type:                     accType,
-			PlanType:                 formatPlanWithTier(acc.PlanType, acc.RateLimitTier),
-			Status:                   status,
-			Penalty:                  acc.Penalty,
-			PrimaryWindowUsed:        primaryUsed,
-			SecondaryWindowUsed:      secondaryUsed,
-			PrimaryWindowAvailable:   usagePrimaryWindowAvailable(acc.Usage),
-			SecondaryWindowAvailable: usageSecondaryWindowAvailable(acc.Usage),
-			PrimaryResetMinutes:      primaryReset,
-			SecondaryResetMinutes:    secondaryReset,
-			PrimaryWindowMinutes:     acc.Usage.PrimaryWindowMinutes,
-			SecondaryWindowMinutes:   acc.Usage.SecondaryWindowMinutes,
-			PrimaryPaceRatio:         quotaPaceRatio(primaryUsed, primaryReset, acc.Usage.PrimaryWindowMinutes),
-			SecondaryPaceRatio:       quotaPaceRatio(secondaryUsed, secondaryReset, acc.Usage.SecondaryWindowMinutes),
-			AccountAddedAt:           acc.AddedAt.UTC().Format(time.RFC3339),
-			TotalInputTokens:         acc.Totals.TotalInputTokens,
-			TotalCachedTokens:        acc.Totals.TotalCachedTokens,
-			TotalOutputTokens:        acc.Totals.TotalOutputTokens,
-			TotalReasoningTokens:     acc.Totals.TotalReasoningTokens,
-			TotalBillableTokens:      acc.Totals.TotalBillableTokens,
-			CacheHitRate:             cacheHitRate,
-			HasCredits:               acc.Usage.HasCredits,
-			CreditsBalance:           acc.Usage.CreditsBalance,
-			Score:                    score,
-			ScoreTooltip:             scoreTooltip,
-			ResetCreditsAvailable:    acc.ResetCreditsAvailable,
-			ResetCreditsKnown:        !acc.ResetCreditsRetrievedAt.IsZero(),
-		}
-		for _, credit := range acc.RateLimitResetCredits {
-			as.ResetCreditExpirations = append(as.ResetCreditExpirations, credit.ExpiresAt.UTC().Format(time.RFC3339Nano))
-		}
-
-		totalInput += acc.Totals.TotalInputTokens
-		totalCached += acc.Totals.TotalCachedTokens
-		totalOutput += acc.Totals.TotalOutputTokens
-		totalReasoning += acc.Totals.TotalReasoningTokens
-		totalBillable += acc.Totals.TotalBillableTokens
-		if usagePrimaryWindowAvailable(acc.Usage) {
-			primarySum += accountPrimaryUsageLocked(acc)
+		totalInput += view.TotalInputTokens
+		totalCached += view.TotalCachedTokens
+		totalOutput += view.TotalOutputTokens
+		totalReasoning += view.TotalReasoningTokens
+		totalBillable += view.TotalBillableTokens
+		if view.PrimaryWindowAvailable {
+			primarySum += snapshot.PrimaryUsage
 			primaryCount++
 		}
-		if usageSecondaryWindowAvailable(acc.Usage) {
-			secondarySum += accountSecondaryUsageLocked(acc)
+		if view.SecondaryWindowAvailable {
+			secondarySum += snapshot.SecondaryUsage
 			secondaryCount++
 		}
-
-		acc.mu.Unlock()
-		stats.Accounts = append(stats.Accounts, as)
 	}
-
-	// Mark the highest-scoring account per provider type as primary
-	highestScore := make(map[string]float64)
-	highestIdx := make(map[string]int)
-	for i, as := range stats.Accounts {
-		if (as.Status == "healthy" || as.Status == "degraded") && as.Score > highestScore[as.Type] {
-			highestScore[as.Type] = as.Score
-			highestIdx[as.Type] = i
-		}
-	}
-	for _, idx := range highestIdx {
-		stats.Accounts[idx].IsPrimary = true
-	}
-
-	stats.ActiveAccounts = activeCount
 
 	overallCacheRate := float64(0)
 	if totalInput > 0 {
@@ -1952,11 +1851,9 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 		// (stats use hashed IDs, costs use real IDs)
 		accountIDMap := make(map[string]string) // hashed -> real
 		accountAddedAt := make(map[string]time.Time)
-		for _, acc := range accounts {
-			acc.mu.Lock()
-			accountIDMap[hashAccountID(acc.ID)] = acc.ID
-			accountAddedAt[acc.ID] = acc.AddedAt
-			acc.mu.Unlock()
+		for _, snapshot := range snapshots {
+			accountIDMap[snapshot.View.ID] = snapshot.ConnectionID
+			accountAddedAt[snapshot.ConnectionID] = snapshot.AddedAt
 		}
 
 		// Update per-account cost fields
@@ -2029,7 +1926,7 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	stats.CyberPolicy = h.computeCyberPolicyStats(accounts)
+	stats.CyberPolicy = h.computeCyberPolicyStatsFromSnapshots(snapshots)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
@@ -2041,19 +1938,21 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 // buffered/4xx retry — i.e. no synthetic-refusal fallbacks AND there's
 // still a cyber candidate available for the next hit.
 func (h *proxyHandler) computeCyberPolicyStats(accounts []*ProviderConnection) CyberPolicyStats {
+	pool := newProviderPool(accounts, h.cfg != nil && h.cfg.disableRefresh)
+	snapshots := NewConnectionViewService(pool).PoolStatsConnections(time.Now(), h.cfg != nil && h.cfg.disableRefresh)
+	return h.computeCyberPolicyStatsFromSnapshots(snapshots)
+}
+
+func (h *proxyHandler) computeCyberPolicyStatsFromSnapshots(snapshots []poolStatsConnectionSnapshot) CyberPolicyStats {
 	out := CyberPolicyStats{
 		Counters:   map[string]int64{},
 		PerAccount: map[string]map[string]int64{},
 	}
 
-	now := time.Now()
-	for _, a := range accounts {
-		a.mu.Lock()
-		if a.CyberAccess && !a.Dead && !a.Disabled &&
-			(a.ExpiresAt.IsZero() || a.ExpiresAt.After(now) || h.cfg.disableRefresh) {
+	for _, snapshot := range snapshots {
+		if snapshot.CyberEligible {
 			out.CyberCandidatesAvailable++
 		}
-		a.mu.Unlock()
 	}
 
 	if h.metrics == nil {

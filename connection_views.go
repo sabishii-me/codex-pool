@@ -65,6 +65,15 @@ type connectionViewSnapshot struct {
 	Legacy    LegacyOperatorConnectionView
 }
 
+type poolStatsConnectionSnapshot struct {
+	View           ProviderConnectionStats
+	ConnectionID   string
+	AddedAt        time.Time
+	PrimaryUsage   float64
+	SecondaryUsage float64
+	CyberEligible  bool
+}
+
 // ConnectionViewService is the only read-model component allowed to inspect
 // mutable ProviderConnection state. It snapshots under the connection lock and
 // returns detached DTO values to HTTP/data consumers.
@@ -94,6 +103,95 @@ func (service *ConnectionViewService) LegacyOperatorConnections() []LegacyOperat
 	}
 	markLegacyPrimary(views)
 	return views
+}
+
+func (service *ConnectionViewService) PoolStatsConnections(now time.Time, disableRefresh bool) []poolStatsConnectionSnapshot {
+	if service == nil || service.pool == nil {
+		return []poolStatsConnectionSnapshot{}
+	}
+	connections := service.pool.allAccounts()
+	out := make([]poolStatsConnectionSnapshot, 0, len(connections))
+	for _, connection := range connections {
+		if connection == nil {
+			continue
+		}
+		connection.mu.Lock()
+		status := "healthy"
+		if connection.Dead || connection.Disabled {
+			status = "dead"
+		} else if accountCoolingDownLocked(connection, now) || accountUsageExhaustedLocked(connection) {
+			status = "cooldown"
+		} else if connection.Penalty > 2 {
+			status = "degraded"
+		}
+		primaryUsage := accountPrimaryUsageLocked(connection)
+		secondaryUsage := accountSecondaryUsageLocked(connection)
+		primaryReset := resetMinutes(now, connection.Usage.PrimaryResetAt)
+		secondaryReset := resetMinutes(now, connection.Usage.SecondaryResetAt)
+		breakdown := scoreBreakdown{}
+		score := float64(0)
+		if !connection.Dead && !connection.Disabled {
+			breakdown = scoreAccountBreakdownLocked(connection, now)
+			score = breakdown.Score
+		}
+		identity := connection.connectionIdentityLocked()
+		cacheHitRate := float64(0)
+		if connection.Totals.TotalInputTokens > 0 {
+			cacheHitRate = float64(connection.Totals.TotalCachedTokens) / float64(connection.Totals.TotalInputTokens) * 100
+		}
+		view := ProviderConnectionStats{
+			ID: hashAccountID(connection.ID), DisplayName: identity.DisplayName,
+			ExternalSubject: identity.ExternalSubject, IdentityAttributes: cloneStringMap(identity.Attributes),
+			UpstreamAccountID: connection.AccountID, AccountEmail: connection.Email, Type: string(connection.Type),
+			PlanType: formatPlanWithTier(connection.PlanType, connection.RateLimitTier), Status: status,
+			Penalty: connection.Penalty, PrimaryWindowUsed: primaryUsage * 100, SecondaryWindowUsed: secondaryUsage * 100,
+			PrimaryWindowAvailable: usagePrimaryWindowAvailable(connection.Usage), SecondaryWindowAvailable: usageSecondaryWindowAvailable(connection.Usage),
+			PrimaryResetMinutes: primaryReset, SecondaryResetMinutes: secondaryReset,
+			PrimaryWindowMinutes: connection.Usage.PrimaryWindowMinutes, SecondaryWindowMinutes: connection.Usage.SecondaryWindowMinutes,
+			PrimaryPaceRatio:   quotaPaceRatio(primaryUsage*100, primaryReset, connection.Usage.PrimaryWindowMinutes),
+			SecondaryPaceRatio: quotaPaceRatio(secondaryUsage*100, secondaryReset, connection.Usage.SecondaryWindowMinutes),
+			AccountAddedAt:     connection.AddedAt.UTC().Format(time.RFC3339), TotalInputTokens: connection.Totals.TotalInputTokens,
+			TotalCachedTokens: connection.Totals.TotalCachedTokens, TotalOutputTokens: connection.Totals.TotalOutputTokens,
+			TotalReasoningTokens: connection.Totals.TotalReasoningTokens, TotalBillableTokens: connection.Totals.TotalBillableTokens,
+			CacheHitRate: cacheHitRate, HasCredits: connection.Usage.HasCredits, CreditsBalance: connection.Usage.CreditsBalance,
+			Score: score, ScoreTooltip: scoreTooltipFromBreakdownLocked(connection, now, breakdown),
+			ResetCreditsAvailable: connection.ResetCreditsAvailable, ResetCreditsKnown: !connection.ResetCreditsRetrievedAt.IsZero(),
+		}
+		for _, credit := range connection.RateLimitResetCredits {
+			view.ResetCreditExpirations = append(view.ResetCreditExpirations, credit.ExpiresAt.UTC().Format(time.RFC3339Nano))
+		}
+		cyberEligible := connection.CyberAccess && !connection.Dead && !connection.Disabled &&
+			(connection.ExpiresAt.IsZero() || connection.ExpiresAt.After(now) || disableRefresh)
+		out = append(out, poolStatsConnectionSnapshot{View: view, ConnectionID: connection.ID, AddedAt: connection.AddedAt,
+			PrimaryUsage: primaryUsage, SecondaryUsage: secondaryUsage, CyberEligible: cyberEligible})
+		connection.mu.Unlock()
+	}
+	markPoolStatsPrimary(out)
+	return out
+}
+
+func resetMinutes(now, resetAt time.Time) int {
+	if resetAt.IsZero() {
+		return 0
+	}
+	minutes := int(resetAt.Sub(now).Minutes())
+	if minutes < 0 {
+		return 0
+	}
+	return minutes
+}
+
+func markPoolStatsPrimary(snapshots []poolStatsConnectionSnapshot) {
+	highest, index := map[string]float64{}, map[string]int{}
+	for i := range snapshots {
+		view := snapshots[i].View
+		if (view.Status == "healthy" || view.Status == "degraded") && view.Score > highest[view.Type] {
+			highest[view.Type], index[view.Type] = view.Score, i
+		}
+	}
+	for _, i := range index {
+		snapshots[i].View.IsPrimary = true
+	}
 }
 
 func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewSnapshot {

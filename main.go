@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -2089,19 +2090,29 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			acc = h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, ConversationID: candidateConversationID, Exclude: candidateExclude, RequireImages: imageGenerationRequest})
 		}
 		if acc == nil {
-			// All accounts excluded or rate-limited. If there are rate-limited
-			// accounts, wait for the shortest cooldown instead of 503 immediately.
+			// Brief cooldowns can be cheaper than failing a request. Long quota
+			// windows must be surfaced immediately so streaming clients do not
+			// time out while the gateway repeatedly sleeps.
 			if cooldown := h.connectionSelector().NearestCooldown(accountType, nil); cooldown > 0 {
-				wait := retryPolicy.CooldownWait(cooldown)
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] all %s accounts exhausted, waiting %s for cooldown", reqID, accountType, wait)
-				}
-				select {
-				case <-time.After(wait):
-					// Retry with fresh exclude set.
-					exclude = map[string]bool{}
-					continue
-				case <-ctx.Done():
+				if wait := retryPolicy.CooldownWait(cooldown); wait > 0 {
+					if h.cfg.debug.Load() {
+						log.Printf("[%s] all %s connections exhausted, waiting %s for cooldown", reqID, accountType, wait)
+					}
+					select {
+					case <-time.After(wait):
+						// Retry with fresh exclusions after the cooldown expires.
+						exclude = map[string]bool{}
+						continue
+					case <-ctx.Done():
+					}
+				} else {
+					retryAfterSeconds := int64(math.Ceil(cooldown.Seconds()))
+					if retryAfterSeconds < 1 {
+						retryAfterSeconds = 1
+					}
+					w.Header().Set("Retry-After", strconv.FormatInt(retryAfterSeconds, 10))
+					http.Error(w, fmt.Sprintf("all %s provider connections are rate limited", accountType), http.StatusTooManyRequests)
+					return
 				}
 			}
 			if lastErr != nil {

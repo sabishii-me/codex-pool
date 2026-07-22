@@ -31,7 +31,7 @@ func (policy RetryPolicy) CooldownWait(cooldown time.Duration) time.Duration {
 		return 0
 	}
 	if policy.MaxCooldownWait > 0 && cooldown > policy.MaxCooldownWait {
-		return policy.MaxCooldownWait
+		return 0
 	}
 	return cooldown
 }

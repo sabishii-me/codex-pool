@@ -592,6 +592,7 @@ type proxyHandler struct {
 	registry             *ProviderRegistry
 	modelRoutes          *ModelRouteRegistry
 	connections          *ConnectionSelector
+	connectionViews      *ConnectionViewService
 	store                *usageStore
 	analyticsStore       *AnalyticsStore
 	pricing              *PricingData

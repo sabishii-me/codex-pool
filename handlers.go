@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -23,165 +22,19 @@ func (h *proxyHandler) serveHealth(w http.ResponseWriter) {
 	})
 }
 
-type OperatorProviderConnectionView struct {
-	ID                string             `json:"id"`
-	PublicID          string             `json:"public_id"`
-	ProviderID        ProviderID         `json:"provider_id"`
-	Identity          ConnectionIdentity `json:"identity"`
-	PlanType          string             `json:"plan_type,omitempty"`
-	Disabled          bool               `json:"disabled"`
-	Dead              bool               `json:"dead"`
-	NeedsVerification bool               `json:"needs_verification,omitempty"`
-	VerificationURL   string             `json:"verification_url,omitempty"`
-	HealthError       string             `json:"health_error,omitempty"`
-	CyberAccess       bool               `json:"cyber_access,omitempty"`
-	Inflight          int64              `json:"inflight"`
-	ExpiresAt         time.Time          `json:"expires_at,omitempty"`
-	LastRefresh       time.Time          `json:"last_refresh,omitempty"`
-	Penalty           float64            `json:"penalty"`
-	Score             float64            `json:"score"`
-	ScoreTooltip      string             `json:"score_tooltip,omitempty"`
-	IsPrimary         bool               `json:"is_primary"`
-	Usage             UsageSnapshot      `json:"usage"`
-	Totals            AccountUsage       `json:"totals"`
+func (h *proxyHandler) connectionViewService() *ConnectionViewService {
+	if h.connectionViews != nil {
+		return h.connectionViews
+	}
+	return NewConnectionViewService(h.pool)
 }
 
 func (h *proxyHandler) serveProviderConnectionsV2(w http.ResponseWriter) {
-	now := time.Now()
-	connections := h.pool.allAccounts()
-	out := make([]OperatorProviderConnectionView, 0, len(connections))
-	for _, connection := range connections {
-		connection.mu.Lock()
-		breakdown := scoreAccountBreakdownLocked(connection, now)
-		score := breakdown.Score
-		if connection.Dead || connection.Disabled {
-			score = 0
-		}
-		view := OperatorProviderConnectionView{
-			ID: connection.ID, PublicID: hashAccountID(connection.ID), ProviderID: connection.Type,
-			Identity: connection.connectionIdentityLocked(), PlanType: connection.PlanType,
-			Disabled: connection.Disabled, Dead: connection.Dead, NeedsVerification: connection.NeedsVerification,
-			VerificationURL: connection.VerificationURL, HealthError: connection.HealthError,
-			CyberAccess: connection.CyberAccess, Inflight: atomic.LoadInt64(&connection.Inflight),
-			ExpiresAt: connection.ExpiresAt, LastRefresh: connection.LastRefresh, Penalty: connection.Penalty,
-			Score: score, ScoreTooltip: scoreTooltipFromBreakdownLocked(connection, now, breakdown),
-			Usage: connection.Usage, Totals: connection.Totals,
-		}
-		connection.mu.Unlock()
-		out = append(out, view)
-	}
-	highestScore := make(map[ProviderID]float64)
-	highestIndex := make(map[ProviderID]int)
-	for index, connection := range out {
-		if !connection.Dead && !connection.Disabled && connection.Score > highestScore[connection.ProviderID] {
-			highestScore[connection.ProviderID] = connection.Score
-			highestIndex[connection.ProviderID] = index
-		}
-	}
-	for _, index := range highestIndex {
-		out[index].IsPrimary = true
-	}
-	respondJSON(w, out)
+	respondJSON(w, h.connectionViewService().OperatorConnections())
 }
 
 func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
-	type row struct {
-		ID                      string            `json:"id"`
-		PublicID                string            `json:"public_id"`
-		Type                    AccountType       `json:"type"`
-		DisplayName             string            `json:"display_name"`
-		ExternalSubject         string            `json:"external_subject,omitempty"`
-		IdentityAttributes      map[string]string `json:"identity_attributes,omitempty"`
-		PlanType                string            `json:"plan_type,omitempty"`
-		AccountID               string            `json:"account_id,omitempty"`
-		IDTokenChatGPTAccountID string            `json:"id_token_chatgpt_account_id,omitempty"`
-		Email                   string            `json:"email,omitempty"`
-		Disabled                bool              `json:"disabled"`
-		Dead                    bool              `json:"dead"`
-		NeedsVerification       bool              `json:"needs_verification,omitempty"`
-		VerificationURL         string            `json:"verification_url,omitempty"`
-		HealthError             string            `json:"health_error,omitempty"`
-		CyberAccess             bool              `json:"cyber_access,omitempty"`
-		Inflight                int64             `json:"inflight"`
-		ExpiresAt               time.Time         `json:"expires_at,omitempty"`
-		LastRefresh             time.Time         `json:"last_refresh,omitempty"`
-		Penalty                 float64           `json:"penalty"`
-		Score                   float64           `json:"score"`
-		ScoreTooltip            string            `json:"score_tooltip,omitempty"`
-		IsPrimary               bool              `json:"is_primary"`
-		Usage                   any               `json:"usage"`
-		Totals                  any               `json:"totals"`
-	}
-	now := time.Now()
-	h.pool.mu.RLock()
-	out := make([]row, 0, len(h.pool.accounts))
-	for _, a := range h.pool.accounts {
-		a.mu.Lock()
-		identity := a.connectionIdentityLocked()
-		planType := a.PlanType
-		accountID := a.AccountID
-		idTokID := a.IDTokenChatGPTAccountID
-		email := a.Email
-		disabled := a.Disabled
-		dead := a.Dead
-		needsVerification := a.NeedsVerification
-		verificationURL := a.VerificationURL
-		healthError := a.HealthError
-		cyberAccess := a.CyberAccess
-		expiresAt := a.ExpiresAt
-		lastRefresh := a.LastRefresh
-		penalty := a.Penalty
-		breakdown := scoreAccountBreakdownLocked(a, now)
-		score := breakdown.Score
-		scoreTooltip := scoreTooltipFromBreakdownLocked(a, now, breakdown)
-		usage := a.Usage
-		totals := a.Totals
-		a.mu.Unlock()
-
-		out = append(out, row{
-			ID:                      a.ID,
-			PublicID:                hashAccountID(a.ID),
-			Type:                    a.Type,
-			DisplayName:             identity.DisplayName,
-			ExternalSubject:         identity.ExternalSubject,
-			IdentityAttributes:      identity.Attributes,
-			PlanType:                planType,
-			AccountID:               accountID,
-			IDTokenChatGPTAccountID: idTokID,
-			Email:                   email,
-			Disabled:                disabled,
-			Dead:                    dead,
-			NeedsVerification:       needsVerification,
-			VerificationURL:         verificationURL,
-			HealthError:             healthError,
-			CyberAccess:             cyberAccess,
-			Inflight:                atomic.LoadInt64(&a.Inflight),
-			ExpiresAt:               expiresAt,
-			LastRefresh:             lastRefresh,
-			Penalty:                 penalty,
-			Score:                   score,
-			ScoreTooltip:            scoreTooltip,
-			Usage:                   usage,
-			Totals:                  totals,
-		})
-	}
-	h.pool.mu.RUnlock()
-
-	// Mark highest-scoring non-dead account per type as primary
-	highestScore := make(map[AccountType]float64)
-	highestIdx := make(map[AccountType]int)
-	for i, r := range out {
-		if !r.Dead && !r.Disabled && r.Score > highestScore[r.Type] {
-			highestScore[r.Type] = r.Score
-			highestIdx[r.Type] = i
-		}
-	}
-	for _, idx := range highestIdx {
-		out[idx].IsPrimary = true
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	respondJSON(w, out)
+	respondJSON(w, h.connectionViewService().LegacyOperatorConnections())
 }
 
 func (h *proxyHandler) reloadAccounts() {

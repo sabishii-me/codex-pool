@@ -23,6 +23,7 @@ export interface MFAStatus {
 
 export interface AccountStats {
   id: string;
+  upstream_account_id?: string;
   type: Provider;
   plan_type: string;
   status: "healthy" | "degraded" | "cooldown" | "dead";

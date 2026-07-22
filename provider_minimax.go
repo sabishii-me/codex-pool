@@ -60,6 +60,9 @@ func (p *MinimaxProvider) RefreshToken(ctx context.Context, acc *Account, transp
 }
 
 func (p *MinimaxProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	// MiniMax uses the Anthropic API format since the base URL is /anthropic
 	eventType, _ := obj["type"].(string)
 

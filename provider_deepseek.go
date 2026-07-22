@@ -59,6 +59,9 @@ func (p *DeepSeekProvider) RefreshToken(ctx context.Context, acc *Account, trans
 }
 
 func (p *DeepSeekProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	eventType, _ := obj["type"].(string)
 
 	if eventType == "message_delta" {

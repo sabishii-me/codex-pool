@@ -61,6 +61,9 @@ func (p *XiaomiProvider) RefreshToken(ctx context.Context, acc *Account, transpo
 }
 
 func (p *XiaomiProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	if usageMap, ok := obj["usage"].(map[string]any); ok {
 		ru := xiaomiUsageFromMap(usageMap)
 		if ru == nil {

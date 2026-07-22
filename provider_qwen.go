@@ -60,6 +60,9 @@ func (p *QwenProvider) RefreshToken(ctx context.Context, acc *Account, transport
 }
 
 func (p *QwenProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	eventType, _ := obj["type"].(string)
 
 	if eventType == "message_delta" {

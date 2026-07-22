@@ -1407,6 +1407,10 @@ func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, 
 		{AccountTypeZAI, isZAIModel, zaiCanonicalModel},
 		{AccountTypeXiaomi, isXiaomiModel, xiaomiCanonicalModel},
 		{AccountTypeGrok, isGrokModel, grokCanonicalModel},
+		{AccountTypeDeepSeek, isDeepSeekModel, deepseekCanonicalModel},
+		{AccountTypeQwen, isQwenModel, qwenCanonicalModel},
+		{AccountTypeOpenRouter, isOpenRouterModel, openrouterCanonicalModel},
+		{AccountTypeNvidia, isNvidiaModel, nvidiaCanonicalModel},
 	}
 	for _, candidate := range routes {
 		if !candidate.matches(model) {

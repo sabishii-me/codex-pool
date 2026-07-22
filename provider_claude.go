@@ -113,6 +113,9 @@ func (p *ClaudeProvider) RefreshToken(ctx context.Context, acc *Account, transpo
 }
 
 func (p *ClaudeProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	eventType, _ := obj["type"].(string)
 
 	// Handle message_delta event (has final output tokens)

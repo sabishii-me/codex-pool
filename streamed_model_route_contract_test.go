@@ -1,0 +1,64 @@
+package main
+
+import (
+	"bytes"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+	"testing"
+)
+
+func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
+	base, _ := url.Parse("https://streamed-route.test")
+	registry := anthropicContractRegistry(base)
+	registry.providers = append(registry.providers, NewGrokProvider(base), NewNvidiaProvider(base))
+	registry.byType[AccountTypeGrok] = registry.providers[len(registry.providers)-2]
+	registry.byType[AccountTypeNvidia] = registry.providers[len(registry.providers)-1]
+	handler := &proxyHandler{cfg: &config{}, registry: registry, aliases: newModelAliases(nil)}
+	fallback := registry.ForType(AccountTypeClaude)
+
+	tests := []struct {
+		name      string
+		model     string
+		wantType  AccountType
+		canonical string
+	}{
+		{"kimi", "kimi-for-coding", AccountTypeKimi, "kimi-for-coding"},
+		{"kimi-platform", "kimi-platform/kimi-k3", AccountTypeKimiPlatform, "kimi-k3"},
+		{"minimax", "minimax", AccountTypeMinimax, "MiniMax-M3"},
+		{"zai", "glm-5.2", AccountTypeZAI, "glm-5.2"},
+		{"xiaomi", "mimo-v2.5-pro", AccountTypeXiaomi, "mimo-v2.5-pro"},
+		{"grok", "grok-composer", AccountTypeGrok, "grok-composer-2.5-fast"},
+		{"deepseek", "deepseek", AccountTypeDeepSeek, "deepseek-v4-pro"},
+		{"qwen", "qwen-coder", AccountTypeQwen, "qwen3.6-plus"},
+		{"openrouter", "openrouter/anthropic/claude-haiku-4.5", AccountTypeOpenRouter, "anthropic/claude-haiku-4.5"},
+		{"nvidia", "nvidia/meta/llama-3.3-70b-instruct", AccountTypeNvidia, "meta/llama-3.3-70b-instruct"},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			padding := strings.Repeat("x", streamedModelRoutePeekBytes+1024)
+			original := []byte(`{"model":"` + test.model + `","messages":[{"role":"user","content":"` + padding + `"}]}`)
+			request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: "/v1/messages"}, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(original)), ContentLength: int64(len(original))}
+			provider, routedBase, err := handler.applyStreamedModelRoute(request, fallback, base, "route-contract")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if provider.Type() != test.wantType || routedBase.String() != base.String() {
+				t.Fatalf("route = %s %v, want %s %v", provider.Type(), routedBase, test.wantType, base)
+			}
+			forwarded, err := io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := bytes.Replace(original, []byte(`"model":"`+test.model+`"`), []byte(`"model":"`+test.canonical+`"`), 1)
+			if !bytes.Equal(forwarded, want) {
+				t.Fatalf("streamed body changed outside canonical model rewrite: got %d bytes, want %d", len(forwarded), len(want))
+			}
+			if request.ContentLength != int64(len(want)) {
+				t.Fatalf("content length = %d, want %d", request.ContentLength, len(want))
+			}
+		})
+	}
+}

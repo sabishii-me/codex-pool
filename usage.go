@@ -361,11 +361,21 @@ func parseRequestUsage(obj map[string]any) *RequestUsage {
 	if ru.CachedInputTokens == 0 {
 		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
 	}
+	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && ru.CachedInputTokens == 0 {
+		ru.CachedInputTokens = readInt64(details, "cached_tokens")
+	}
+	ru.CacheCreationTokens = readInt64(usageMap, "cache_creation_input_tokens")
 	ru.OutputTokens = readInt64(usageMap, "output_tokens")
 	ru.ReasoningTokens = readInt64(usageMap, "reasoning_output_tokens")
+	if ru.ReasoningTokens == 0 {
+		ru.ReasoningTokens = readInt64(usageMap, "reasoning_tokens")
+	}
+	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok && ru.ReasoningTokens == 0 {
+		ru.ReasoningTokens = readInt64(details, "reasoning_tokens")
+	}
 	ru.BillableTokens = readInt64(usageMap, "billable_tokens")
 	if ru.BillableTokens == 0 {
-		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens + ru.OutputTokens)
+		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens - ru.CacheCreationTokens + ru.OutputTokens)
 	}
 	if ru.InputTokens == 0 && ru.OutputTokens == 0 && ru.BillableTokens == 0 {
 		return nil

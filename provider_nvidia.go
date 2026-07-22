@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // NvidiaProvider handles NVIDIA NIM accounts. Unlike the other "extra"
@@ -70,21 +69,7 @@ func (p *NvidiaProvider) RefreshToken(ctx context.Context, acc *Account, transpo
 // object with prompt_tokens/completion_tokens, present on the non-streaming
 // response and (when requested) the final SSE chunk.
 func (p *NvidiaProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	usageMap, ok := obj["usage"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	ru := &RequestUsage{Timestamp: time.Now()}
-	ru.InputTokens = readInt64(usageMap, "prompt_tokens")
-	ru.OutputTokens = readInt64(usageMap, "completion_tokens")
-	if ru.InputTokens == 0 && ru.OutputTokens == 0 {
-		return nil
-	}
-	if model, ok := obj["model"].(string); ok {
-		ru.Model = model
-	}
-	ru.BillableTokens = ru.InputTokens + ru.OutputTokens
-	return ru
+	return parseOpenAIChatUsage(obj)
 }
 
 func (p *NvidiaProvider) ParseUsageHeaders(acc *Account, headers http.Header) {

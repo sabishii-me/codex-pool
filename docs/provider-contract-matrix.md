@@ -19,25 +19,22 @@ Adding a registered provider without a complete declared row fails `TestProvider
 | Claude | Anthropic Messages custom | path | Verified | Verified | Verified | Verified | Partial | Verified | Partial | Partial |
 | Gemini | Gemini | path | Verified | Verified | Verified | Gap | Verified | Partial | Gap | Gap |
 | Antigravity | Gemini custom | model | Verified | Partial | Verified | Gap | Verified | Partial | Gap | Gap |
-| Kimi Coding | Anthropic Messages | model | Verified | Partial | Verified | Gap | Partial | Verified | Gap | Gap |
-| Kimi Platform | Anthropic Messages | model | Verified | Partial | Verified | Gap | Partial | Verified | Gap | Gap |
-| MiniMax | Anthropic Messages | model | Verified | Partial | Verified | Gap | Partial | Verified | Gap | Gap |
-| Z.ai | Anthropic Messages | model | Verified | Partial | Verified | Verified | Partial | Verified | Gap | Verified (SSE) |
-| Xiaomi | Anthropic Messages | model | Verified | Partial | Verified | Partial | Partial | Verified | Verified | Gap |
+| Kimi Coding | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| Kimi Platform | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| MiniMax | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| Z.ai | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| Xiaomi | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Verified | Partial |
 | Grok | OpenAI Responses custom | model | Verified | Verified | Verified | Gap | Verified | Verified | Gap | Gap |
-| DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Verified | Partial | Verified | Gap | Verified |
-| Qwen | Anthropic Messages | model | Verified | Partial | Verified | Gap | Partial | Verified | Gap | Gap |
-| OpenRouter | Anthropic Messages | model | Verified | Partial | Verified | Gap | Partial | Verified | Gap | Gap |
-| NVIDIA | OpenAI Chat | model | Verified | Verified | Gap | Gap | Gap | Verified | Gap | Gap |
+| DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| Qwen | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Partial | Verified | Verified | Partial | Partial |
+| NVIDIA | OpenAI Chat | model | Verified | Verified | Verified | Gap | Verified | Verified | Partial | Gap |
 
 ## Phase 0 closure work
 
-1. Add non-streaming usage fixtures for every Anthropic-compatible provider.
-2. Add cache-creation persistence assertions, not only parser assertions.
-3. Add reasoning-token fixtures per protocol/provider.
-4. Exercise every provider through normal and large-body routing.
-5. Assert response-byte integrity for pass-through paths.
-6. Replace provider-specific exactly-once regressions with one canonical event assertion for every row.
-7. Add custom-engine fixtures for Codex, Claude, Gemini, Antigravity, and Grok to the shared harness.
+1. Persist cache-creation tokens in analytics and aggregate projections, not only parser/request records.
+2. Add custom-engine fixtures for Codex, Claude, Gemini, Antigravity, and Grok to the shared harness.
+3. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
+4. Replace legacy analytics exactly-once assertions with one canonical event assertion and request ID for every row.
 
 Phase 0 exits only when every applicable cell is **Verified** or explicitly **N/A**.

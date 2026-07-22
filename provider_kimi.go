@@ -62,6 +62,9 @@ func (p *KimiProvider) RefreshToken(ctx context.Context, acc *Account, transport
 }
 
 func (p *KimiProvider) ParseUsage(obj map[string]any) *RequestUsage {
+	if usage := parseAnthropicUsage(obj); usage != nil {
+		return usage
+	}
 	// Kimi proxies Anthropic/OpenAI-style responses, so parse both formats.
 
 	// OpenAI-style usage object

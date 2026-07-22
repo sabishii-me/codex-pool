@@ -90,11 +90,12 @@ func TestAnthropicCompatibleProvidersProxyNonStreamingExactlyOnce(t *testing.T) 
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
 			var count, input, cached, output, reasoning int64
-			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(cached_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(reasoning_tokens),0) FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &input, &cached, &output, &reasoning); err != nil {
+			var persistedRequestID string
+			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(input_tokens),0), COALESCE(SUM(cached_tokens),0), COALESCE(SUM(output_tokens),0), COALESCE(SUM(reasoning_tokens),0), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &input, &cached, &output, &reasoning, &persistedRequestID); err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 || input != 120 || cached != 30 || output != 40 || reasoning != 7 {
-				t.Fatalf("persisted usage count=%d input=%d cached=%d output=%d reasoning=%d", count, input, cached, output, reasoning)
+			if count != 1 || input != 120 || cached != 30 || output != 40 || reasoning != 7 || persistedRequestID != "contract-"+string(test.ProviderType) {
+				t.Fatalf("persisted usage count=%d input=%d cached=%d output=%d reasoning=%d request=%q", count, input, cached, output, reasoning, persistedRequestID)
 			}
 		})
 	}
@@ -161,11 +162,12 @@ func TestAnthropicCompatibleProvidersProxyStreamingExactlyOnce(t *testing.T) {
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
 			var count int64
-			if err := analytics.db.QueryRow(`SELECT COUNT(*) FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
+			var persistedRequestID string
+			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &persistedRequestID); err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 {
-				t.Fatalf("persisted request count = %d, want 1", count)
+			if count != 1 || persistedRequestID != "stream-contract-"+string(test.ProviderType) {
+				t.Fatalf("persisted stream request count=%d ID=%q", count, persistedRequestID)
 			}
 		})
 	}
@@ -246,11 +248,12 @@ func TestAnthropicCompatibleProvidersProxyLargeBodyRouteAndUsage(t *testing.T) {
 				t.Fatalf("unexpected totals: %+v", totals)
 			}
 			var count int64
-			if err := analytics.db.QueryRow(`SELECT COUNT(*) FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count); err != nil {
+			var persistedRequestID string
+			if err := analytics.db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(request_id),'') FROM request_costs WHERE account_id = ?`, account.ID).Scan(&count, &persistedRequestID); err != nil {
 				t.Fatal(err)
 			}
-			if count != 1 {
-				t.Fatalf("persisted request count = %d, want 1", count)
+			if count != 1 || persistedRequestID != "large-contract-"+string(test.ProviderType) {
+				t.Fatalf("persisted large request count=%d ID=%q", count, persistedRequestID)
 			}
 		})
 	}

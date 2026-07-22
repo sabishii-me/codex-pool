@@ -12,6 +12,46 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+func TestUsageStoreRequestIDDeduplicatesRawEventAndProjections(t *testing.T) {
+	store, err := newUsageStore(filepath.Join(t.TempDir(), "usage.db"), 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	usage := RequestUsage{
+		Timestamp: time.Now(), AccountID: "account", AccountType: AccountTypeDeepSeek,
+		UserID: "user", OriginID: "origin", RequestID: "request-1",
+		InputTokens: 100, CachedInputTokens: 20, CacheCreationTokens: 10,
+		OutputTokens: 30, ReasoningTokens: 5, BillableTokens: 100,
+	}
+	first, err := store.recordIfNew(usage)
+	if err != nil || !first {
+		t.Fatalf("first record = %v, %v", first, err)
+	}
+	usage.Timestamp = usage.Timestamp.Add(time.Second)
+	second, err := store.recordIfNew(usage)
+	if err != nil || second {
+		t.Fatalf("second record = %v, %v; want duplicate", second, err)
+	}
+	account, err := store.loadAccountUsage("account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account.RequestCount != 1 || account.TotalInputTokens != 100 || account.TotalCachedTokens != 20 || account.TotalOutputTokens != 30 {
+		t.Fatalf("account projection duplicated: %+v", account)
+	}
+	var rawRequests int
+	if err := store.db.View(func(tx *bbolt.Tx) error {
+		rawRequests = tx.Bucket([]byte(bucketUsageRequests)).Stats().KeyN
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if rawRequests != 1 {
+		t.Fatalf("raw requests = %d, want 1", rawRequests)
+	}
+}
+
 func TestUsageStoreRecordAndAggregate(t *testing.T) {
 	tmp := t.TempDir()
 	path := filepath.Join(tmp, "proxy.db")

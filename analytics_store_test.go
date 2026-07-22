@@ -183,6 +183,33 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 	}
 }
 
+func TestAnalyticsStoreRequestIDDeduplicatesAndPersistsCacheCreation(t *testing.T) {
+	store, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	usage := RequestUsage{
+		Timestamp: time.Now(), AccountID: "account", AccountType: AccountTypeDeepSeek,
+		RequestID: "request-1", InputTokens: 100, CachedInputTokens: 20,
+		CacheCreationTokens: 10, OutputTokens: 30, ReasoningTokens: 5, BillableTokens: 100,
+	}
+	if err := store.recordRequest(usage, 0); err != nil {
+		t.Fatal(err)
+	}
+	usage.Timestamp = usage.Timestamp.Add(time.Second)
+	if err := store.recordRequest(usage, 0); err != nil {
+		t.Fatal(err)
+	}
+	var count, cacheCreation int64
+	if err := store.db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(cache_creation_tokens),0) FROM request_costs WHERE account_id = ?`, "account").Scan(&count, &cacheCreation); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || cacheCreation != 10 {
+		t.Fatalf("count = %d, cache creation = %d; want 1, 10", count, cacheCreation)
+	}
+}
+
 func TestDailyRollupIsIdempotent(t *testing.T) {
 	store, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 	if err != nil {

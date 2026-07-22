@@ -196,8 +196,15 @@ func (s *usageStore) Close() error {
 }
 
 func (s *usageStore) record(u RequestUsage) error {
+	_, err := s.recordIfNew(u)
+	return err
+}
+
+// recordIfNew atomically persists a raw request and every legacy projection.
+// A non-empty request ID is unique within one provider connection.
+func (s *usageStore) recordIfNew(u RequestUsage) (bool, error) {
 	if s == nil || s.db == nil {
-		return nil
+		return true, nil
 	}
 
 	// Calculate rate limit deltas
@@ -223,18 +230,24 @@ func (s *usageStore) record(u RequestUsage) error {
 
 	key := fmt.Sprintf("%s|%020d", safeID(u.AccountID), u.Timestamp.UnixNano())
 	if u.RequestID != "" {
-		key = key + "|" + u.RequestID
+		key = fmt.Sprintf("%s|request|%s", safeID(u.AccountID), safeID(u.RequestID))
 	}
 	val, err := json.Marshal(u)
 	if err != nil {
-		return err
+		return false, err
 	}
 
+	recorded := false
 	err = s.db.Update(func(tx *bbolt.Tx) error {
-		// Store raw request
-		if err := tx.Bucket([]byte(bucketUsageRequests)).Put([]byte(key), val); err != nil {
+		requests := tx.Bucket([]byte(bucketUsageRequests))
+		if requests.Get([]byte(key)) != nil {
+			return nil
+		}
+		// Raw event and projections share this transaction.
+		if err := requests.Put([]byte(key), val); err != nil {
 			return err
 		}
+		recorded = true
 
 		// Update account aggregates
 		b := tx.Bucket([]byte(bucketAccountUsage))
@@ -445,12 +458,12 @@ func (s *usageStore) record(u RequestUsage) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
-	if time.Now().After(s.nextPrune) {
+	if recorded && time.Now().After(s.nextPrune) {
 		s.prune()
 	}
-	return nil
+	return recorded, nil
 }
 
 // getAllOriginUsage returns usage for all hashed origins, sorted by total billable tokens descending.

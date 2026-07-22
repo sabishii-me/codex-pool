@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,9 +106,11 @@ func createAnalyticsTables(db *sql.DB) error {
 		account_id TEXT NOT NULL,
 		account_type TEXT NOT NULL,
 		user_id TEXT,
+		request_id TEXT NOT NULL DEFAULT '',
 		model TEXT,
 		input_tokens INTEGER DEFAULT 0,
 		cached_tokens INTEGER DEFAULT 0,
+		cache_creation_tokens INTEGER DEFAULT 0,
 		output_tokens INTEGER DEFAULT 0,
 		reasoning_tokens INTEGER DEFAULT 0,
 		cost_usd REAL DEFAULT 0
@@ -115,7 +118,6 @@ func createAnalyticsTables(db *sql.DB) error {
 
 	CREATE INDEX IF NOT EXISTS idx_request_costs_account_ts ON request_costs(account_id, timestamp);
 	CREATE INDEX IF NOT EXISTS idx_request_costs_type_ts ON request_costs(account_type, timestamp);
-	CREATE INDEX IF NOT EXISTS idx_request_costs_ts ON request_costs(timestamp);
 
 	CREATE TABLE IF NOT EXISTS daily_costs (
 		date TEXT NOT NULL,
@@ -132,6 +134,20 @@ func createAnalyticsTables(db *sql.DB) error {
 	);
 	`
 	_, err := db.Exec(schema)
+	if err != nil {
+		return err
+	}
+	// Additive migrations for databases created before request identity and
+	// cache-write accounting were introduced.
+	for _, migration := range []string{
+		`ALTER TABLE request_costs ADD COLUMN request_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE request_costs ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0`,
+	} {
+		if _, migrationErr := db.Exec(migration); migrationErr != nil && !strings.Contains(strings.ToLower(migrationErr.Error()), "duplicate column") {
+			return migrationErr
+		}
+	}
+	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_request_costs_request ON request_costs(account_id, request_id) WHERE request_id != ''`)
 	return err
 }
 
@@ -141,16 +157,18 @@ func (s *AnalyticsStore) recordRequest(ru RequestUsage, costUSD float64) error {
 	defer s.mu.Unlock()
 
 	_, err := s.db.Exec(`
-		INSERT INTO request_costs (timestamp, account_id, account_type, user_id, model,
-			input_tokens, cached_tokens, output_tokens, reasoning_tokens, cost_usd)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		INSERT OR IGNORE INTO request_costs (timestamp, account_id, account_type, user_id, request_id, model,
+			input_tokens, cached_tokens, cache_creation_tokens, output_tokens, reasoning_tokens, cost_usd)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ru.Timestamp.UTC().Format(time.RFC3339),
 		ru.AccountID,
 		string(ru.AccountType),
 		ru.UserID,
+		ru.RequestID,
 		ru.Model,
 		ru.InputTokens,
 		ru.CachedInputTokens,
+		ru.CacheCreationTokens,
 		ru.OutputTokens,
 		ru.ReasoningTokens,
 		costUSD,

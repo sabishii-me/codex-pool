@@ -2447,7 +2447,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						ru.UserID = userID
 						ru.OriginID = originID
 						ru.AccountType = acc.Type
-						h.recordUsage(acc, *ru)
+						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
 			}
@@ -2528,7 +2528,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						ru.UserID = userID
 						ru.OriginID = originID
 						ru.AccountType = acc.Type
-						h.recordUsage(acc, *ru)
+						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
 			}
@@ -2580,7 +2580,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						ru.UserID = userID
 						ru.OriginID = originID
 						ru.AccountType = acc.Type
-						h.recordUsage(acc, *ru)
+						h.recordUsageForRequest(acc, *ru, reqID)
 					}
 				}
 			}
@@ -2622,7 +2622,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			if sampleBuf != nil {
 				sampleBuf.Write(respBody)
 			}
-			h.updateUsageFromBody(acc, respBody, userID, originID)
+			h.updateUsageFromBody(acc, respBody, userID, originID, reqID)
 
 			var translated []byte
 			if resp.StatusCode >= 400 {
@@ -2744,7 +2744,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				if ru.Model == "" {
 					ru.Model = requestedModel
 				}
-				h.recordUsage(acc, *ru)
+				h.recordUsageForRequest(acc, *ru, reqID)
 			}
 
 			if isSSE {
@@ -2852,7 +2852,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				if pendingUsage.Model == "" {
 					pendingUsage.Model = requestedModel
 				}
-				h.recordUsage(acc, *pendingUsage)
+				h.recordUsageForRequest(acc, *pendingUsage, reqID)
 			}
 
 			if copyErr != nil {
@@ -2875,7 +2875,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				log.Printf("[%s] response body sample (%d bytes): %s", reqID, len(respSample), safeText(respSample))
 			}
 			if !isSSE && len(respSample) > 0 {
-				h.updateUsageFromBody(acc, respSample, userID, originID)
+				h.updateUsageFromBody(acc, respSample, userID, originID, reqID)
 			}
 		}
 
@@ -3734,7 +3734,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 				acc.mu.Lock()
 				ru.PlanType = acc.PlanType
 				acc.mu.Unlock()
-				h.recordUsage(acc, *ru)
+				h.recordUsageForRequest(acc, *ru, reqID)
 			},
 		}
 		if accountType == AccountTypeCodex && !acc.CyberAccess {
@@ -3783,7 +3783,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		if pendingUsage.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
 			pendingUsage.SecondaryUsedPct = headerSecondaryPct
 		}
-		h.recordUsage(acc, *pendingUsage)
+		h.recordUsageForRequest(acc, *pendingUsage, reqID)
 	}
 
 	if copyErr != nil {
@@ -3802,7 +3802,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		log.Printf("[%s] response body sample (%d bytes): %s", reqID, len(respSample), safeText(respSample))
 	}
 	if !isSSE && len(respSample) > 0 {
-		h.updateUsageFromBody(acc, respSample, userID, originID)
+		h.updateUsageFromBody(acc, respSample, userID, originID, reqID)
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
@@ -5070,7 +5070,7 @@ func (h *proxyHandler) waitForRefreshSlot(ctx context.Context) error {
 	}
 }
 
-func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, originID string) {
+func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, originID, reqID string) {
 	if a == nil || len(sample) == 0 {
 		return
 	}
@@ -5102,7 +5102,7 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 				a.mu.Lock()
 				ru.PlanType = a.PlanType
 				a.mu.Unlock()
-				h.recordUsage(a, *ru)
+				h.recordUsageForRequest(a, *ru, reqID)
 			}
 			// Also apply rate limits from token_count
 			if rl, ok := obj["rate_limits"].(map[string]any); ok {
@@ -5129,7 +5129,7 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 				a.mu.Lock()
 				ru.PlanType = a.PlanType
 				a.mu.Unlock()
-				h.recordUsage(a, *ru)
+				h.recordUsageForRequest(a, *ru, reqID)
 			}
 		}
 
@@ -5142,7 +5142,7 @@ func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, or
 			a.mu.Lock()
 			ru.PlanType = a.PlanType
 			a.mu.Unlock()
-			h.recordUsage(a, *ru)
+			h.recordUsageForRequest(a, *ru, reqID)
 		}
 	}
 }

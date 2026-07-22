@@ -306,6 +306,13 @@ func parseTokenCountEvent(obj map[string]any) *RequestUsage {
 	return ru
 }
 
+func (h *proxyHandler) recordUsageForRequest(a *Account, ru RequestUsage, requestID string) {
+	if ru.RequestID == "" {
+		ru.RequestID = requestID
+	}
+	h.recordUsage(a, ru)
+}
+
 func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 	if a == nil {
 		return
@@ -324,10 +331,20 @@ func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 		ru.SecondaryWindowMinutes = a.Usage.SecondaryWindowMinutes
 	}
 	a.mu.Unlock()
-	a.applyRequestUsage(ru)
 	if h.store != nil {
-		_ = h.store.record(ru)
+		recorded, err := h.store.recordIfNew(ru)
+		if err != nil {
+			log.Printf("usage persistence failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
+			if h.recent != nil {
+				h.recent.add("usage persistence failed: " + err.Error())
+			}
+			return
+		}
+		if !recorded {
+			return
+		}
 	}
+	a.applyRequestUsage(ru)
 
 	// Calculate and record cost
 	var costUSD float64
@@ -340,10 +357,15 @@ func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
 		}
 	}
 	if h.analyticsStore != nil {
-		_ = h.analyticsStore.recordRequest(ru, costUSD)
+		if err := h.analyticsStore.recordRequest(ru, costUSD); err != nil {
+			log.Printf("analytics persistence failed request=%s account=%s: %v", ru.RequestID, ru.AccountID, err)
+			if h.recent != nil {
+				h.recent.add("analytics persistence failed: " + err.Error())
+			}
+		}
 	}
 
-	if h.cfg.debug.Load() {
+	if h.cfg != nil && h.cfg.debug.Load() {
 		log.Printf("token_count: account=%s plan=%s user=%s origin=%s model=%s in=%d cached=%d out=%d reasoning=%d billable=%d cost=$%.6f primary=%.1f%% secondary=%.1f%%",
 			ru.AccountID, ru.PlanType, ru.UserID, ru.OriginID, ru.Model, ru.InputTokens, ru.CachedInputTokens, ru.OutputTokens, ru.ReasoningTokens, ru.BillableTokens,
 			costUSD, ru.PrimaryUsedPct*100, ru.SecondaryUsedPct*100)

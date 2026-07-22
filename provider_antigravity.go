@@ -197,25 +197,7 @@ func (p *AntigravityProvider) RefreshToken(ctx context.Context, acc *ProviderCon
 }
 
 func (p *AntigravityProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if response, ok := obj["response"].(map[string]any); ok {
-		obj = response
-	}
-	usage, ok := obj["usageMetadata"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	result := &RequestUsage{
-		Timestamp:         time.Now(),
-		InputTokens:       readInt64(usage, "promptTokenCount"),
-		CachedInputTokens: readInt64(usage, "cachedContentTokenCount"),
-		OutputTokens:      readInt64(usage, "candidatesTokenCount"),
-		ReasoningTokens:   readInt64(usage, "thoughtsTokenCount"),
-	}
-	result.BillableTokens = clampNonNegative(result.InputTokens - result.CachedInputTokens + result.OutputTokens)
-	if result.InputTokens == 0 && result.OutputTokens == 0 && result.ReasoningTokens == 0 {
-		return nil
-	}
-	return result
+	return antigravityGeminiUsageEngine.ParseUsage(obj)
 }
 
 func (p *AntigravityProvider) ParseUsageHeaders(_ *ProviderConnection, _ http.Header) {}

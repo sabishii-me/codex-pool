@@ -2,8 +2,8 @@ package main
 
 import "strings"
 
-type poolModel struct {
-	AccountType   AccountType
+type ModelRoute struct {
+	ProviderID    ProviderID
 	ID            string
 	DisplayName   string
 	Description   string
@@ -15,75 +15,79 @@ type poolModel struct {
 	Cost          *piModelCost
 }
 
-var poolModels = []poolModel{
-	{AccountType: AccountTypeCodex, ID: "gpt-5.6-sol", DisplayName: "GPT-5.6-Sol", Description: "Latest frontier agentic coding model.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"gpt-5.6"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.6-terra", DisplayName: "GPT-5.6-Terra", Description: "Balanced agentic coding model for everyday work.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.6-luna", DisplayName: "GPT-5.6-Luna", Description: "Fast and affordable agentic coding model.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.5", DisplayName: "GPT-5.5", Description: "Frontier model for complex coding, research, and real-world work.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.4", DisplayName: "GPT-5.4", Description: "Strong model for everyday coding.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.4-mini", DisplayName: "GPT-5.4-Mini", Description: "Small, fast, and cost-efficient model for simpler coding tasks.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeCodex, ID: "gpt-5.3-codex-spark", DisplayName: "GPT-5.3-Codex-Spark", Description: "Ultra-fast coding model.", ContextWindow: 128000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+// poolModel is retained while catalog call sites migrate to ModelRoute.
+// Deprecated: use ModelRoute.
+type poolModel = ModelRoute
 
-	{AccountType: AccountTypeClaude, ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5", ContextWindow: 1000000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"sonnet"}, Cost: &piModelCost{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
-	{AccountType: AccountTypeClaude, ID: "claude-fable-5", DisplayName: "Claude Fable 5", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"fable"}, Cost: &piModelCost{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
-	{AccountType: AccountTypeClaude, ID: "claude-opus-4-8", DisplayName: "Claude Opus 4.8", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"opus"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
-	{AccountType: AccountTypeClaude, ID: "claude-opus-4-7", DisplayName: "Claude Opus 4.7", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
-	{AccountType: AccountTypeClaude, ID: "claude-sonnet-4-6", DisplayName: "Claude Sonnet 4.6", ContextWindow: 1000000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
-	{AccountType: AccountTypeClaude, ID: "claude-opus-4-6", DisplayName: "Claude Opus 4.6", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
-	{AccountType: AccountTypeClaude, ID: "claude-opus-4-5-20251101", DisplayName: "Claude Opus 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
-	{AccountType: AccountTypeClaude, ID: "claude-haiku-4-5-20251001", DisplayName: "Claude Haiku 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"haiku", "claude-haiku-4-5"}, Cost: &piModelCost{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
-	{AccountType: AccountTypeClaude, ID: "claude-sonnet-4-5-20250929", DisplayName: "Claude Sonnet 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
-	{AccountType: AccountTypeClaude, ID: "claude-opus-4-1-20250805", DisplayName: "Claude Opus 4.1", ContextWindow: 200000, MaxTokens: 32000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 15, Output: 75, CacheRead: 1.5, CacheWrite: 18.75}},
+var poolModels = []ModelRoute{
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.6-sol", DisplayName: "GPT-5.6-Sol", Description: "Latest frontier agentic coding model.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"gpt-5.6"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.6-terra", DisplayName: "GPT-5.6-Terra", Description: "Balanced agentic coding model for everyday work.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.6-luna", DisplayName: "GPT-5.6-Luna", Description: "Fast and affordable agentic coding model.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.5", DisplayName: "GPT-5.5", Description: "Frontier model for complex coding, research, and real-world work.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.4", DisplayName: "GPT-5.4", Description: "Strong model for everyday coding.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.4-mini", DisplayName: "GPT-5.4-Mini", Description: "Small, fast, and cost-efficient model for simpler coding tasks.", ContextWindow: 272000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeCodex, ID: "gpt-5.3-codex-spark", DisplayName: "GPT-5.3-Codex-Spark", Description: "Ultra-fast coding model.", ContextWindow: 128000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}},
 
-	{AccountType: AccountTypeKimi, ID: "kimi-for-coding", DisplayName: "kimi-for-coding", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"kimi", "k2p5", "kimi-k2-thinking"}},
-	{AccountType: AccountTypeKimi, ID: "kimi-for-coding-highspeed", DisplayName: "kimi-for-coding-highspeed", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeClaude, ID: "claude-sonnet-5", DisplayName: "Claude Sonnet 5", ContextWindow: 1000000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"sonnet"}, Cost: &piModelCost{Input: 2, Output: 10, CacheRead: 0.2, CacheWrite: 2.5}},
+	{ProviderID: AccountTypeClaude, ID: "claude-fable-5", DisplayName: "Claude Fable 5", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"fable"}, Cost: &piModelCost{Input: 10, Output: 50, CacheRead: 1, CacheWrite: 12.5}},
+	{ProviderID: AccountTypeClaude, ID: "claude-opus-4-8", DisplayName: "Claude Opus 4.8", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"opus"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+	{ProviderID: AccountTypeClaude, ID: "claude-opus-4-7", DisplayName: "Claude Opus 4.7", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+	{ProviderID: AccountTypeClaude, ID: "claude-sonnet-4-6", DisplayName: "Claude Sonnet 4.6", ContextWindow: 1000000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+	{ProviderID: AccountTypeClaude, ID: "claude-opus-4-6", DisplayName: "Claude Opus 4.6", ContextWindow: 1000000, MaxTokens: 128000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+	{ProviderID: AccountTypeClaude, ID: "claude-opus-4-5-20251101", DisplayName: "Claude Opus 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 5, Output: 25, CacheRead: 0.5, CacheWrite: 6.25}},
+	{ProviderID: AccountTypeClaude, ID: "claude-haiku-4-5-20251001", DisplayName: "Claude Haiku 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"haiku", "claude-haiku-4-5"}, Cost: &piModelCost{Input: 1, Output: 5, CacheRead: 0.1, CacheWrite: 1.25}},
+	{ProviderID: AccountTypeClaude, ID: "claude-sonnet-4-5-20250929", DisplayName: "Claude Sonnet 4.5", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 3, Output: 15, CacheRead: 0.3, CacheWrite: 3.75}},
+	{ProviderID: AccountTypeClaude, ID: "claude-opus-4-1-20250805", DisplayName: "Claude Opus 4.1", ContextWindow: 200000, MaxTokens: 32000, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 15, Output: 75, CacheRead: 1.5, CacheWrite: 18.75}},
+
+	{ProviderID: AccountTypeKimi, ID: "kimi-for-coding", DisplayName: "kimi-for-coding", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"kimi", "k2p5", "kimi-k2-thinking"}},
+	{ProviderID: AccountTypeKimi, ID: "kimi-for-coding-highspeed", DisplayName: "kimi-for-coding-highspeed", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
 
 	// Kimi Open Platform is a separate pay-as-you-go product from the Kimi
 	// Coding Plan. Keep its real model IDs and limits aligned with the official
 	// Open Platform catalog; "kimi-for-coding" belongs only to AccountTypeKimi.
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k3", DisplayName: "Kimi K3", Description: "Latest Moonshot/Kimi Open Platform frontier model.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k3[1m]", DisplayName: "Kimi K3 (Anthropic 1M alias)", Description: "Kimi K3 alias documented for Anthropic-compatible clients.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.7-code", DisplayName: "Kimi K2.7-Code", Description: "Open Platform coding model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.7-code-highspeed", DisplayName: "Kimi K2.7-Code Highspeed", Description: "Open Platform coding model, faster inference.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.6", DisplayName: "Kimi K2.6", Description: "Open Platform general-purpose model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeKimiPlatform, ID: "kimi-k2.5", DisplayName: "Kimi K2.5", Description: "Open Platform legacy model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k3", DisplayName: "Kimi K3", Description: "Latest Moonshot/Kimi Open Platform frontier model.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k3[1m]", DisplayName: "Kimi K3 (Anthropic 1M alias)", Description: "Kimi K3 alias documented for Anthropic-compatible clients.", ContextWindow: 1048576, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k2.7-code", DisplayName: "Kimi K2.7-Code", Description: "Open Platform coding model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k2.7-code-highspeed", DisplayName: "Kimi K2.7-Code Highspeed", Description: "Open Platform coding model, faster inference.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k2.6", DisplayName: "Kimi K2.6", Description: "Open Platform general-purpose model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeKimiPlatform, ID: "kimi-k2.5", DisplayName: "Kimi K2.5", Description: "Open Platform legacy model.", ContextWindow: 262144, MaxTokens: 32768, Reasoning: true, Input: []string{"text", "image"}},
 
-	{AccountType: AccountTypeMinimax, ID: "MiniMax-M3", DisplayName: "MiniMax-M3", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"minimax", "minimax-m3"}},
-	{AccountType: AccountTypeMinimax, ID: "MiniMax-M2.7", DisplayName: "MiniMax-M2.7", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
-	{AccountType: AccountTypeMinimax, ID: "MiniMax-M2.7-highspeed", DisplayName: "MiniMax-M2.7-Highspeed", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
+	{ProviderID: AccountTypeMinimax, ID: "MiniMax-M3", DisplayName: "MiniMax-M3", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Aliases: []string{"minimax", "minimax-m3"}},
+	{ProviderID: AccountTypeMinimax, ID: "MiniMax-M2.7", DisplayName: "MiniMax-M2.7", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.3, Output: 1.2, CacheRead: 0.06, CacheWrite: 0.375}},
+	{ProviderID: AccountTypeMinimax, ID: "MiniMax-M2.7-highspeed", DisplayName: "MiniMax-M2.7-Highspeed", ContextWindow: 204800, MaxTokens: 131072, Reasoning: true, Input: []string{"text", "image"}, Cost: &piModelCost{Input: 0.6, Output: 2.4, CacheRead: 0.06, CacheWrite: 0.375}},
 
-	{AccountType: AccountTypeZAI, ID: "glm-5.2", DisplayName: "GLM-5.2", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}},
+	{ProviderID: AccountTypeZAI, ID: "glm-5.2", DisplayName: "GLM-5.2", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}},
 
-	{AccountType: AccountTypeXiaomi, ID: "mimo-v2.5-pro", DisplayName: "MiMo-V2.5-Pro", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text"}, Aliases: []string{"mimo-v2.5-pro[1m]"}},
+	{ProviderID: AccountTypeXiaomi, ID: "mimo-v2.5-pro", DisplayName: "MiMo-V2.5-Pro", ContextWindow: 1000000, MaxTokens: 131072, Reasoning: true, Input: []string{"text"}, Aliases: []string{"mimo-v2.5-pro[1m]"}},
 
-	{AccountType: AccountTypeDeepSeek, ID: "deepseek-v4-flash", DisplayName: "DeepSeek-V4-Flash", Description: "Fast, cost-efficient DeepSeek model (non-thinking mode).", ContextWindow: 128000, MaxTokens: 32768, Reasoning: false, Input: []string{"text"}, Aliases: []string{"deepseek-flash"}},
-	{AccountType: AccountTypeDeepSeek, ID: "deepseek-v4-pro", DisplayName: "DeepSeek-V4-Pro", Description: "Frontier DeepSeek reasoning model.", ContextWindow: 128000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"deepseek-pro", "deepseek"}},
+	{ProviderID: AccountTypeDeepSeek, ID: "deepseek-v4-flash", DisplayName: "DeepSeek-V4-Flash", Description: "Fast, cost-efficient DeepSeek model (non-thinking mode).", ContextWindow: 128000, MaxTokens: 32768, Reasoning: false, Input: []string{"text"}, Aliases: []string{"deepseek-flash"}},
+	{ProviderID: AccountTypeDeepSeek, ID: "deepseek-v4-pro", DisplayName: "DeepSeek-V4-Pro", Description: "Frontier DeepSeek reasoning model.", ContextWindow: 128000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"deepseek-pro", "deepseek"}},
 
-	{AccountType: AccountTypeQwen, ID: "qwen3.6-plus", DisplayName: "Qwen3.6-Plus", Description: "Alibaba's flagship agentic coding model (Coding Plan).", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"qwen", "qwen-coder", "qwen3-coder"}},
+	{ProviderID: AccountTypeQwen, ID: "qwen3.6-plus", DisplayName: "Qwen3.6-Plus", Description: "Alibaba's flagship agentic coding model (Coding Plan).", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"qwen", "qwen-coder", "qwen3-coder"}},
 
 	// OpenRouter and NVIDIA are aggregators with no fixed catalog - any
 	// "openrouter/<vendor>/<model>" or "nvidia/<vendor>/<model>" slug routes
 	// to a pooled account of that type, prefix stripped before forwarding
 	// upstream (see isOpenRouterModel/isNvidiaModel). These entries exist only
 	// so the Models tab shows a discoverable, working example of each.
-	{AccountType: AccountTypeOpenRouter, ID: "openrouter/anthropic/claude-haiku-4.5", DisplayName: "OpenRouter: Claude Haiku 4.5", Description: "Example only - any \"openrouter/<vendor>/<model>\" slug routes to a pooled OpenRouter account.", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}},
-	{AccountType: AccountTypeNvidia, ID: "nvidia/meta/llama-3.3-70b-instruct", DisplayName: "NVIDIA: Llama 3.3 70B Instruct", Description: "Example only - any \"nvidia/<vendor>/<model>\" slug routes to a pooled NVIDIA account.", ContextWindow: 128000, MaxTokens: 8192, Reasoning: false, Input: []string{"text"}},
+	{ProviderID: AccountTypeOpenRouter, ID: "openrouter/anthropic/claude-haiku-4.5", DisplayName: "OpenRouter: Claude Haiku 4.5", Description: "Example only - any \"openrouter/<vendor>/<model>\" slug routes to a pooled OpenRouter account.", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}},
+	{ProviderID: AccountTypeNvidia, ID: "nvidia/meta/llama-3.3-70b-instruct", DisplayName: "NVIDIA: Llama 3.3 70B Instruct", Description: "Example only - any \"nvidia/<vendor>/<model>\" slug routes to a pooled NVIDIA account.", ContextWindow: 128000, MaxTokens: 8192, Reasoning: false, Input: []string{"text"}},
 }
 
-func modelsForProvider(accountType AccountType) []poolModel {
-	var models []poolModel
+func modelsForProvider(providerID ProviderID) []ModelRoute {
+	var models []ModelRoute
 	for _, model := range poolModels {
-		if model.AccountType == accountType {
+		if model.ProviderID == providerID {
 			models = append(models, model)
 		}
 	}
 	return models
 }
 
-func modelForProvider(accountType AccountType, name string) (poolModel, bool) {
+func modelForProvider(providerID ProviderID, name string) (ModelRoute, bool) {
 	name = strings.ToLower(strings.TrimSpace(name))
 	for _, model := range poolModels {
-		if model.AccountType != accountType {
+		if model.ProviderID != providerID {
 			continue
 		}
 		if strings.EqualFold(model.ID, name) {
@@ -95,5 +99,5 @@ func modelForProvider(accountType AccountType, name string) (poolModel, bool) {
 			}
 		}
 	}
-	return poolModel{}, false
+	return ModelRoute{}, false
 }

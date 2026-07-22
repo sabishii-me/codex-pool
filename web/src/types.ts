@@ -21,7 +21,7 @@ export interface MFAStatus {
   recovery_codes_remaining: number;
 }
 
-export interface AccountStats {
+export interface ProviderConnectionStats {
   id: string;
   display_name: string;
   external_subject?: string;
@@ -65,6 +65,9 @@ export interface AccountStats {
   reset_credit_expirations?: string[];
   reset_credits_known?: boolean;
 }
+
+/** @deprecated Use ProviderConnectionStats. */
+export type AccountStats = ProviderConnectionStats;
 
 export interface PoolStats {
   total_accounts: number;
@@ -230,7 +233,7 @@ export interface SignalAnalytics {
   quota_generated_at?: string;
 }
 
-export interface AdminAccount {
+export interface OperatorProviderConnection {
   id: string;
   public_id: string;
   type: Provider;
@@ -253,3 +256,6 @@ export interface AdminAccount {
   usage: Record<string, unknown>;
   totals: Record<string, number>;
 }
+
+/** @deprecated Use OperatorProviderConnection. */
+export type AdminAccount = OperatorProviderConnection;

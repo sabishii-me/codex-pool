@@ -13,8 +13,12 @@ import (
 	"time"
 )
 
-// AccountType distinguishes between different API backends.
-type AccountType string
+// ProviderID is the stable identifier for an upstream provider definition.
+type ProviderID string
+
+// AccountType is retained as a source-compatible alias during the domain rename.
+// Deprecated: use ProviderID.
+type AccountType = ProviderID
 
 const (
 	AccountTypeCodex        AccountType = "codex"
@@ -33,7 +37,7 @@ const (
 	AccountTypeNvidia       AccountType = "nvidia"
 )
 
-type Account struct {
+type ProviderConnection struct {
 	mu sync.Mutex
 
 	Type         AccountType // codex, gemini, or claude
@@ -85,6 +89,10 @@ type Account struct {
 	// Aggregated token counters (in-memory for now; persist later)
 	Totals AccountUsage
 }
+
+// Account is retained while call sites migrate to ProviderConnection.
+// Deprecated: use ProviderConnection.
+type Account = ProviderConnection
 
 type RateLimitResetCredit struct {
 	ID        string
@@ -442,8 +450,8 @@ func applyCommonAccountFileState(account *Account, data []byte) {
 // - provider_claude.go: ClaudeProvider.LoadAccount
 // - provider_gemini.go: GeminiProvider.LoadAccount
 
-// poolState wraps accounts with a mutex.
-type poolState struct {
+// ProviderPool coordinates the live connections available for routing.
+type ProviderPool struct {
 	mu            sync.RWMutex
 	accounts      []*Account
 	convPin       map[string]string // conversation_id -> account ID
@@ -451,6 +459,10 @@ type poolState struct {
 	rr            uint64
 	tierThreshold float64 // secondary usage % at which we stop preferring a tier (default 0.50)
 }
+
+// poolState is retained while internal call sites migrate to ProviderPool.
+// Deprecated: use ProviderPool.
+type poolState = ProviderPool
 
 func newPoolState(accs []*Account, debug bool) *poolState {
 	return &poolState{accounts: accs, convPin: map[string]string{}, debug: debug, tierThreshold: 0.50}

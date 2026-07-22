@@ -251,7 +251,7 @@ Exit criterion: every provider has an explicit support matrix and executable fix
 
 ### Phase 1 — Establish domain language
 
-Status: in progress. The provider-neutral `ConnectionIdentity` seam is implemented with durable `display_name`, optional `external_subject`/attributes, migration-safe legacy fallback, normalized stats/operator DTOs, and an elevated-operator rename endpoint. Existing `Account` names and compatibility API fields remain until the next slices.
+Status: in progress. The provider-neutral `ConnectionIdentity` seam is implemented with durable `display_name`, optional `external_subject`/attributes, migration-safe legacy fallback, normalized stats/operator DTOs, and an elevated-operator rename endpoint. `GatewayUser`, `ProviderID`, `ProviderConnection`, `ProviderPool`, and `ModelRoute` are now the canonical declared types used by the provider contract, catalog, and TypeScript view-model consumers. Existing `PoolUser`, `AccountType`, `Account`, `poolState`, compatibility JSON fields, and `/admin/accounts` URLs remain deprecated aliases/interfaces until compiler-guided call-site and API-version migrations are complete.
 
 - Introduce `GatewayUser`, `Provider`, `ProviderConnection`, `ProviderPool`, and `ModelRoute`.
 - Add `ConnectionIdentity` with a required `display_name` and optional provider metadata.

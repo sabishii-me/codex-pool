@@ -1584,16 +1584,16 @@ func formatPlanWithTier(planType, tier string) string {
 
 // PoolStats represents anonymized pool statistics
 type PoolStats struct {
-	TotalAccounts    int               `json:"total_accounts"`
-	ActiveAccounts   int               `json:"active_accounts"`
-	TotalPoolUsers   int               `json:"total_pool_users"`
-	Accounts         []AccountStats    `json:"accounts"`
-	AggregateUsage   AggregateStats    `json:"aggregate"`
-	CapacityAnalysis *CapacityAnalysis `json:"capacity_analysis,omitempty"`
-	Last24hTokens    int64             `json:"last_24h_tokens"`
-	DailyCosts       []DailyCostEntry  `json:"daily_costs,omitempty"`
-	CyberPolicy      CyberPolicyStats  `json:"cyber_policy"`
-	GeneratedAt      time.Time         `json:"generated_at"`
+	TotalAccounts    int                       `json:"total_accounts"`
+	ActiveAccounts   int                       `json:"active_accounts"`
+	TotalPoolUsers   int                       `json:"total_pool_users"`
+	Accounts         []ProviderConnectionStats `json:"accounts"`
+	AggregateUsage   AggregateStats            `json:"aggregate"`
+	CapacityAnalysis *CapacityAnalysis         `json:"capacity_analysis,omitempty"`
+	Last24hTokens    int64                     `json:"last_24h_tokens"`
+	DailyCosts       []DailyCostEntry          `json:"daily_costs,omitempty"`
+	CyberPolicy      CyberPolicyStats          `json:"cyber_policy"`
+	GeneratedAt      time.Time                 `json:"generated_at"`
 }
 
 // CyberPolicyStats summarizes how often the cyber_policy safety net
@@ -1620,7 +1620,7 @@ type CyberPolicyStats struct {
 	PerAccount map[string]map[string]int64 `json:"per_account,omitempty"`
 }
 
-type AccountStats struct {
+type ProviderConnectionStats struct {
 	ID                        string            `json:"id"` // hashed connection ID
 	DisplayName               string            `json:"display_name"`
 	ExternalSubject           string            `json:"external_subject,omitempty"`
@@ -1665,6 +1665,10 @@ type AccountStats struct {
 	ResetCreditExpirations    []string          `json:"reset_credit_expirations,omitempty"`
 	ResetCreditsKnown         bool              `json:"reset_credits_known"`
 }
+
+// AccountStats is retained for API/test source compatibility.
+// Deprecated: use ProviderConnectionStats.
+type AccountStats = ProviderConnectionStats
 
 type AggregateStats struct {
 	TotalInputTokens         int64                          `json:"total_input_tokens"`
@@ -1720,7 +1724,7 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 
 	stats := PoolStats{
 		TotalAccounts: len(accounts),
-		Accounts:      []AccountStats{},
+		Accounts:      []ProviderConnectionStats{},
 		GeneratedAt:   time.Now(),
 	}
 
@@ -1782,7 +1786,7 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 		scoreTooltip := scoreTooltipFromBreakdownLocked(acc, stats.GeneratedAt, breakdown)
 
 		identity := acc.connectionIdentityLocked()
-		as := AccountStats{
+		as := ProviderConnectionStats{
 			ID:                       hashAccountID(acc.ID),
 			DisplayName:              identity.DisplayName,
 			ExternalSubject:          identity.ExternalSubject,

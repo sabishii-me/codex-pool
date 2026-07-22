@@ -1,4 +1,4 @@
-import type { AccountStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage, Provider } from "./types";
+import type { ProviderConnectionStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage, Provider } from "./types";
 
 export interface CapacityForecast {
   provider: Provider;
@@ -68,7 +68,7 @@ function throughput(row: Pick<HourlyUsage, "account_type" | "input_tokens" | "ca
   return row.input_tokens + row.output_tokens + (row.account_type === "claude" ? row.cached_tokens : 0);
 }
 
-export function capacityForecasts(accounts: AccountStats[], bufferRatio = 0.2): CapacityForecast[] {
+export function capacityForecasts(accounts: ProviderConnectionStats[], bufferRatio = 0.2): CapacityForecast[] {
   const providers = [...new Set(accounts.map((account) => account.type))];
   return providers.flatMap((provider) => {
     const rows = accounts.filter((account) => account.type === provider);
@@ -146,7 +146,7 @@ export function dailyDemandSeries(hourly: HourlyUsage[]): DailyDemandPoint[] {
   });
 }
 
-export function accountFlow(accounts: AccountStats[]): AccountFlow[] {
+export function accountFlow(accounts: ProviderConnectionStats[]): AccountFlow[] {
   return accounts.flatMap((account) => {
     if (account.status === "dead" || !account.secondary_window_available) return [];
     const windowMinutes = account.secondary_window_minutes > 0 ? account.secondary_window_minutes : 7 * 1440;

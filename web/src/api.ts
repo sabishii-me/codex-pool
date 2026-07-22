@@ -1,4 +1,4 @@
-import type { AdminAccount, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
+import type { OperatorProviderConnection, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
@@ -62,8 +62,13 @@ export async function loadLiveCuteCodeSettings(downloadToken: string): Promise<s
 // A 401/403 means "not currently elevated," which callers handle by
 // falling back to the MFA prompt.
 
-export async function loadAdminAccounts(): Promise<AdminAccount[]> {
+export async function loadOperatorProviderConnections(): Promise<OperatorProviderConnection[]> {
   return decode(await fetch("/admin/accounts", { cache: "no-store" }));
+}
+
+/** @deprecated Use loadOperatorProviderConnections. */
+export async function loadAdminAccounts(): Promise<OperatorProviderConnection[]> {
+  return loadOperatorProviderConnections();
 }
 
 export async function renameProviderConnection(accountID: string, displayName: string): Promise<{ status: string; connection_id: string }> {

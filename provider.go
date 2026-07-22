@@ -6,23 +6,23 @@ import (
 	"net/url"
 )
 
-// Provider defines the contract for LLM API providers (Codex, Claude, Gemini).
+// Provider defines one upstream service and its protocol/credential behavior.
 type Provider interface {
-	Type() AccountType
+	Type() ProviderID
 
-	// LoadAccount parses provider-specific JSON into an Account.
-	// Returns nil, nil if the file doesn't match this provider's format.
-	LoadAccount(name, path string, data []byte) (*Account, error)
+	// LoadAccount is the compatibility loader for a provider connection file.
+	// New provider APIs should describe the result as ProviderConnection.
+	LoadAccount(name, path string, data []byte) (*ProviderConnection, error)
 
-	SetAuthHeaders(req *http.Request, acc *Account)
+	SetAuthHeaders(req *http.Request, connection *ProviderConnection)
 
-	RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error
+	RefreshToken(ctx context.Context, connection *ProviderConnection, transport http.RoundTripper) error
 
 	// ParseUsage extracts usage from an SSE event.
 	// Returns nil if the event doesn't contain usage data.
 	ParseUsage(obj map[string]any) *RequestUsage
 
-	ParseUsageHeaders(acc *Account, headers http.Header)
+	ParseUsageHeaders(connection *ProviderConnection, headers http.Header)
 
 	// UpstreamURL returns the base URL for this provider.
 	// Path is provided so providers can route different paths to different upstreams.
@@ -38,7 +38,7 @@ type Provider interface {
 // ProviderRegistry manages all provider implementations.
 type ProviderRegistry struct {
 	providers []Provider
-	byType    map[AccountType]Provider
+	byType    map[ProviderID]Provider
 }
 
 // NewProviderRegistry creates a registry with all configured providers.
@@ -49,7 +49,7 @@ func NewProviderRegistry(codex *CodexProvider, claude *ClaudeProvider, gemini *G
 	// Order: Gemini (unique paths), Claude (specific /v1/messages), Codex (broad /v1/)
 	providers := []Provider{gemini, claude, codex}
 	providers = append(providers, extra...)
-	byType := make(map[AccountType]Provider)
+	byType := make(map[ProviderID]Provider)
 	for _, p := range providers {
 		byType[p.Type()] = p
 	}
@@ -60,8 +60,8 @@ func NewProviderRegistry(codex *CodexProvider, claude *ClaudeProvider, gemini *G
 }
 
 // ForType returns the provider for the given account type.
-func (r *ProviderRegistry) ForType(t AccountType) Provider {
-	return r.byType[t]
+func (r *ProviderRegistry) ForType(providerID ProviderID) Provider {
+	return r.byType[providerID]
 }
 
 // ForPath returns the provider that handles the given request path.

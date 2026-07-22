@@ -36,9 +36,9 @@ func poolModelDescriptors(pools ...*poolState) []poolModelDescriptor {
 	}
 	models := make([]poolModelDescriptor, 0, len(poolModels)+len(grokModelCatalog))
 	for _, model := range poolModels {
-		supportingAccounts, availableAccounts, availableNow := poolModelAvailability(pool, model.AccountType)
+		supportingAccounts, availableAccounts, availableNow := poolModelAvailability(pool, model.ProviderID)
 		protocol := "anthropic"
-		if model.AccountType == AccountTypeCodex {
+		if model.ProviderID == AccountTypeCodex {
 			protocol = "openai"
 		}
 		models = append(models, poolModelDescriptor{
@@ -47,7 +47,7 @@ func poolModelDescriptors(pools ...*poolState) []poolModelDescriptor {
 			Protocol:           protocol,
 			ContextWindow:      model.ContextWindow,
 			Description:        model.Description,
-			Provider:           string(model.AccountType),
+			Provider:           string(model.ProviderID),
 			UpstreamID:         model.ID,
 			MaxOutputTokens:    model.MaxTokens,
 			Protocols:          []string{protocol},

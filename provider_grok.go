@@ -504,7 +504,7 @@ func grokModelsForClient() []grokClientModel {
 	models := append([]grokClientModel(nil), grokCLIModelCatalog...)
 	for _, model := range poolModels {
 		apiBackend := "messages"
-		if model.AccountType == AccountTypeCodex {
+		if model.ProviderID == AccountTypeCodex {
 			apiBackend = "chat_completions"
 		}
 		models = append(models, grokClientModel{

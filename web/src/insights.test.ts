@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { accountFlow, capacityForecasts, dailyDemandSeries, demandSummary, modelMix, originConcentration, peakHeatmap } from "./insights";
-import type { AccountStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage } from "./types";
+import type { ProviderConnectionStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage } from "./types";
 
-function account(overrides: Partial<AccountStats>): AccountStats {
+function account(overrides: Partial<ProviderConnectionStats>): ProviderConnectionStats {
   return {
     id: "account",
     display_name: "Test connection",

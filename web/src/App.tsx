@@ -27,7 +27,7 @@ import {
   enrollMFA,
   exchangeAccountOAuth,
 	  exchangeAntigravityOAuth,
-  loadAdminAccounts,
+  loadOperatorProviderConnections,
 	loadLiveCuteCodeSettings,
 	loadLivePiModels,
 	loadModelCatalog,
@@ -57,8 +57,8 @@ import {
   type CapacityForecast,
 } from "./insights";
 import type {
-  AccountStats,
-  AdminAccount,
+  ProviderConnectionStats,
+  OperatorProviderConnection,
   FriendSession,
   HourlyUsage,
 	MFAStatus,
@@ -107,7 +107,7 @@ function tokenThroughput(row: { account_type: Provider | "unknown"; input_tokens
   return row.input_tokens + row.output_tokens + (row.account_type === "claude" ? row.cached_tokens : 0);
 }
 
-function accountThroughput(account: AccountStats) {
+function accountThroughput(account: ProviderConnectionStats) {
   return account.total_input_tokens + account.total_output_tokens + (account.type === "claude" ? account.total_cached_tokens : 0);
 }
 
@@ -133,7 +133,7 @@ function paceLabel(paceRatio?: number) {
   return paceRatio >= 1.1 ? `${paceRatio.toFixed(1)}× FAST` : `${paceRatio.toFixed(1)}× SAFE`;
 }
 
-function WeeklyPace({ account }: { account: AccountStats }) {
+function WeeklyPace({ account }: { account: ProviderConnectionStats }) {
   if (!account.secondary_window_available) {
     return <span className="quota-limit unavailable">N/A</span>;
   }
@@ -186,7 +186,7 @@ function formatResetCreditExpiry(value: string) {
   return `${absolute} // IN ${relative}`;
 }
 
-function ResetCreditExpirations({ account }: { account: AccountStats }) {
+function ResetCreditExpirations({ account }: { account: ProviderConnectionStats }) {
   const expirations = account.reset_credit_expirations ?? [];
   const count = account.reset_credits_available ?? expirations.length;
   const missing = Math.max(0, count - expirations.length);
@@ -199,7 +199,7 @@ function ResetCreditExpirations({ account }: { account: AccountStats }) {
   );
 }
 
-function ResetCreditBadge({ account }: { account: AccountStats }) {
+function ResetCreditBadge({ account }: { account: ProviderConnectionStats }) {
   if (account.type !== "codex" || !account.reset_credits_known) return <span className="reset-credit unknown">—</span>;
   const count = account.reset_credits_available ?? 0;
   return (
@@ -228,7 +228,7 @@ export function App() {
   const [error, setError] = useState("");
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
   const [adminElevated, setAdminElevated] = useState(false);
-  const [adminAccounts, setAdminAccounts] = useState<AdminAccount[]>([]);
+  const [adminAccounts, setOperatorProviderConnections] = useState<OperatorProviderConnection[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -254,23 +254,23 @@ export function App() {
     if (!isAdmin) {
       setMfaStatus(null);
       setAdminElevated(false);
-      setAdminAccounts([]);
+      setOperatorProviderConnections([]);
       return;
     }
     try {
       const status = await checkMFAStatus();
       setMfaStatus(status);
       if (status.elevated) {
-        setAdminAccounts(await loadAdminAccounts());
+        setOperatorProviderConnections(await loadOperatorProviderConnections());
         setAdminElevated(true);
       } else {
-        setAdminAccounts([]);
+        setOperatorProviderConnections([]);
         setAdminElevated(false);
       }
     } catch {
       setMfaStatus(null);
       setAdminElevated(false);
-      setAdminAccounts([]);
+      setOperatorProviderConnections([]);
     }
   }, []);
 
@@ -306,7 +306,7 @@ export function App() {
     setSignal(null);
     setMfaStatus(null);
     setAdminElevated(false);
-    setAdminAccounts([]);
+    setOperatorProviderConnections([]);
   };
 
   return (
@@ -338,8 +338,8 @@ export function App() {
 				  await refresh();
 				  return;
 				}
-				const [accounts] = await Promise.all([loadAdminAccounts(), refresh()]);
-				setAdminAccounts(accounts);
+				const [accounts] = await Promise.all([loadOperatorProviderConnections(), refresh()]);
+				setOperatorProviderConnections(accounts);
               }}
             />
           )}
@@ -597,7 +597,7 @@ function burnSummary(hourly: HourlyUsage[]) {
   };
 }
 
-function ProviderLanes({ accounts }: { accounts: AccountStats[] }) {
+function ProviderLanes({ accounts }: { accounts: ProviderConnectionStats[] }) {
   const groups = Object.keys(PROVIDERS).map((provider) => {
     const rows = accounts.filter((account) => account.type === provider);
     return { provider: provider as Provider, rows };
@@ -690,7 +690,7 @@ function OriginDrain({ rows }: { rows: OriginWeeklyUsage[] }) {
   );
 }
 
-function ProviderCapitalChart({ accounts }: { accounts: AccountStats[] }) {
+function ProviderCapitalChart({ accounts }: { accounts: ProviderConnectionStats[] }) {
   const data = Object.keys(PROVIDERS).map((provider) => {
     const rows = accounts.filter((account) => account.type === provider);
     return {
@@ -1264,26 +1264,26 @@ function Usage({ stats, signal, session }: { stats: PoolStats | null; signal: Si
   );
 }
 
-function upstreamAccountID(account: AdminAccount | null | undefined) {
+function upstreamAccountID(account: OperatorProviderConnection | null | undefined) {
   if (!account) return "";
   return account.account_id || account.id_token_chatgpt_account_id || "";
 }
 
-function connectionEmail(account: AccountStats, adminAccount?: AdminAccount | null) {
+function connectionEmail(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
   return account.identity_attributes?.email || adminAccount?.identity_attributes?.email || account.account_email || adminAccount?.email || "";
 }
 
-function connectionSubject(account: AccountStats, adminAccount?: AdminAccount | null) {
+function connectionSubject(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
   return account.external_subject || adminAccount?.external_subject || account.upstream_account_id || upstreamAccountID(adminAccount) || "";
 }
 
-function connectionDisplayName(account: AccountStats, adminAccount?: AdminAccount | null) {
+function connectionDisplayName(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
   return account.display_name || adminAccount?.display_name || `${PROVIDERS[account.type].label} connection`;
 }
 
 function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
   stats: PoolStats | null;
-  adminAccounts: AdminAccount[];
+  adminAccounts: OperatorProviderConnection[];
   isAdmin: boolean;
   mfaStatus: MFAStatus | null;
   adminElevated: boolean;

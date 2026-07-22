@@ -14,8 +14,9 @@ import (
 	"time"
 )
 
-// PoolUser represents a generated pool user who can use the proxy.
-type PoolUser struct {
+// GatewayUser is a person authorized to use the gateway. It is intentionally
+// distinct from ProviderConnection, which supplies upstream capacity.
+type GatewayUser struct {
 	ID        string    `json:"id"`
 	Token     string    `json:"token"` // Download token for /config/codex/<token>
 	Email     string    `json:"email"`
@@ -23,6 +24,10 @@ type PoolUser struct {
 	CreatedAt time.Time `json:"created_at"`
 	Disabled  bool      `json:"disabled"`
 }
+
+// PoolUser is retained for persisted/API compatibility during migration.
+// Deprecated: use GatewayUser.
+type PoolUser = GatewayUser
 
 // PoolUserStore manages pool user persistence.
 type PoolUserStore struct {

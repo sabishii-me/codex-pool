@@ -70,6 +70,18 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestAccessPolicyDecisionsStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, decision := range []string{"adminEmailAllowed(", "adminElevated(", ".isBanned(", ".recordFailure(", ".recordSuccess("} {
+		if strings.Contains(string(data), decision) {
+			t.Errorf("router.go contains access decision %q; use AccessPolicy", decision)
+		}
+	}
+}
+
 func TestProductionModelRoutingIsCentralized(t *testing.T) {
 	allowed := map[string]bool{
 		"model_route_registry.go": true, "provider.go": true, "provider_grok.go": true,

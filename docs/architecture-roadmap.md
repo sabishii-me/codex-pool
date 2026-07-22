@@ -306,6 +306,17 @@ Exit criterion: one route definition drives every request path.
 
 ### Phase 6 — Separate HTTP APIs
 
+Status: in progress. `ConnectionViewService` is the sole read-model boundary that snapshots mutable `ProviderConnection` state for canonical operator DTOs and the explicit `/admin/accounts` compatibility projection. `DataAPI.TryServe` now owns read-only pool analytics, model catalog, canonical provider-connection collection, compatibility connection collection, and per-user usage routes. It receives authentication functions and response callbacks rather than proxy transports, retry policy, connection selection, or mutation capabilities. `proxyHandler.ServeHTTP` delegates these paths before authentication, provider administration, and gateway dispatch; source-level guards prevent read collections from drifting back into the proxy router. Existing URLs, authorization order, method behavior, and JSON contracts remain unchanged. Provider-connection identity mutation remains deliberately owned by the administration router.
+
+Current route ownership:
+
+| Boundary | Routes |
+|---|---|
+| Read-only data API | `/api/pool/{stats,whoami,users,origins,daily-breakdown,hourly,signal,catalog}`, `/api/pool/users/:id/{daily,hourly}`, `GET /api/v2/provider-connections`, `GET /admin/accounts` compatibility |
+| Authentication/session | `/auth/*`, `/api/pool/session`, `/api/admin/mfa/*` |
+| Provider administration | `/api/v2/provider-connections/:id/identity`, `/admin/accounts/:id/*`, `/api/pool/accounts/*`, `/admin/{codex,claude,...}` |
+| Gateway/protocol | `/v1/*`, WebSocket upgrades, Codex compatibility/no-op paths, and upstream fallback |
+
 - Isolate gateway, authentication, provider administration, and read-only data handlers.
 - Return `display_name`, public connection ID, and visibility-filtered structured identity metadata from connection view models.
 - Do not expose provider-specific identity fields directly on generic stats DTOs.

@@ -268,6 +268,12 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read-only data routes are owned separately from authentication,
+	// administration mutations, and gateway proxy execution.
+	if h.dataAPIService().TryServe(w, r) {
+		return
+	}
+
 	// Static routes
 	switch r.URL.Path {
 	case "/":
@@ -322,55 +328,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/api/admin/mfa/regenerate-codes":
 		h.handleMFARegenerateCodes(w, r)
 		return
-	case "/api/pool/stats":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handlePoolStats(w, r)
-		return
-	case "/api/pool/whoami":
-		h.handleWhoami(w, r)
-		return
-	case "/api/pool/users":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handlePoolUsers(w, r)
-		return
-	case "/api/pool/origins":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handlePoolOrigins(w, r)
-		return
-	case "/api/pool/daily-breakdown":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handleDailyBreakdown(w, r)
-		return
-	case "/api/pool/hourly":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handleGlobalHourly(w, r)
-		return
-	case "/api/pool/signal":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handleSignalAnalytics(w, r)
-		return
-	case "/api/pool/catalog":
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		servePoolModelsWithRegistry(w, h.pool, h.registry)
-		return
 	case "/favicon.ico":
 		http.NotFound(w, r)
 		return
@@ -394,16 +351,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.reloadAccounts()
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
-		return
-	case "/admin/accounts":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.serveAccounts(w)
 		return
 	case "/admin/origins":
 		if !h.checkAdminAuth(w, r) {
@@ -447,19 +394,8 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Canonical provider-connection API v2. These routes intentionally omit
-	// account-specific compatibility identity fields.
-	if r.URL.Path == "/api/v2/provider-connections" {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.serveProviderConnectionsV2(w)
-		return
-	}
+	// Canonical provider-connection mutations remain in the administration
+	// router. Read-only collection routes are owned by DataAPI.
 	if strings.HasPrefix(r.URL.Path, "/api/v2/provider-connections/") && strings.HasSuffix(r.URL.Path, "/identity") {
 		if !h.checkAdminAuth(w, r) {
 			return
@@ -540,24 +476,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Friend landing page with code
 	if strings.HasPrefix(r.URL.Path, "/friend/") {
 		h.serveFriendLanding(w, r)
-		return
-	}
-
-	// User daily usage: /api/pool/users/:id/daily
-	if strings.HasPrefix(r.URL.Path, "/api/pool/users/") && strings.HasSuffix(r.URL.Path, "/daily") {
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handleUserDaily(w, r)
-		return
-	}
-
-	// User hourly usage: /api/pool/users/:id/hourly
-	if strings.HasPrefix(r.URL.Path, "/api/pool/users/") && strings.HasSuffix(r.URL.Path, "/hourly") {
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		h.handleUserHourly(w, r)
 		return
 	}
 

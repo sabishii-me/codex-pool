@@ -45,6 +45,31 @@ func TestProductionRequestPathsUseRoutingBoundaries(t *testing.T) {
 	}
 }
 
+func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		`case "/api/pool/stats"`,
+		`case "/api/pool/users"`,
+		`case "/api/pool/origins"`,
+		`case "/api/pool/daily-breakdown"`,
+		`case "/api/pool/hourly"`,
+		`case "/api/pool/signal"`,
+		`case "/api/pool/catalog"`,
+		`case "/api/v2/provider-connections"`,
+		`case "/admin/accounts"`,
+	} {
+		if strings.Contains(string(data), path) {
+			t.Errorf("router.go directly owns read route %s; use DataAPI", path)
+		}
+	}
+	if !strings.Contains(string(data), "h.dataAPIService().TryServe(w, r)") {
+		t.Fatal("proxy router does not delegate to DataAPI")
+	}
+}
+
 func TestProductionModelRoutingIsCentralized(t *testing.T) {
 	allowed := map[string]bool{
 		"model_route_registry.go": true, "provider.go": true, "provider_grok.go": true,

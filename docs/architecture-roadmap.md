@@ -315,6 +315,7 @@ Current route ownership:
 | Read-only data API | `/api/pool/{stats,whoami,users,origins,daily-breakdown,hourly,signal,catalog}`, `/api/pool/users/:id/{daily,hourly}`, `GET /api/v2/provider-connections`, `GET /admin/accounts` compatibility |
 | Authentication/session | `AuthenticationAPI`: `/auth/*`, `/api/pool/session`, `/api/admin/mfa/*`; `AccessPolicy`: signed-in/elevated route decisions |
 | Provider administration | `ProviderAdminAPI`: `/api/v2/provider-connections/:id/identity`, `/admin/accounts/:id/{identity,enable,disable,resurrect,refresh}`; `ProviderContributionAPI`: signed-in member additions under `/api/pool/accounts/*`; `ProviderOperationsAPI`: elevated `/admin/{codex,claude,antigravity,kimi,...}` operations with explicit public OAuth callback exceptions |
+| System administration | `SystemAdminAPI`: metrics, reload, origins, capacity, rate-limit reset, anonymous purge, and `/admin/pool-users*` |
 | Gateway/protocol | `/v1/*`, WebSocket upgrades, Codex compatibility/no-op paths, and upstream fallback |
 
 - Isolate gateway, authentication, provider administration, and read-only data handlers.

@@ -1,0 +1,86 @@
+package main
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestSystemAdminAPIAuthorizesBeforeMethodAndHandler(t *testing.T) {
+	called := false
+	api := &SystemAdminAPI{
+		authorizeAdmin: func(w http.ResponseWriter, _ *http.Request) bool {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return false
+		},
+		routes: map[string]systemAdminRoute{
+			"/admin/reload": {method: http.MethodPost, handler: func(http.ResponseWriter, *http.Request) { called = true }},
+		},
+	}
+	response := httptest.NewRecorder()
+	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/reload", nil)) || response.Code != http.StatusForbidden || called {
+		t.Fatalf("status=%d called=%v", response.Code, called)
+	}
+}
+
+func TestSystemAdminAPIEnforcesDeclaredMethods(t *testing.T) {
+	called := false
+	api := &SystemAdminAPI{
+		authorizeAdmin: func(http.ResponseWriter, *http.Request) bool { return true },
+		routes: map[string]systemAdminRoute{
+			"/admin/reload": {method: http.MethodPost, handler: func(http.ResponseWriter, *http.Request) { called = true }},
+		},
+	}
+	response := httptest.NewRecorder()
+	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/reload", nil)) || response.Code != http.StatusMethodNotAllowed || called {
+		t.Fatalf("status=%d called=%v", response.Code, called)
+	}
+	response = httptest.NewRecorder()
+	if !api.TryServe(response, httptest.NewRequest(http.MethodPost, "/admin/reload", nil)) || !called {
+		t.Fatalf("POST called=%v status=%d", called, response.Code)
+	}
+}
+
+func TestSystemAdminAPIRoutesPoolUsersAfterAuthorization(t *testing.T) {
+	called := false
+	api := &SystemAdminAPI{
+		authorizeAdmin: func(http.ResponseWriter, *http.Request) bool { return true },
+		poolUsers:      func(w http.ResponseWriter, _ *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) },
+	}
+	response := httptest.NewRecorder()
+	if !api.TryServe(response, httptest.NewRequest(http.MethodDelete, "/admin/pool-users/member", nil)) || !called || response.Code != http.StatusNoContent {
+		t.Fatalf("called=%v status=%d", called, response.Code)
+	}
+}
+
+func TestSystemAdminAPIDoesNotClaimOtherBoundaries(t *testing.T) {
+	api := &SystemAdminAPI{}
+	for _, path := range []string{"/admin/codex", "/admin/accounts/c1/disable", "/api/pool/stats", "/v1/messages", "/admin/unknown"} {
+		if api.TryServe(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil)) {
+			t.Fatalf("claimed unrelated path %s", path)
+		}
+	}
+}
+
+func TestProxyHandlerDelegatesSystemAdminRoute(t *testing.T) {
+	called := false
+	handler := &proxyHandler{
+		cfg:                     &config{},
+		dataAPI:                 &DataAPI{},
+		providerAdminAPI:        &ProviderAdminAPI{},
+		providerContributionAPI: &ProviderContributionAPI{},
+		providerOperationsAPI:   &ProviderOperationsAPI{},
+		authenticationAPI:       &AuthenticationAPI{},
+		systemAdminAPI: &SystemAdminAPI{
+			authorizeAdmin: func(http.ResponseWriter, *http.Request) bool { return true },
+			routes: map[string]systemAdminRoute{
+				"/admin/reload": {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) { called = true; w.WriteHeader(http.StatusNoContent) }},
+			},
+		},
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/admin/reload", nil))
+	if !called || response.Code != http.StatusNoContent {
+		t.Fatalf("called=%v status=%d", called, response.Code)
+	}
+}

@@ -70,6 +70,21 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestSystemAdminRoutesStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"/metrics", "/admin/reload", "/admin/origins", "/admin/tokens", "/admin/clear-rate-limits", "/admin/purge-anonymous", "/admin/pool-users", "servePoolUsersAdmin("} {
+		if strings.Contains(string(data), fragment) {
+			t.Errorf("router.go directly owns system admin fragment %q; use SystemAdminAPI", fragment)
+		}
+	}
+	if !strings.Contains(string(data), "h.systemAdminAPIService().TryServe(w, r)") {
+		t.Fatal("proxy router does not delegate to SystemAdminAPI")
+	}
+}
+
 func TestAuthenticationRoutesStayOutOfProxyRouter(t *testing.T) {
 	data, err := os.ReadFile("router.go")
 	if err != nil {

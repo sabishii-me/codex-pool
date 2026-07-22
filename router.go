@@ -219,6 +219,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.authenticationAPIService().TryServe(w, r) {
 		return
 	}
+	if h.systemAdminAPIService().TryServe(w, r) {
+		return
+	}
 
 	// Static routes
 	switch r.URL.Path {
@@ -242,64 +245,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case "/healthz":
 		h.serveHealth(w)
-		return
-	case "/metrics":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.metrics.serve(w, r)
-		return
-	case "/admin/reload":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.reloadAccounts()
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-		return
-	case "/admin/origins":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.handleAdminOrigins(w, r)
-		return
-	case "/admin/tokens":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.serveTokenCapacity(w)
-		return
-	case "/admin/clear-rate-limits":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.clearAllRateLimits(w)
-		return
-	case "/admin/purge-anonymous":
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.purgeAnonymousUsers(w)
 		return
 	}
 
@@ -336,15 +281,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/config/cute-code/") {
 		h.serveCuteCodeSettingsConfig(w, r)
-		return
-	}
-
-	// Pool user admin routes
-	if strings.HasPrefix(r.URL.Path, "/admin/pool-users") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.servePoolUsersAdmin(w, r)
 		return
 	}
 

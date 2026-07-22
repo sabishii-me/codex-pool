@@ -56,6 +56,56 @@ func TestConnectionSelectorDelegatesAntigravityModelCapability(t *testing.T) {
 	}
 }
 
+func TestConnectionSelectorWeightsCompetitiveCodexWithoutStarvation(t *testing.T) {
+	connections := []*ProviderConnection{
+		{ID: "cyber-a", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
+		{ID: "cyber-b", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
+		{ID: "ordinary-a", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
+		{ID: "ordinary-b", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
+	}
+	selector := NewConnectionSelector(newProviderPool(connections, false))
+	counts := map[string]int{}
+	for range 60 {
+		selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex})
+		if selected == nil {
+			t.Fatal("expected Codex connection")
+		}
+		counts[selected.ID]++
+	}
+	for _, id := range []string{"cyber-a", "cyber-b"} {
+		if counts[id] != 20 {
+			t.Fatalf("%s selections=%d, want 20; all=%v", id, counts[id], counts)
+		}
+	}
+	for _, id := range []string{"ordinary-a", "ordinary-b"} {
+		if counts[id] != 10 {
+			t.Fatalf("%s selections=%d, want 10; all=%v", id, counts[id], counts)
+		}
+	}
+}
+
+func TestConnectionSelectorExcludesNoncompetitiveCodexFromFairRotation(t *testing.T) {
+	healthy := &ProviderConnection{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}}
+	drainedCyber := &ProviderConnection{ID: "drained-cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5}}
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{drainedCyber, healthy}, false))
+	for i := 0; i < 12; i++ {
+		if selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex}); selected != healthy {
+			t.Fatalf("selection %d=%v, want quota-healthy ordinary connection", i, selected)
+		}
+	}
+}
+
+func TestConnectionSelectorCyberRetryRemainsCyberOnly(t *testing.T) {
+	ordinary := &ProviderConnection{ID: "ordinary", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0}}
+	cyber := &ProviderConnection{ID: "cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5}}
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber}, false))
+	for i := 0; i < 4; i++ {
+		if selected := selector.Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex}); selected != cyber {
+			t.Fatalf("cyber retry selected=%v", selected)
+		}
+	}
+}
+
 func TestConnectionSelectorOwnsImageCapabilityAndFanout(t *testing.T) {
 	unsupported := &ProviderConnection{Type: AccountTypeCodex, ID: "unsupported", ImageGenerationSupport: -1}
 	first := &ProviderConnection{Type: AccountTypeCodex, ID: "first", ImageGenerationSupport: 1}

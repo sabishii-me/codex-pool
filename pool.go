@@ -751,6 +751,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		tier         int
 		secondaryPct float64
 		score        float64
+		cyberAccess  bool
 	}
 	var eligible []scoredAccount
 	var rateLimited []scoredAccount
@@ -799,113 +800,95 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		}
 		tier := accountTier(a.Type, a.PlanType)
 		score := scoreAccountLocked(a, now)
+		cyberAccess := a.CyberAccess
 		a.mu.Unlock()
 		// Prefer less-loaded accounts
 		score -= float64(atomic.LoadInt64(&a.Inflight)) * 0.02
-		eligible = append(eligible, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score})
+		eligible = append(eligible, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score, cyberAccess: cyberAccess})
 	}
 
 	selectCandidate := func(accounts []scoredAccount) *ProviderConnection {
 		threshold := p.tierThreshold
-		// Try Tier 1 accounts below threshold
-		var bestTier1Below *scoredAccount
-		var bestTier1Any *scoredAccount
+		var tier1Below, tier1Any []weightedConnectionCandidate
+		var tier2Below, tier2Any []weightedConnectionCandidate
+		var tier3Below, tier3Any []weightedConnectionCandidate
 		for i := range accounts {
 			sa := &accounts[i]
-			if sa.tier == 1 {
-				if bestTier1Any == nil || sa.score > bestTier1Any.score {
-					bestTier1Any = sa
-				}
+			candidate := weightedConnectionCandidate{connection: sa.acc, score: sa.score, cyberAccess: sa.cyberAccess}
+			switch sa.tier {
+			case 1:
+				tier1Any = append(tier1Any, candidate)
 				if sa.secondaryPct < threshold {
-					if bestTier1Below == nil || sa.score > bestTier1Below.score {
-						bestTier1Below = sa
-					}
+					tier1Below = append(tier1Below, candidate)
 				}
-			}
-		}
-		if bestTier1Below != nil {
-			p.rr++
-			return bestTier1Below.acc
-		}
-
-		// Try Tier 2 accounts below threshold
-		var bestTier2Below *scoredAccount
-		var bestTier2Any *scoredAccount
-		for i := range accounts {
-			sa := &accounts[i]
-			if sa.tier == 2 {
-				if bestTier2Any == nil || sa.score > bestTier2Any.score {
-					bestTier2Any = sa
-				}
+			case 2:
+				tier2Any = append(tier2Any, candidate)
 				if sa.secondaryPct < threshold {
-					if bestTier2Below == nil || sa.score > bestTier2Below.score {
-						bestTier2Below = sa
-					}
+					tier2Below = append(tier2Below, candidate)
+				}
+			case 3:
+				tier3Any = append(tier3Any, candidate)
+				if sa.secondaryPct < threshold {
+					tier3Below = append(tier3Below, candidate)
 				}
 			}
 		}
 
-		// If tier 1 accounts exist above threshold, prefer them over tier 2 below threshold.
-		// Only fall to tier 2 if no tier 1 accounts at all.
-		if bestTier1Any != nil {
-			// Tier 1 exists but all above threshold. Still prefer tier 1 by score
-			// unless a tier 2 below threshold has significantly better score.
-			if accountType != AccountTypeCodex && bestTier2Below != nil && bestTier2Below.score > bestTier1Any.score+0.3 {
+		best := func(candidates []weightedConnectionCandidate) *weightedConnectionCandidate {
+			var selected *weightedConnectionCandidate
+			for i := range candidates {
+				candidate := &candidates[i]
+				if selected == nil || candidate.score > selected.score {
+					selected = candidate
+				}
+			}
+			return selected
+		}
+		choose := func(candidates []weightedConnectionCandidate) *ProviderConnection {
+			if len(candidates) == 0 {
+				return nil
+			}
+			var selected *ProviderConnection
+			if accountType == AccountTypeCodex {
+				selected = selectQuotaCompetitiveConnection(candidates, p.rr)
+			} else if candidate := best(candidates); candidate != nil {
+				selected = candidate.connection
+			}
+			if selected != nil {
 				p.rr++
-				return bestTier2Below.acc
 			}
-			p.rr++
-			return bestTier1Any.acc
-		}
-		if bestTier2Below != nil {
-			p.rr++
-			return bestTier2Below.acc
-		}
-		if bestTier2Any != nil {
-			p.rr++
-			return bestTier2Any.acc
+			return selected
 		}
 
-		// Tier 3: last resort (e.g. Claude pro accounts)
-		var bestTier3Below *scoredAccount
-		var bestTier3Any *scoredAccount
-		for i := range accounts {
-			sa := &accounts[i]
-			if sa.tier == 3 {
-				if bestTier3Any == nil || sa.score > bestTier3Any.score {
-					bestTier3Any = sa
-				}
-				if sa.secondaryPct < threshold {
-					if bestTier3Below == nil || sa.score > bestTier3Below.score {
-						bestTier3Below = sa
-					}
-				}
+		if len(tier1Below) > 0 {
+			return choose(tier1Below)
+		}
+		if len(tier1Any) > 0 {
+			bestTier1 := best(tier1Any)
+			bestTier2Below := best(tier2Below)
+			if accountType != AccountTypeCodex && bestTier2Below != nil && bestTier2Below.score > bestTier1.score+0.3 {
+				return choose(tier2Below)
 			}
+			return choose(tier1Any)
 		}
-		if bestTier3Below != nil {
-			p.rr++
-			return bestTier3Below.acc
+		if len(tier2Below) > 0 {
+			return choose(tier2Below)
 		}
-		if bestTier3Any != nil {
-			p.rr++
-			return bestTier3Any.acc
+		if len(tier2Any) > 0 {
+			return choose(tier2Any)
 		}
-
-		// Absolute fallback — pick the one with highest score (most headroom)
-		var bestAll *scoredAccount
+		if len(tier3Below) > 0 {
+			return choose(tier3Below)
+		}
+		if len(tier3Any) > 0 {
+			return choose(tier3Any)
+		}
+		all := make([]weightedConnectionCandidate, 0, len(accounts))
 		for i := range accounts {
-			sa := &accounts[i]
-			if bestAll == nil || sa.score > bestAll.score {
-				bestAll = sa
-			}
+			all = append(all, weightedConnectionCandidate{connection: accounts[i].acc, score: accounts[i].score, cyberAccess: accounts[i].cyberAccess})
 		}
-		if bestAll != nil {
-			p.rr++
-			return bestAll.acc
-		}
-		return nil
+		return choose(all)
 	}
-
 	if len(eligible) == 0 {
 		if len(rateLimited) > 0 && p.debug {
 			log.Printf("no non-rate-limited %s accounts available; refusing to route to rate-limited accounts", accountType)
@@ -1253,6 +1236,9 @@ func scoreTooltipFromBreakdownLocked(a *ProviderConnection, now time.Time, break
 	}
 	if breakdown.CreditBonus > 1.0 {
 		lines = append(lines, fmt.Sprintf("Credits multiplier: x%.2f", breakdown.CreditBonus))
+	}
+	if a.Type == AccountTypeCodex && a.CyberAccess {
+		lines = append(lines, "Ordinary routing weight: 2x when quota health is competitive")
 	}
 	if accountCoolingDownLocked(a, now) {
 		lines = append(lines, "Cooldown is separate from score; this account is currently cooling down.")

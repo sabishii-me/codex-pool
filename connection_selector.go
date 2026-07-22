@@ -1,6 +1,66 @@
 package main
 
-import "time"
+import (
+	"sort"
+	"time"
+)
+
+const (
+	ordinaryRoutingWeight         = 1
+	cyberAccessRoutingWeight      = 2
+	competitiveRoutingScoreWindow = 0.15
+)
+
+type weightedConnectionCandidate struct {
+	connection  *ProviderConnection
+	score       float64
+	cyberAccess bool
+}
+
+// selectQuotaCompetitiveConnection applies ordinary Codex routing fairness
+// after the pool has enforced eligibility, tier, quota, and health policy.
+// Explicit cyber-policy retries never call this function.
+func selectQuotaCompetitiveConnection(candidates []weightedConnectionCandidate, sequence uint64) *ProviderConnection {
+	if len(candidates) == 0 {
+		return nil
+	}
+	bestScore := candidates[0].score
+	for _, candidate := range candidates[1:] {
+		if candidate.score > bestScore {
+			bestScore = candidate.score
+		}
+	}
+	minimumScore := bestScore - competitiveRoutingScoreWindow
+	competitive := make([]weightedConnectionCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.connection != nil && candidate.score >= minimumScore {
+			competitive = append(competitive, candidate)
+		}
+	}
+	if len(competitive) == 0 {
+		return nil
+	}
+	sort.Slice(competitive, func(i, j int) bool { return competitive[i].connection.ID < competitive[j].connection.ID })
+	totalWeight := 0
+	for _, candidate := range competitive {
+		totalWeight += ordinaryRoutingWeight
+		if candidate.cyberAccess {
+			totalWeight += cyberAccessRoutingWeight - ordinaryRoutingWeight
+		}
+	}
+	slot := int(sequence % uint64(totalWeight))
+	for _, candidate := range competitive {
+		weight := ordinaryRoutingWeight
+		if candidate.cyberAccess {
+			weight = cyberAccessRoutingWeight
+		}
+		if slot < weight {
+			return candidate.connection
+		}
+		slot -= weight
+	}
+	return competitive[len(competitive)-1].connection
+}
 
 // ConnectionSelectionMode declares exceptional capacity constraints without
 // duplicating provider-pool scoring in request paths.

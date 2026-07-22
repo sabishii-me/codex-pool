@@ -70,6 +70,27 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestCodexFairnessPolicyStaysBehindConnectionSelector(t *testing.T) {
+	selectorData, err := os.ReadFile("connection_selector.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(selectorData), "selectQuotaCompetitiveConnection") || !strings.Contains(string(selectorData), "cyberAccessRoutingWeight") {
+		t.Fatal("ConnectionSelector does not own weighted quota-competitive Codex policy")
+	}
+	for _, path := range []string{"main.go", "router.go", "cyber_swap_ws.go"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, fragment := range []string{"selectQuotaCompetitiveConnection", "cyberAccessRoutingWeight", "competitiveRoutingScoreWindow"} {
+			if strings.Contains(string(data), fragment) {
+				t.Errorf("%s bypasses ConnectionSelector fairness via %q", path, fragment)
+			}
+		}
+	}
+}
+
 func TestPoolStatsHandlerUsesDetachedConnectionViews(t *testing.T) {
 	data, err := os.ReadFile("frontend.go")
 	if err != nil {

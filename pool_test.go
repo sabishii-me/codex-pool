@@ -314,7 +314,7 @@ func TestCandidateSkipsAccountWhenClientIPNotAllowed(t *testing.T) {
 
 func TestCandidateAllowsRestrictedAccountWhenClientIPMatches(t *testing.T) {
 	restricted := &Account{ID: "restricted", Type: AccountTypeCodex, PlanType: "pro", AllowedSourceIPs: []string{"199.45.144.95"}, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
-	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
+	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.4}}
 	p := newProviderPool([]*Account{restricted, fallback}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "199.45.144.95")

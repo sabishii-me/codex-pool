@@ -68,20 +68,28 @@ function throughput(row: Pick<HourlyUsage, "account_type" | "input_tokens" | "ca
   return row.input_tokens + row.output_tokens + (row.account_type === "claude" ? row.cached_tokens : 0);
 }
 
+export function weeklyQuotaEstimate(account: ProviderConnectionStats) {
+  if (account.status === "dead" || !account.secondary_window_available || account.secondary_window_used_pct < 0) return null;
+  const windowMinutes = account.secondary_window_minutes > 0 ? account.secondary_window_minutes : 7 * 1440;
+  const elapsedMinutes = windowMinutes - account.secondary_reset_minutes;
+  // Usage arrives in whole percentage-point increments. Do not extrapolate a
+  // fresh non-zero sample before one point of even-burn budget has elapsed.
+  if (elapsedMinutes <= 0 || (account.secondary_window_used_pct > 0 && elapsedMinutes < windowMinutes / 100)) return null;
+  const loadEquivalents = (account.secondary_window_used_pct / 100) * (windowMinutes / elapsedMinutes);
+  const burnPerMinute = account.secondary_window_used_pct / elapsedMinutes;
+  const burnPerDay = burnPerMinute * 1440;
+  const fullInMinutes = burnPerMinute > 0 ? (100 - account.secondary_window_used_pct) / burnPerMinute : Number.POSITIVE_INFINITY;
+  return { loadEquivalents, elapsedMinutes, burnPerDay, fullInMinutes, resetMinutes: account.secondary_reset_minutes };
+}
+
 export function capacityForecasts(accounts: ProviderConnectionStats[], bufferRatio = 0.2): CapacityForecast[] {
   const providers = [...new Set(accounts.map((account) => account.type))];
   return providers.flatMap((provider) => {
     const rows = accounts.filter((account) => account.type === provider);
     const activeAccounts = rows.filter((account) => account.status === "healthy" || account.status === "degraded").length;
     const measured = rows.flatMap((account) => {
-      if (account.status === "dead" || !account.secondary_window_available || account.secondary_window_used_pct < 0) return [];
-      const windowMinutes = account.secondary_window_minutes > 0 ? account.secondary_window_minutes : 7 * 1440;
-      const elapsedMinutes = windowMinutes - account.secondary_reset_minutes;
-      if (elapsedMinutes <= 0) return [];
-      const loadEquivalents = (account.secondary_window_used_pct / 100) * (windowMinutes / elapsedMinutes);
-      const burnPerMinute = account.secondary_window_used_pct / elapsedMinutes;
-      const fullInMinutes = burnPerMinute > 0 ? (100 - account.secondary_window_used_pct) / burnPerMinute : Number.POSITIVE_INFINITY;
-      return [{ loadEquivalents, elapsedMinutes, fullInMinutes, resetMinutes: account.secondary_reset_minutes }];
+      const estimate = weeklyQuotaEstimate(account);
+      return estimate ? [estimate] : [];
     });
     if (measured.length === 0) return [];
     const loadEquivalents = measured.reduce((sum, row) => sum + row.loadEquivalents, 0);

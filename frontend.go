@@ -1713,7 +1713,10 @@ func quotaPaceRatio(usedPercent float64, resetMinutes, windowMinutes int) float6
 		return 0
 	}
 	elapsed := windowMinutes - resetMinutes
-	if elapsed <= 0 {
+	// Upstream quota usage is quantized to percentage points. Before one
+	// percentage point of an even-burn budget has elapsed, extrapolating the
+	// first non-zero sample produces extreme and misleading pace forecasts.
+	if float64(elapsed) < float64(windowMinutes)/100 {
 		return 0
 	}
 	return usedPercent / (100 * float64(elapsed) / float64(windowMinutes))

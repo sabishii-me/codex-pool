@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accountFlow, capacityForecasts, dailyDemandSeries, demandSummary, modelMix, originConcentration, peakHeatmap } from "./insights";
+import { accountFlow, capacityForecasts, dailyDemandSeries, demandSummary, modelMix, originConcentration, peakHeatmap, weeklyQuotaEstimate } from "./insights";
 import type { ProviderConnectionStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage } from "./types";
 
 function account(overrides: Partial<ProviderConnectionStats>): ProviderConnectionStats {
@@ -40,6 +40,17 @@ function account(overrides: Partial<ProviderConnectionStats>): ProviderConnectio
 }
 
 describe("capacityForecasts", () => {
+  it("does not extrapolate a fresh quantized quota sample", () => {
+    const fresh = account({ secondary_window_used_pct: 1, secondary_reset_minutes: 10050 });
+    expect(weeklyQuotaEstimate(fresh)).toBeNull();
+    expect(capacityForecasts([fresh])).toEqual([]);
+  });
+
+  it("keeps an idle fresh window measurable after time has elapsed", () => {
+    const idle = account({ secondary_window_used_pct: 0, secondary_reset_minutes: 10050 });
+    expect(weeklyQuotaEstimate(idle)?.loadEquivalents).toBe(0);
+  });
+
   it("converts weekly quota drain into account-equivalent demand", () => {
     const forecast = capacityForecasts([
       account({ id: "one", secondary_window_used_pct: 45 }),

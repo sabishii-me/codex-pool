@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // KimiPlatformProvider handles a pay-as-you-go Kimi Open Platform API key,
@@ -69,30 +68,7 @@ func (p *KimiPlatformProvider) ParseUsage(obj map[string]any) *RequestUsage {
 		return usage
 	}
 	// Kimi Platform proxies Anthropic/OpenAI-style responses, so parse both formats.
-
-	// OpenAI-style usage object
-	if usageMap, ok := obj["usage"].(map[string]any); ok {
-		ru := &RequestUsage{Timestamp: time.Now()}
-		ru.InputTokens = readInt64(usageMap, "prompt_tokens")
-		if ru.InputTokens == 0 {
-			ru.InputTokens = readInt64(usageMap, "input_tokens")
-		}
-		ru.OutputTokens = readInt64(usageMap, "completion_tokens")
-		if ru.OutputTokens == 0 {
-			ru.OutputTokens = readInt64(usageMap, "output_tokens")
-		}
-		ru.CachedInputTokens = readInt64(usageMap, "cached_tokens")
-		if ru.InputTokens == 0 && ru.OutputTokens == 0 {
-			return nil
-		}
-		ru.BillableTokens = ru.InputTokens + ru.OutputTokens
-		if m, ok := obj["model"].(string); ok && m != "" {
-			ru.Model = m
-		}
-		return ru
-	}
-
-	return nil
+	return openAIChatLegacyKimiEngine.ParseUsage(obj)
 }
 
 func (p *KimiPlatformProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

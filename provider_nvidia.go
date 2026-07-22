@@ -69,7 +69,7 @@ func (p *NvidiaProvider) RefreshToken(ctx context.Context, acc *ProviderConnecti
 // object with prompt_tokens/completion_tokens, present on the non-streaming
 // response and (when requested) the final SSE chunk.
 func (p *NvidiaProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	return parseOpenAIChatUsage(obj)
+	return openAIChatEngine.ParseUsage(obj)
 }
 
 func (p *NvidiaProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

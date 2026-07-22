@@ -21,6 +21,30 @@ Use distinct names for user identity and upstream capacity:
 
 The current `Account` abstraction should migrate to `ProviderConnection`. Compatibility fields and existing credential files can retain their old names during migration.
 
+### Provider connection identity
+
+A connection must not assume every provider exposes an email address. Use a provider-neutral identity contract:
+
+```text
+ProviderConnection
+  id                  stable internal connection ID
+  display_name        required, user-editable UI label
+  provider_id         owning provider definition
+  external_subject    optional upstream account/subject ID
+  identity_attributes optional typed metadata (email, tenant, workspace, region)
+```
+
+Rules:
+
+- Generic connection UI uses `display_name`, never email as its identity field.
+- Provider plugins may suggest an initial name from email, workspace, subscription, or a shortened subject ID.
+- Email is optional metadata and is not required by routing, usage, persistence, or generic DTOs.
+- Renaming does not change the stable connection ID or usage attribution.
+- Sensitive identity attributes have explicit visibility rules.
+- API v2 returns structured identity metadata instead of provider-specific fields on generic connection DTOs.
+
+The current Codex `account_email` field is a temporary compatibility aid and must leave the generic stats contract when this model lands.
+
 ## Current structural problems
 
 1. All Go code is in `package main`; major files have become large state machines.
@@ -224,10 +248,14 @@ Exit criterion: every provider has an explicit support matrix and executable fix
 ### Phase 1 — Establish domain language
 
 - Introduce `GatewayUser`, `Provider`, `ProviderConnection`, `ProviderPool`, and `ModelRoute`.
+- Add `ConnectionIdentity` with a required `display_name` and optional provider metadata.
+- Backfill deterministic display names for existing connections and support operator rename.
+- Keep email, tenant, workspace, and upstream subject identifiers optional and typed.
 - Migrate `Account` and related method names internally.
 - Preserve old JSON and API fields through compatibility adapters.
+- Remove generic frontend dependence on `AccountStats.account_email` after API v2 is available.
 
-Exit criterion: new code no longer uses `Account` for upstream credentials.
+Exit criterion: new code no longer uses `Account` for upstream credentials, and generic connection UI does not assume email exists.
 
 ### Phase 2 — Extract usage as an internal service
 
@@ -267,6 +295,8 @@ Exit criterion: one route definition drives every request path.
 ### Phase 6 — Separate HTTP APIs
 
 - Isolate gateway, authentication, provider administration, and read-only data handlers.
+- Return `display_name`, public connection ID, and visibility-filtered structured identity metadata from connection view models.
+- Do not expose provider-specific identity fields directly on generic stats DTOs.
 - Generate frontend API types from a schema where practical.
 
 Exit criterion: UI/data handlers do not depend on proxy internals or mutable connection structs.

@@ -257,7 +257,9 @@ One row per provider definition:
 One row per `ProviderConnection`:
 
 - Provider and region
+- Required user-editable display name
 - Credential label, never raw secret
+- Optional provider identity details such as email, workspace, tenant, or upstream subject ID
 - Health
 - Quota
 - Last successful request
@@ -639,6 +641,9 @@ Deliverable: clickable low-fidelity flow without visual polish.
 ### UX Phase 2 — Data contracts
 
 - Define `/api/v2` view models.
+- Add a provider-neutral connection identity contract centered on `display_name`.
+- Treat email, workspace, tenant, region, and upstream subject ID as optional structured metadata with visibility rules.
+- Remove the temporary generic `AccountStats.account_email` dependency.
 - Remove provider accounting calculations from React.
 - Add backend-supplied provider presentation and connection-form schemas.
 

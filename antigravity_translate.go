@@ -1216,12 +1216,13 @@ func sanitizeAntigravityFunctionName(name string) string {
 
 func stringValue(value any) string { text, _ := value.(string); return text }
 
-func (h *proxyHandler) handleAntigravityProxy(w http.ResponseWriter, r *http.Request, body []byte, requestedModel, conversationID, userID, originID, clientIP, reqID string) bool {
-	if !shouldRouteAntigravityModel(requestedModel) {
+func (h *proxyHandler) handleAntigravityProxy(w http.ResponseWriter, r *http.Request, body []byte, route ResolvedModelRoute, conversationID, userID, originID, clientIP, reqID string) bool {
+	if route.Provider == nil || route.BodyPolicy != ModelBodyCustomAntigravity {
 		return false
 	}
-	canonical := antigravityCanonicalModel(requestedModel)
-	provider, _ := h.registry.ForType(AccountTypeAntigravity).(*AntigravityProvider)
+	requestedModel := route.RequestedModel
+	canonical := route.CanonicalModel
+	provider, _ := route.Provider.(*AntigravityProvider)
 	if provider == nil {
 		respondJSONError(w, http.StatusServiceUnavailable, "Antigravity provider is not configured")
 		return true
@@ -1235,7 +1236,7 @@ func (h *proxyHandler) handleAntigravityProxy(w http.ResponseWriter, r *http.Req
 		attempts = accountCount
 	}
 	for attempt := 0; attempt < attempts; attempt++ {
-		account := h.pool.candidateForAntigravityModel(conversationID, exclude, canonical, clientIP)
+		account := h.connectionSelector().Select(ConnectionSelection{Mode: SelectModelCapability, ProviderID: AccountTypeAntigravity, ConversationID: conversationID, Model: canonical, ClientIP: clientIP, Exclude: exclude})
 		if account == nil {
 			break
 		}

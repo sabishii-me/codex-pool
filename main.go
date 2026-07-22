@@ -503,6 +503,8 @@ func main() {
 		poolUsers:            poolUsers,
 		adminTOTP:            adminTOTP,
 		registry:             registry,
+		modelRoutes:          NewModelRouteRegistry(registry),
+		connections:          NewConnectionSelector(pool),
 		store:                store,
 		analyticsStore:       analyticsStore,
 		pricing:              pricing,
@@ -510,6 +512,7 @@ func main() {
 		bruteForce:           newBruteForceTracker(),
 		metrics:              newMetrics(),
 		recent:               newRecentErrors(50),
+		retryPolicy:          RetryPolicy{ConfiguredAttempts: cfg.maxAttempts, MaxCooldownWait: 10 * time.Second},
 		startTime:            time.Now(),
 		pacer:                pacer,
 	}
@@ -586,6 +589,8 @@ type proxyHandler struct {
 	poolUsers            *GatewayUserStore
 	adminTOTP            *AdminTOTPStore
 	registry             *ProviderRegistry
+	modelRoutes          *ModelRouteRegistry
+	connections          *ConnectionSelector
 	store                *usageStore
 	analyticsStore       *AnalyticsStore
 	pricing              *PricingData
@@ -593,6 +598,7 @@ type proxyHandler struct {
 	bruteForce           *bruteForceTracker
 	metrics              *metrics
 	recent               *recentErrors
+	retryPolicy          RetryPolicy
 	inflight             int64
 	startTime            time.Time
 	pacer                *requestPacer // Per-session request pacing
@@ -611,6 +617,31 @@ type proxyHandler struct {
 type refreshCall struct {
 	done chan struct{}
 	err  error
+}
+
+func (h *proxyHandler) requestRetryPolicy() RetryPolicy {
+	policy := h.retryPolicy
+	if policy.ConfiguredAttempts == 0 && h.cfg != nil {
+		policy.ConfiguredAttempts = h.cfg.maxAttempts
+	}
+	if policy.MaxCooldownWait == 0 {
+		policy.MaxCooldownWait = 10 * time.Second
+	}
+	return policy
+}
+
+func (h *proxyHandler) connectionSelector() *ConnectionSelector {
+	if h.connections != nil {
+		return h.connections
+	}
+	return NewConnectionSelector(h.pool)
+}
+
+func (h *proxyHandler) routeRegistry() *ModelRouteRegistry {
+	if h.modelRoutes != nil {
+		return h.modelRoutes
+	}
+	return NewModelRouteRegistry(h.registry)
 }
 
 func (h *proxyHandler) pickUpstream(path string, headers http.Header) (Provider, *url.URL) {
@@ -987,7 +1018,7 @@ func (h *proxyHandler) pinConversationToCyberAccess(conversationID string, accou
 	if currentAccountID != "" {
 		exclude[currentAccountID] = true
 	}
-	acc := h.pool.candidateWithCyberAccess(exclude, accountType, requiredPlan, clientIP)
+	acc := h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, Exclude: exclude})
 	if acc == nil {
 		if h.cfg.debug.Load() {
 			log.Printf("[%s] cyber_policy seen for conversation %s, but no cyber_access account is available", reqID, conversationID)
@@ -1012,7 +1043,7 @@ func (h *proxyHandler) pinConversationToCyberAccess(conversationID string, accou
 // this case anyway, so retrying is strictly better UX than writing the
 // empty translation.
 func (h *proxyHandler) shouldRetryBufferedSSEForCyberPolicy(cyberPinned bool, attempt, attempts int, acc *ProviderConnection, reqID, label string) bool {
-	if !cyberPinned || attempt >= attempts || acc == nil || acc.CyberAccess {
+	if acc == nil || !h.requestRetryPolicy().ShouldRetryBufferedCyberPolicy(cyberPinned, attempt, attempts, acc.CyberAccess) {
 		return false
 	}
 	log.Printf("[%s] buffered %s SSE saw cyber_policy on account %s; retrying on cyber_access account", reqID, label, acc.ID)
@@ -1241,46 +1272,13 @@ func isCodexToClaudeModelOverridePath(path string) bool {
 	return strings.HasPrefix(path, "/v1/responses") || strings.HasPrefix(path, "/responses")
 }
 
-// modelRouteOverride checks if the requested model should be routed to an external
-// provider (Kimi, MiniMax, etc.) instead of the path-detected provider.
-// Returns (provider, baseURL, rewrittenBody) or (nil, nil, nil) if no override.
+// modelRouteOverride applies the central route decision to a buffered body.
 func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Provider, *url.URL, []byte) {
-	if provider, canonical, ok := h.registry.MatchDeclarativeModel(model); ok {
-		return provider, provider.UpstreamURL(path), rewriteModelInBody(body, canonical)
+	route, ok := h.routeRegistry().Resolve(path, model)
+	if !ok || route.BodyPolicy == ModelBodyCustomAntigravity {
+		return nil, nil, nil
 	}
-	if isKimiModel(model) {
-		p := h.registry.ForType(AccountTypeKimi)
-		if p == nil {
-			return nil, nil, nil
-		}
-		return p, p.UpstreamURL(path), nil
-	}
-	if isGrokModel(model) {
-		p := h.registry.ForType(AccountTypeGrok)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := grokCanonicalModel(model)
-		rewritten := rewriteAndSanitizeGrokRequestBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	// Cross-format model routing: detect if the model belongs to a different provider
-	// than the one the request path would normally select.
-	if isOpenAIModel(model) {
-		p := h.registry.ForType(AccountTypeCodex)
-		if p != nil {
-			return p, p.UpstreamURL(path), nil
-		}
-	}
-	if isClaudeModel(model) && !isCodexToClaudeModelOverridePath(path) {
-		p := h.registry.ForType(AccountTypeClaude)
-		if p != nil {
-			canonical := claudeCanonicalModel(model)
-			rewritten := rewriteModelInBody(body, canonical)
-			return p, p.UpstreamURL(path), rewritten
-		}
-	}
-	return nil, nil, nil
+	return route.Provider, route.Provider.UpstreamURL(path), route.RewriteBody(body)
 }
 
 const streamedModelRoutePeekBytes = 64 * 1024
@@ -1338,23 +1336,23 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 		}
 		requestedModel = resolved
 	}
-	routeProvider, routeBase, canonicalModel := h.resolveStreamedModelRoute(r.URL.Path, requestedModel)
-	if routeProvider == nil {
+	route, ok := h.routeRegistry().Resolve(r.URL.Path, requestedModel)
+	if !ok {
 		restoreBody(prefix)
 		return provider, targetBase, nil
 	}
 	rewrittenPrefix := prefix
 	delta := 0
-	if routeProvider.Type() == AccountTypeGrok || routeProvider.Type() == AccountTypeAntigravity {
+	if route.RequiresWholeBody() {
 		limit := int64(streamedModelRoutePeekBytes)
 		if h.cfg != nil && h.cfg.maxInMemoryBodyBytes > 0 {
 			limit = h.cfg.maxInMemoryBodyBytes
 		}
 		restoreBody(prefix)
-		return provider, targetBase, fmt.Errorf("large %s request requires full-body translation or sanitization; reduce the request below %d bytes", routeProvider.Type(), limit)
+		return provider, targetBase, fmt.Errorf("large %s request requires full-body translation or sanitization; reduce the request below %d bytes", route.Provider.Type(), limit)
 	}
-	if canonicalModel != requestedModel {
-		rewrittenPrefix, delta, err = replaceJSONStringToken(prefix, valueStart, valueEnd, canonicalModel)
+	if route.CanonicalModel != requestedModel {
+		rewrittenPrefix, delta, err = replaceJSONStringToken(prefix, valueStart, valueEnd, route.CanonicalModel)
 	}
 	if err != nil {
 		restoreBody(prefix)
@@ -1365,34 +1363,7 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 		r.Header.Del("Content-Length")
 	}
 	restoreBody(rewrittenPrefix)
-	return routeProvider, routeBase, nil
-}
-
-func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, *url.URL, string) {
-	if provider, canonical, ok := h.registry.MatchDeclarativeModel(model); ok {
-		return provider, provider.UpstreamURL(path), canonical
-	}
-	type route struct {
-		accountType AccountType
-		matches     func(string) bool
-		canonical   func(string) string
-	}
-	routes := []route{
-		{AccountTypeAntigravity, shouldRouteAntigravityModel, antigravityCanonicalModel},
-		{AccountTypeKimi, isKimiModel, func(model string) string { return model }},
-		{AccountTypeGrok, isGrokModel, grokCanonicalModel},
-	}
-	for _, candidate := range routes {
-		if !candidate.matches(model) {
-			continue
-		}
-		provider := h.registry.ForType(candidate.accountType)
-		if provider == nil {
-			return nil, nil, model
-		}
-		return provider, provider.UpstreamURL(path), candidate.canonical(model)
-	}
-	return nil, nil, model
+	return route.Provider, route.Provider.UpstreamURL(r.URL.Path), nil
 }
 
 func readBodyPrefix(body io.Reader, limit int64) ([]byte, error) {
@@ -1850,10 +1821,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	}
 
 	// Antigravity owns its complete upstream envelope and protocol conversion.
-	// Handle it before the generic provider translator so every public protocol
-	// consumes the same model registry and quota scheduler.
-	if requestedModel != "" && h.handleAntigravityProxy(w, r, bodyBytes, requestedModel, conversationID, userID, originID, originIP, reqID) {
-		return
+	// Resolve it through the same route registry before invoking the custom executor.
+	if requestedModel != "" {
+		if route, ok := h.routeRegistry().Resolve(r.URL.Path, requestedModel); ok && h.handleAntigravityProxy(w, r, bodyBytes, route, conversationID, userID, originID, originIP, reqID) {
+			return
+		}
 	}
 
 	if requestedModel != "" && isOpenAIModel(requestedModel) {
@@ -2074,18 +2046,8 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	}
 	defer cancel()
 
-	attempts := h.cfg.maxAttempts
-	if attempts <= 0 {
-		attempts = 1
-	}
-	// Try at least all accounts of this type, up to configured max
-	if n := h.pool.countByType(accountType); n > attempts {
-		attempts = n
-	}
-	// But don't exceed total pool size
-	if n := h.pool.count(); n > 0 && attempts > n {
-		attempts = n
-	}
+	retryPolicy := h.requestRetryPolicy()
+	attempts := retryPolicy.Attempts(h.pool.countByType(accountType), h.pool.count())
 
 	exclude := map[string]bool{}
 	var lastErr error
@@ -2093,7 +2055,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	cyberAccessRetry := false
 	requiredPlan := requiredPlanForRequest(accountType, r, requestedModel)
 
-	const maxCooldownWait = 10 * time.Second // max time to wait for a rate-limited account
 	const preferredImageCodexAccountID = "neon"
 	imageGenerationRequest := accountType == AccountTypeCodex && requestHasImageGenerationTool(bodyBytes)
 	imageFanoutChild := r.Header.Get("X-Codex-Pool-Image-Fanout") != ""
@@ -2103,26 +2064,19 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		var acc *ProviderConnection
 		candidateExclude := exclude
 		if imageGenerationRequest {
-			candidateExclude = make(map[string]bool, len(exclude)+h.pool.countByType(accountType))
-			for id, excluded := range exclude {
-				candidateExclude[id] = excluded
-			}
-			h.pool.excludeImageIncapable(candidateExclude)
-			if imageFanoutChild && attempt == 1 {
-				h.pool.excludeInflightWhenIdleAvailable(accountType, candidateExclude)
-			}
+			candidateExclude = copyConnectionExclusions(exclude)
 		}
 		if imageGenerationRequest && attempt == 1 && !imageFanoutChild {
-			acc = h.pool.candidateByID(preferredImageCodexAccountID, accountType, requiredPlan, originIP)
+			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectExactID, ConnectionID: preferredImageCodexAccountID, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP})
 			if acc != nil && h.cfg.debug.Load() {
 				log.Printf("[%s] routing image generation request to codex account %s", reqID, acc.ID)
 			}
 		}
 		if imageGenerationRequest && imageFanoutChild && attempt == 1 {
-			acc = h.pool.imageFanoutCandidate(imageFanoutIndex, candidateExclude, requiredPlan, originIP)
+			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectImageFanout, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, Exclude: candidateExclude, FanoutIndex: imageFanoutIndex, RequireImages: true, PreferIdle: true})
 		}
 		if acc == nil && cyberAccessRetry {
-			acc = h.pool.candidateWithCyberAccess(candidateExclude, accountType, requiredPlan, originIP)
+			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, Exclude: candidateExclude})
 			if acc != nil && h.cfg.debug.Load() {
 				log.Printf("[%s] routing cyber_policy retry to %s account %s", reqID, accountType, acc.ID)
 			}
@@ -2132,16 +2086,13 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			if imageGenerationRequest {
 				candidateConversationID = ""
 			}
-			acc = h.pool.candidate(candidateConversationID, candidateExclude, accountType, requiredPlan, originIP)
+			acc = h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, ConversationID: candidateConversationID, Exclude: candidateExclude, RequireImages: imageGenerationRequest})
 		}
 		if acc == nil {
 			// All accounts excluded or rate-limited. If there are rate-limited
 			// accounts, wait for the shortest cooldown instead of 503 immediately.
-			if cooldown := h.pool.nearestCooldown(accountType, nil); cooldown > 0 {
-				wait := cooldown
-				if wait > maxCooldownWait {
-					wait = maxCooldownWait
-				}
+			if cooldown := h.connectionSelector().NearestCooldown(accountType, nil); cooldown > 0 {
+				wait := retryPolicy.CooldownWait(cooldown)
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] all %s accounts exhausted, waiting %s for cooldown", reqID, accountType, wait)
 				}
@@ -2290,7 +2241,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				acc.mu.Unlock()
 			}
 
-			if errClass.Retryable() {
+			if retryPolicy.ShouldRotate(errClass, ctx) {
 				if len(errBody) > 0 {
 					lastErr = fmt.Errorf("upstream %s: %s", resp.Status, errBodyStr)
 				} else {
@@ -2899,7 +2850,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 		}
 		selectionConversationID = "cyber-fallback:" + fallbackID
 	}
-	acc := h.pool.candidate(selectionConversationID, map[string]bool{}, accountType, requiredPlan, clientIP)
+	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, ConversationID: selectionConversationID, Exclude: map[string]bool{}})
 	if acc == nil {
 		http.Error(w, fmt.Sprintf("no live %s accounts", accountType), http.StatusServiceUnavailable)
 		return
@@ -3417,7 +3368,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 
 	requiredPlan := requiredPlanForRequest(accountType, r, "")
 	clientIP := getClientIP(r)
-	acc := h.pool.candidate("", map[string]bool{}, accountType, requiredPlan, clientIP)
+	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, Exclude: map[string]bool{}})
 	if acc == nil {
 		http.Error(w, fmt.Sprintf("no live %s accounts", accountType), http.StatusServiceUnavailable)
 		return

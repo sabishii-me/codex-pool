@@ -608,7 +608,7 @@ func (h *proxyHandler) handleAntigravityModelVerify(w http.ResponseWriter, r *ht
 			continue
 		}
 		entry := verification{Model: model.ID}
-		account := h.pool.candidateForAntigravityModel("", nil, model.ID, getClientIP(r))
+		account := h.connectionSelector().Select(ConnectionSelection{Mode: SelectModelCapability, ProviderID: AccountTypeAntigravity, Model: model.ID, ClientIP: getClientIP(r)})
 		if account == nil {
 			entry.Error = "no available account supports this model"
 			results = append(results, entry)

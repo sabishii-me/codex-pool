@@ -297,6 +297,8 @@ Exit criterion: a compatible provider can be added at runtime without recompilin
 
 ### Phase 5 — Centralize routing and selection
 
+Status: complete. `ModelRouteRegistry` returns one immutable `ResolvedModelRoute`—provider, canonical model, and body-safety policy—for buffered HTTP, large streamed bodies, Antigravity custom execution, and WebSocket `response.create` frames. Large requests reject routes requiring whole-body sanitization or translation, and established WebSockets reject cross-provider model switches instead of silently using the wrong credential. `ConnectionSelector` is the only production boundary for pinned, exact-ID, cyber-access, image-capability/fanout, general, and Antigravity model-capability selection; the proven scoring and lifecycle implementation remains behind it. `RetryPolicy` owns attempt budgeting, cooldown wait caps, cancellation-aware rotation, and buffered cyber retry decisions. Source-level architectural tests prevent request paths from bypassing these boundaries.
+
 - Build one model route registry for normal, streamed, websocket, and large-body paths.
 - Extract connection selection, retry policy, cooldowns, and lifecycle state.
 

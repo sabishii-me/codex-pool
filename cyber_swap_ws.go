@@ -332,8 +332,39 @@ func (s *codexRelayState) inspectUpstream(data []byte) ([]byte, error) {
 func (s *codexRelayState) inspectClient(data []byte) ([]byte, error) {
 	if isCodexResponseCreate(data) {
 		data = applyModelAliasToJSONFrame(s.h, s.opts.ReqID, data)
+		var err error
+		data, err = applyModelRouteToWebSocketFrame(s.h, s.opts.Provider, data)
+		if err != nil {
+			return data, err
+		}
 		s.lastResponseCreate = append(s.lastResponseCreate[:0], data...)
 		s.requestedModel = extractRequestedModelFromJSON(data)
+	}
+	return data, nil
+}
+
+func applyModelRouteToWebSocketFrame(h *proxyHandler, established Provider, data []byte) ([]byte, error) {
+	if h == nil || established == nil {
+		return data, nil
+	}
+	model := extractRequestedModelFromJSON(data)
+	if model == "" {
+		return data, nil
+	}
+	route, ok := h.routeRegistry().Resolve("/v1/responses", model)
+	if !ok {
+		return data, nil
+	}
+	if route.Provider.Type() != established.Type() {
+		return data, fmt.Errorf("websocket model %s routes to %s, but socket is established with %s", model, route.Provider.Type(), established.Type())
+	}
+	if route.RequiresWholeBody() {
+		return data, fmt.Errorf("websocket model %s requires unsupported whole-body routing policy", model)
+	}
+	if route.CanonicalModel != model {
+		if rewritten := rewriteModelInBody(data, route.CanonicalModel); rewritten != nil {
+			return rewritten, nil
+		}
 	}
 	return data, nil
 }
@@ -461,7 +492,7 @@ func (s *codexRelayState) pickCyberAccessCandidate() *ProviderConnection {
 	if s.activeAccount != nil {
 		exclude[s.activeAccount.ID] = true
 	}
-	return s.h.pool.candidateWithCyberAccess(exclude, AccountTypeCodex, s.opts.RequiredPlan, s.opts.ClientIP)
+	return s.h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex, RequiredPlan: s.opts.RequiredPlan, ClientIP: s.opts.ClientIP, Exclude: exclude})
 }
 
 func (s *codexRelayState) legacyPin() {

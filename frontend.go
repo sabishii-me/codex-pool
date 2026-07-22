@@ -1623,6 +1623,7 @@ type CyberPolicyStats struct {
 type AccountStats struct {
 	ID                        string   `json:"id"` // hashed connection ID
 	UpstreamAccountID         string   `json:"upstream_account_id,omitempty"`
+	AccountEmail              string   `json:"account_email,omitempty"`
 	Type                      string   `json:"type"`
 	PlanType                  string   `json:"plan_type"`
 	Status                    string   `json:"status"` // healthy, degraded, dead
@@ -1780,6 +1781,7 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 		as := AccountStats{
 			ID:                       hashAccountID(acc.ID),
 			UpstreamAccountID:        acc.AccountID,
+			AccountEmail:             acc.Email,
 			Type:                     accType,
 			PlanType:                 formatPlanWithTier(acc.PlanType, acc.RateLimitTier),
 			Status:                   status,

@@ -1266,6 +1266,10 @@ function upstreamAccountID(account: AdminAccount | null | undefined) {
   return account.account_id || account.id_token_chatgpt_account_id || "";
 }
 
+function providerAccountEmail(account: AccountStats, adminAccount?: AdminAccount | null) {
+  return account.account_email || adminAccount?.email || "";
+}
+
 function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
   stats: PoolStats | null;
   adminAccounts: AdminAccount[];
@@ -1328,7 +1332,7 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             const rowID = adminMatch?.id ?? account.id;
             return (
               <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}>{account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}</span></small></span>
+                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}>{providerAccountEmail(account, adminMatch) || account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1351,8 +1355,9 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             {selectedAccount ? (
               <>
                 <span className="inspector-code">ACCOUNT // SIGNAL VIEW</span>
-                <h2>{selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin) || selectedAccount.id}</h2>
+                <h2>{providerAccountEmail(selectedAccount, selectedAdmin) || selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin) || selectedAccount.id}</h2>
                 <div className="inspector-provider" style={{ color: PROVIDERS[selectedAccount.type].color }}>{PROVIDERS[selectedAccount.type].label.toUpperCase()} / {selectedAccount.plan_type}</div>
+                {providerAccountEmail(selectedAccount, selectedAdmin) && <div className="account-admission">ACCOUNT EMAIL // {providerAccountEmail(selectedAccount, selectedAdmin)}</div>}
                 {(selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin)) && <div className="account-admission">UPSTREAM ACCOUNT ID // {selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin)}</div>}
                 <div className="account-admission">CONNECTION HASH // {selectedAdmin?.id || selectedAccount.id}</div>
                 <div className="account-admission">IN POOL {formatAdmission(selectedAccount.account_added_at)} // SPEND {money.format(selectedAccount.subscription_spend)}</div>

@@ -69,6 +69,7 @@ func (p *CodexProvider) LoadAccount(name, path string, data []byte) (*Account, e
 		acc.AccountID = acc.IDTokenChatGPTAccountID
 	}
 	acc.PlanType = claims.PlanType
+	acc.Email = claims.Email
 	acc.ExpiresAt = claims.ExpiresAt
 	if acc.ExpiresAt.IsZero() && aj.LastRefresh != nil {
 		acc.ExpiresAt = aj.LastRefresh.Add(20 * time.Hour)
@@ -178,6 +179,9 @@ func (p *CodexProvider) RefreshToken(ctx context.Context, acc *Account, transpor
 		}
 		if claims.PlanType != "" {
 			acc.PlanType = claims.PlanType
+		}
+		if claims.Email != "" {
+			acc.Email = claims.Email
 		}
 	}
 	acc.LastRefresh = time.Now().UTC()
@@ -369,6 +373,14 @@ func parseCodexClaims(idToken string) codexJWTClaims {
 	if acc, ok := payload["chatgpt_account_id"].(string); ok {
 		out.ChatGPTAccountID = acc
 	}
+	if email, ok := payload["email"].(string); ok {
+		out.Email = strings.ToLower(strings.TrimSpace(email))
+	}
+	if profile, ok := payload["https://api.openai.com/profile"].(map[string]any); ok {
+		if email, ok := profile["email"].(string); ok && strings.TrimSpace(email) != "" {
+			out.Email = strings.ToLower(strings.TrimSpace(email))
+		}
+	}
 	if auth, ok := payload["https://api.openai.com/auth"].(map[string]any); ok {
 		if acc, ok := auth["chatgpt_account_id"].(string); ok && acc != "" {
 			out.ChatGPTAccountID = acc
@@ -387,4 +399,5 @@ type codexJWTClaims struct {
 	ExpiresAt        time.Time
 	ChatGPTAccountID string
 	PlanType         string
+	Email            string
 }

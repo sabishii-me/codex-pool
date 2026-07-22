@@ -24,6 +24,7 @@ export interface MFAStatus {
 export interface AccountStats {
   id: string;
   upstream_account_id?: string;
+  account_email?: string;
   type: Provider;
   plan_type: string;
   status: "healthy" | "degraded" | "cooldown" | "dead";
@@ -231,6 +232,7 @@ export interface AdminAccount {
   plan_type: string;
   account_id?: string;
   id_token_chatgpt_account_id?: string;
+  email?: string;
   disabled: boolean;
   dead: boolean;
   inflight: number;

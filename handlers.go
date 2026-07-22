@@ -29,6 +29,7 @@ func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
 		PlanType                string      `json:"plan_type,omitempty"`
 		AccountID               string      `json:"account_id,omitempty"`
 		IDTokenChatGPTAccountID string      `json:"id_token_chatgpt_account_id,omitempty"`
+		Email                   string      `json:"email,omitempty"`
 		Disabled                bool        `json:"disabled"`
 		Dead                    bool        `json:"dead"`
 		NeedsVerification       bool        `json:"needs_verification,omitempty"`
@@ -53,6 +54,7 @@ func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
 		planType := a.PlanType
 		accountID := a.AccountID
 		idTokID := a.IDTokenChatGPTAccountID
+		email := a.Email
 		disabled := a.Disabled
 		dead := a.Dead
 		needsVerification := a.NeedsVerification
@@ -76,6 +78,7 @@ func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
 			PlanType:                planType,
 			AccountID:               accountID,
 			IDTokenChatGPTAccountID: idTokID,
+			Email:                   email,
 			Disabled:                disabled,
 			Dead:                    dead,
 			NeedsVerification:       needsVerification,

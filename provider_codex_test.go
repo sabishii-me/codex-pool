@@ -7,10 +7,13 @@ import (
 )
 
 func TestParseCodexClaimsNormalizesProLitePlan(t *testing.T) {
-	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"https://api.openai.com/auth":{"chatgpt_plan_type":"PROLITE"}}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(`{"https://api.openai.com/auth":{"chatgpt_plan_type":"PROLITE"},"https://api.openai.com/profile":{"email":"Person@Example.COM"}}`))
 	claims := parseCodexClaims("header." + payload + ".signature")
 	if claims.PlanType != "prolite" {
 		t.Fatalf("PlanType = %q, want prolite", claims.PlanType)
+	}
+	if claims.Email != "person@example.com" {
+		t.Fatalf("Email = %q, want person@example.com", claims.Email)
 	}
 }
 

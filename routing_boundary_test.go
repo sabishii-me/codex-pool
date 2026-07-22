@@ -70,6 +70,21 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestAuthenticationRoutesStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"/auth/login/google", "/auth/callback/google", "/auth/callback/codex", "/auth/logout", "/api/pool/session", "/api/admin/mfa/", "handleGoogleLoginStart(", "handleMFAVerify("} {
+		if strings.Contains(string(data), fragment) {
+			t.Errorf("router.go directly owns authentication fragment %q; use AuthenticationAPI", fragment)
+		}
+	}
+	if !strings.Contains(string(data), "h.authenticationAPIService().TryServe(w, r)") {
+		t.Fatal("proxy router does not delegate to AuthenticationAPI")
+	}
+}
+
 func TestProviderOperationRoutesStayOutOfProxyRouter(t *testing.T) {
 	data, err := os.ReadFile("router.go")
 	if err != nil {

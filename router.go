@@ -216,6 +216,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.providerOperationsAPIService().TryServe(w, r) {
 		return
 	}
+	if h.authenticationAPIService().TryServe(w, r) {
+		return
+	}
 
 	// Static routes
 	switch r.URL.Path {
@@ -233,43 +236,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	case "/hero.png", "/hero.webp":
 		h.serveHeroImage(w, r)
-		return
-	case "/auth/login/google":
-		h.handleGoogleLoginStart(w, r)
-		return
-	case "/auth/callback/google":
-		h.handleGoogleLoginCallback(w, r)
-		return
-	case "/auth/callback/codex":
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.handleCodexCallback(w, r)
-		return
-	case "/auth/logout":
-		h.handleLogout(w, r)
-		return
-	case "/api/pool/session":
-		h.handlePoolSession(w, r)
-		return
-	case "/api/admin/mfa/status":
-		h.handleMFAStatus(w, r)
-		return
-	case "/api/admin/mfa/enroll":
-		h.handleMFAEnroll(w, r)
-		return
-	case "/api/admin/mfa/confirm":
-		h.handleMFAConfirm(w, r)
-		return
-	case "/api/admin/mfa/verify":
-		h.handleMFAVerify(w, r)
-		return
-	case "/api/admin/mfa/regenerate":
-		h.handleMFARegenerate(w, r)
-		return
-	case "/api/admin/mfa/regenerate-codes":
-		h.handleMFARegenerateCodes(w, r)
 		return
 	case "/favicon.ico":
 		http.NotFound(w, r)

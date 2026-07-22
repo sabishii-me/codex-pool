@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codex-pool.local/schemas/provider-connections-v2.json",
+  "title": "Provider Connections V2",
+  "type": "array",
+  "items": { "$ref": "#/$defs/OperatorProviderConnectionV2" },
+  "$defs": {
+    "ProviderConnectionIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["display_name"],
+      "properties": {
+        "display_name": { "type": "string" },
+        "external_subject": { "type": "string" },
+        "attributes": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "OperatorProviderConnectionV2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "public_id", "provider_id", "identity", "disabled", "dead", "inflight", "penalty", "score", "is_primary", "usage", "totals"],
+      "properties": {
+        "id": { "type": "string" },
+        "public_id": { "type": "string" },
+        "provider_id": { "type": "string" },
+        "identity": { "$ref": "#/$defs/ProviderConnectionIdentity" },
+        "plan_type": { "type": "string" },
+        "disabled": { "type": "boolean" },
+        "dead": { "type": "boolean" },
+        "needs_verification": { "type": "boolean" },
+        "verification_url": { "type": "string" },
+        "health_error": { "type": "string" },
+        "cyber_access": { "type": "boolean" },
+        "inflight": { "type": "integer" },
+        "expires_at": { "type": "string", "format": "date-time" },
+        "last_refresh": { "type": "string", "format": "date-time" },
+        "penalty": { "type": "number" },
+        "score": { "type": "number" },
+        "score_tooltip": { "type": "string" },
+        "is_primary": { "type": "boolean" },
+        "usage": { "type": "object", "additionalProperties": true },
+        "totals": { "type": "object", "additionalProperties": { "type": "number" } }
+      }
+    }
+  }
+}

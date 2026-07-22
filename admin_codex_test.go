@@ -1,10 +1,15 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +26,79 @@ func resetCodexOAuthSessions(t *testing.T) {
 		codexOAuthSessions.sessions = previous
 		codexOAuthSessions.Unlock()
 	})
+}
+
+func codexTestIDToken(t *testing.T, accountID, email string) string {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{
+		"email":                       email,
+		"https://api.openai.com/auth": map[string]any{"chatgpt_account_id": accountID, "chatgpt_plan_type": "plus"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return "header." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
+}
+
+func TestGenerateCodexAccountIDUsesFullStableAccountHash(t *testing.T) {
+	first := generateCodexAccountID(codexTestIDToken(t, "account-one", "same@example.com"))
+	sameAccount := generateCodexAccountID(codexTestIDToken(t, "account-one", "changed@example.com"))
+	second := generateCodexAccountID(codexTestIDToken(t, "account-two", "same@example.com"))
+	wantHash := sha256.Sum256([]byte("account-one"))
+	want := hex.EncodeToString(wantHash[:])
+	if first != want || len(first) != 64 {
+		t.Fatalf("account hash = %q, want %q", first, want)
+	}
+	if sameAccount != first {
+		t.Fatalf("same upstream account changed hash: %q != %q", sameAccount, first)
+	}
+	if second == first {
+		t.Fatalf("different upstream accounts shared hash %q", first)
+	}
+}
+
+func TestSaveNewCodexAccountUpsertsStableFileAndPreservesMetadata(t *testing.T) {
+	dir := t.TempDir()
+	accountID := generateCodexAccountID(codexTestIDToken(t, "account-one", "person@example.com"))
+	first := &CodexTokenResponse{IDToken: codexTestIDToken(t, "account-one", "person@example.com"), AccessToken: "first", RefreshToken: "refresh-one"}
+	if err := saveNewCodexAccount(dir, accountID, first); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, accountID+".json")
+	var stored map[string]any
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatal(err)
+	}
+	addedAt := stored["added_at"]
+	stored["disabled"] = true
+	data, _ = json.Marshal(stored)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	second := &CodexTokenResponse{IDToken: first.IDToken, AccessToken: "second", RefreshToken: "refresh-two"}
+	if err := saveNewCodexAccount(dir, accountID, second); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != accountID+".json" {
+		t.Fatalf("credential files = %v", entries)
+	}
+	data, _ = os.ReadFile(path)
+	if err := json.Unmarshal(data, &stored); err != nil {
+		t.Fatal(err)
+	}
+	tokens := stored["tokens"].(map[string]any)
+	if tokens["access_token"] != "second" || stored["disabled"] != true || stored["added_at"] != addedAt {
+		t.Fatalf("upserted credential = %#v", stored)
+	}
 }
 
 func TestCodexOAuthRedirectUsesAllowlistedTemporaryRelayPort(t *testing.T) {

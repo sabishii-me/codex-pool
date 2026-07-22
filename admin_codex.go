@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -13,7 +14,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -424,108 +424,83 @@ func codexExchangeCode(code, verifier, redirectURI string) (*CodexTokenResponse,
 	return &tokens, nil
 }
 
-// generateCodexAccountID generates an account ID from the id_token email
+// generateCodexAccountID derives a stable, non-identifying filename from the
+// upstream ChatGPT account ID. Email-derived names collide for aliases and
+// multi-workspace users; the full SHA-256 keeps each upstream account distinct.
 func generateCodexAccountID(idToken string) string {
-	// Parse JWT to get email
-	parts := strings.Split(idToken, ".")
-	if len(parts) < 2 {
-		return fmt.Sprintf("codex_%d", time.Now().Unix())
+	identity := strings.TrimSpace(parseCodexClaims(idToken).ChatGPTAccountID)
+	if identity == "" {
+		identity = codexTokenEmail(idToken)
 	}
-
-	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return fmt.Sprintf("codex_%d", time.Now().Unix())
+	if identity == "" {
+		// An ID token should always contain an account ID or email. Hashing the
+		// token is a privacy-preserving last resort rather than exposing it.
+		identity = idToken
 	}
-
-	var payload map[string]any
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return fmt.Sprintf("codex_%d", time.Now().Unix())
-	}
-
-	// Try to get email from profile claim
-	email := ""
-	if profile, ok := payload["https://api.openai.com/profile"].(map[string]any); ok {
-		if e, ok := profile["email"].(string); ok {
-			email = e
-		}
-	}
-	if email == "" {
-		if e, ok := payload["email"].(string); ok {
-			email = e
-		}
-	}
-
-	if email == "" {
-		return fmt.Sprintf("codex_%d", time.Now().Unix())
-	}
-
-	// Extract meaningful part from email
-	// e.g., "dlssnetsec+1@gmail.com" -> "dlss_1"
-	// e.g., "foo@bar.com" -> "foo"
-	localPart := strings.Split(email, "@")[0]
-
-	// Handle plus aliases: user+alias -> user_alias
-	localPart = strings.ReplaceAll(localPart, "+", "_")
-
-	// Truncate long prefixes, keep suffix
-	// e.g., "dlssnetsec_1" -> "dlss_1"
-	re := regexp.MustCompile(`^([a-zA-Z]{1,4})[a-zA-Z]*(_\d+)?$`)
-	if matches := re.FindStringSubmatch(localPart); len(matches) > 0 {
-		result := matches[1]
-		if len(matches) > 2 && matches[2] != "" {
-			result += matches[2]
-		}
-		return result
-	}
-
-	// Fallback: just use first 8 chars of local part
-	if len(localPart) > 8 {
-		localPart = localPart[:8]
-	}
-	return localPart
+	hash := sha256.Sum256([]byte(identity))
+	return hex.EncodeToString(hash[:])
 }
 
-// saveNewCodexAccount saves a new Codex account to the pool directory
+func codexTokenEmail(idToken string) string {
+	parts := strings.Split(idToken, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+	payloadBytes, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return ""
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return ""
+	}
+	if profile, ok := payload["https://api.openai.com/profile"].(map[string]any); ok {
+		if email, ok := profile["email"].(string); ok {
+			return strings.ToLower(strings.TrimSpace(email))
+		}
+	}
+	if email, ok := payload["email"].(string); ok {
+		return strings.ToLower(strings.TrimSpace(email))
+	}
+	return ""
+}
+
+// saveNewCodexAccount upserts a Codex connection by its stable account hash.
+// Reauthorization replaces tokens without duplicating the same upstream
+// account or discarding durable connection metadata.
 func saveNewCodexAccount(poolDir, accountID string, tokens *CodexTokenResponse) error {
-	// Ensure pool directory exists
 	if err := os.MkdirAll(poolDir, 0755); err != nil {
 		return fmt.Errorf("create pool dir: %w", err)
 	}
-
 	filePath := filepath.Join(poolDir, accountID+".json")
-
-	// Check if file already exists
-	if _, err := os.Stat(filePath); err == nil {
-		// File exists, append a number
-		for i := 2; i <= 99; i++ {
-			newPath := filepath.Join(poolDir, fmt.Sprintf("%s_%d.json", accountID, i))
-			if _, err := os.Stat(newPath); os.IsNotExist(err) {
-				filePath = newPath
-				accountID = fmt.Sprintf("%s_%d", accountID, i)
-				break
-			}
+	authJSON := map[string]any{}
+	if existing, err := os.ReadFile(filePath); err == nil {
+		if err := json.Unmarshal(existing, &authJSON); err != nil {
+			return fmt.Errorf("parse existing account: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("read existing account: %w", err)
 	}
-
-	authJSON := map[string]any{
-		"added_at": time.Now().UTC().Format(time.RFC3339Nano),
-		"tokens": map[string]any{
-			"id_token":      tokens.IDToken,
-			"access_token":  tokens.AccessToken,
-			"refresh_token": tokens.RefreshToken,
-		},
+	if _, exists := authJSON["added_at"]; !exists {
+		authJSON["added_at"] = time.Now().UTC().Format(time.RFC3339Nano)
+	}
+	authJSON["tokens"] = map[string]any{
+		"id_token":      tokens.IDToken,
+		"access_token":  tokens.AccessToken,
+		"refresh_token": tokens.RefreshToken,
 	}
 
 	data, err := json.MarshalIndent(authJSON, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal json: %w", err)
 	}
-
 	if err := os.WriteFile(filePath, data, 0600); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
-
-	log.Printf("Saved new Codex account: %s -> %s", accountID, filePath)
+	if err := os.Chmod(filePath, 0600); err != nil {
+		return fmt.Errorf("secure account file: %w", err)
+	}
+	log.Printf("Saved Codex account: %s -> %s", accountID, filePath)
 	return nil
 }
 

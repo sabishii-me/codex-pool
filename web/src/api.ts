@@ -1,4 +1,4 @@
-import type { OperatorProviderConnection, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
+import type { OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
   const data = (await response.json().catch(() => null)) as T | { error?: string } | null;
@@ -71,8 +71,12 @@ export async function loadAdminAccounts(): Promise<OperatorProviderConnection[]>
   return loadOperatorProviderConnections();
 }
 
+export async function loadProviderConnectionsV2(): Promise<OperatorProviderConnectionV2[]> {
+  return decode(await fetch("/api/v2/provider-connections", { cache: "no-store" }));
+}
+
 export async function renameProviderConnection(accountID: string, displayName: string): Promise<{ status: string; connection_id: string }> {
-  return decode(await fetch(`/admin/accounts/${encodeURIComponent(accountID)}/identity`, {
+  return decode(await fetch(`/api/v2/provider-connections/${encodeURIComponent(accountID)}/identity`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ display_name: displayName }),

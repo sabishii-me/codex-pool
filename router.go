@@ -447,6 +447,33 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Canonical provider-connection API v2. These routes intentionally omit
+	// account-specific compatibility identity fields.
+	if r.URL.Path == "/api/v2/provider-connections" {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		if r.Method != http.MethodGet {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		h.serveProviderConnectionsV2(w)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v2/provider-connections/") && strings.HasSuffix(r.URL.Path, "/identity") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		if r.Method != http.MethodPatch {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/api/v2/provider-connections/")
+		connectionID := strings.TrimSuffix(path, "/identity")
+		h.renameProviderConnection(w, r, connectionID)
+		return
+	}
+
 	// Provider connection rename: /admin/accounts/:id/identity
 	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") && strings.HasSuffix(r.URL.Path, "/identity") {
 		if !h.checkAdminAuth(w, r) {

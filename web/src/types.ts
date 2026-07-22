@@ -233,6 +233,35 @@ export interface SignalAnalytics {
   quota_generated_at?: string;
 }
 
+export interface ProviderConnectionIdentity {
+  display_name: string;
+  external_subject?: string;
+  attributes?: Record<string, string>;
+}
+
+export interface OperatorProviderConnectionV2 {
+  id: string;
+  public_id: string;
+  provider_id: Provider;
+  identity: ProviderConnectionIdentity;
+  plan_type?: string;
+  disabled: boolean;
+  dead: boolean;
+  needs_verification?: boolean;
+  verification_url?: string;
+  health_error?: string;
+  cyber_access?: boolean;
+  inflight: number;
+  expires_at?: string;
+  last_refresh?: string;
+  penalty: number;
+  score: number;
+  score_tooltip?: string;
+  is_primary: boolean;
+  usage: Record<string, unknown>;
+  totals: Record<string, number>;
+}
+
 export interface OperatorProviderConnection {
   id: string;
   public_id: string;

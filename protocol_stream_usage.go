@@ -12,7 +12,7 @@ type protocolUsageObserver struct {
 	accumulator  splitUsageAccumulator
 }
 
-func newProtocolUsageObserver(provider Provider, defaultModel string, emit func(*RequestUsage, bool)) *protocolUsageObserver {
+func newProtocolUsageObserver(provider ProviderUsageParser, defaultModel string, emit func(*RequestUsage, bool)) *protocolUsageObserver {
 	observer := &protocolUsageObserver{defaultModel: defaultModel, emit: emit}
 	if provider != nil {
 		observer.parse = provider.ParseUsage

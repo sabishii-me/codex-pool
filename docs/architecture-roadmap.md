@@ -321,7 +321,7 @@ Current route ownership:
 - Isolate gateway, authentication, provider administration, and read-only data handlers.
 - Return `display_name`, public connection ID, and visibility-filtered structured identity metadata from connection view models.
 - Do not expose provider-specific identity fields directly on generic stats DTOs.
-- Generate frontend API types from a schema where practical.
+- Narrow the compatibility `Provider` composition into focused credential loading, authentication, refresh, routing target, stream detection, usage parsing, quota-header parsing, and target-format capabilities; isolated protocol consumers already depend on the narrow usage/identity capabilities.
 
 Exit criterion: UI/data handlers do not depend on proxy internals or mutable connection structs.
 

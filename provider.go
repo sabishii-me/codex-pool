@@ -9,18 +9,63 @@ import (
 	"sync/atomic"
 )
 
-// Provider defines one upstream service and its protocol/credential behavior.
-type Provider interface {
+// ProviderIdentity identifies an upstream provider independently of its other
+// capabilities.
+type ProviderIdentity interface {
 	Type() ProviderID
+}
+
+// ProviderCredentialLoader decodes persisted credentials into a connection.
+type ProviderCredentialLoader interface {
+	ProviderIdentity
 	LoadAccount(name, path string, data []byte) (*ProviderConnection, error)
+}
+
+// ProviderAuthenticator applies connection credentials to an upstream request.
+type ProviderAuthenticator interface {
 	SetAuthHeaders(req *http.Request, connection *ProviderConnection)
+}
+
+// ProviderRefresher renews an existing provider connection.
+type ProviderRefresher interface {
 	RefreshToken(ctx context.Context, connection *ProviderConnection, transport http.RoundTripper) error
+}
+
+// ProviderUsageParser normalizes provider response payloads.
+type ProviderUsageParser interface {
 	ParseUsage(obj map[string]any) *RequestUsage
+}
+
+// ProviderUsageHeaderParser updates quota state from response headers.
+type ProviderUsageHeaderParser interface {
 	ParseUsageHeaders(connection *ProviderConnection, headers http.Header)
+}
+
+// ProviderRouteTarget owns path matching and upstream URL normalization.
+type ProviderRouteTarget interface {
+	ProviderIdentity
 	UpstreamURL(path string) *url.URL
 	MatchesPath(path string) bool
 	NormalizePath(path string) string
+}
+
+// ProviderStreamDetector classifies provider responses without owning usage
+// normalization or transport execution.
+type ProviderStreamDetector interface {
 	DetectsSSE(path string, contentType string) bool
+}
+
+// Provider is the compatibility composition used where one request crosses
+// credential, routing, authentication, usage, and streaming boundaries. New
+// isolated components should accept the smallest capability above.
+type Provider interface {
+	ProviderCredentialLoader
+	ProviderAuthenticator
+	ProviderRefresher
+	ProviderUsageParser
+	ProviderUsageHeaderParser
+	ProviderRouteTarget
+	ProviderStreamDetector
 }
 
 type providerRegistrySnapshot struct {

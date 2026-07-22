@@ -58,12 +58,12 @@ func detectRequestFormat(path string) RequestFormat {
 	}
 }
 
-type providerTargetFormatter interface {
+type ProviderTargetFormatter interface {
 	TargetFormat() RequestFormat
 }
 
-func targetFormatForProvider(provider Provider) RequestFormat {
-	if formatter, ok := provider.(providerTargetFormatter); ok {
+func targetFormatForProvider(provider ProviderIdentity) RequestFormat {
+	if formatter, ok := provider.(ProviderTargetFormatter); ok {
 		return formatter.TargetFormat()
 	}
 	if provider == nil {

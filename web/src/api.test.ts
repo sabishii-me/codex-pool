@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { prepareCodexOAuthBroker, startAccountOAuth } from "./api";
+import { loadProviderConnectionsV2, prepareCodexOAuthBroker, renameProviderConnection, startAccountOAuth } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -26,5 +26,40 @@ describe("Codex OAuth broker handshake", () => {
   it("reports an actionable error when the broker is unavailable", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("connection refused")));
     await expect(prepareCodexOAuthBroker("http://localhost:8989")).rejects.toThrow("Codex OAuth broker is not running");
+  });
+});
+
+describe("provider connection API v2", () => {
+  it("loads canonical provider identities without legacy account fields", async () => {
+    const payload = [{
+      id: "connection-1",
+      public_id: "public-1",
+      provider_id: "codex",
+      identity: { display_name: "Production Codex", attributes: { region: "us-east" } },
+      disabled: false,
+      dead: false,
+      inflight: 0,
+      penalty: 0,
+      score: 1,
+      is_primary: true,
+      usage: {},
+      totals: {},
+    }];
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(loadProviderConnectionsV2()).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith("/api/v2/provider-connections", { cache: "no-store" });
+  });
+
+  it("renames through the canonical identity route", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: "renamed", connection_id: "connection-1" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renameProviderConnection("connection-1", "Primary Codex");
+    expect(fetchMock).toHaveBeenCalledWith("/api/v2/provider-connections/connection-1/identity", expect.objectContaining({
+      method: "PATCH",
+      body: JSON.stringify({ display_name: "Primary Codex" }),
+    }));
   });
 });

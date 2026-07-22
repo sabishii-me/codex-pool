@@ -27,7 +27,7 @@ import {
   enrollMFA,
   exchangeAccountOAuth,
 	  exchangeAntigravityOAuth,
-  loadOperatorProviderConnections,
+  loadProviderConnectionsV2,
 	loadLiveCuteCodeSettings,
 	loadLivePiModels,
 	loadModelCatalog,
@@ -58,7 +58,7 @@ import {
 } from "./insights";
 import type {
   ProviderConnectionStats,
-  OperatorProviderConnection,
+  OperatorProviderConnectionV2,
   FriendSession,
   HourlyUsage,
 	MFAStatus,
@@ -228,7 +228,7 @@ export function App() {
   const [error, setError] = useState("");
   const [mfaStatus, setMfaStatus] = useState<MFAStatus | null>(null);
   const [adminElevated, setAdminElevated] = useState(false);
-  const [adminAccounts, setOperatorProviderConnections] = useState<OperatorProviderConnection[]>([]);
+  const [providerConnections, setProviderConnections] = useState<OperatorProviderConnectionV2[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -254,23 +254,23 @@ export function App() {
     if (!isAdmin) {
       setMfaStatus(null);
       setAdminElevated(false);
-      setOperatorProviderConnections([]);
+      setProviderConnections([]);
       return;
     }
     try {
       const status = await checkMFAStatus();
       setMfaStatus(status);
       if (status.elevated) {
-        setOperatorProviderConnections(await loadOperatorProviderConnections());
+        setProviderConnections(await loadProviderConnectionsV2());
         setAdminElevated(true);
       } else {
-        setOperatorProviderConnections([]);
+        setProviderConnections([]);
         setAdminElevated(false);
       }
     } catch {
       setMfaStatus(null);
       setAdminElevated(false);
-      setOperatorProviderConnections([]);
+      setProviderConnections([]);
     }
   }, []);
 
@@ -306,7 +306,7 @@ export function App() {
     setSignal(null);
     setMfaStatus(null);
     setAdminElevated(false);
-    setOperatorProviderConnections([]);
+    setProviderConnections([]);
   };
 
   return (
@@ -331,15 +331,15 @@ export function App() {
               isAdmin={session.is_admin}
               mfaStatus={mfaStatus}
               adminElevated={adminElevated}
-              adminAccounts={adminAccounts}
+              providerConnections={providerConnections}
               onElevated={() => refreshAdminState(session.is_admin)}
               onAccountsChanged={async () => {
 				if (!adminElevated) {
 				  await refresh();
 				  return;
 				}
-				const [accounts] = await Promise.all([loadOperatorProviderConnections(), refresh()]);
-				setOperatorProviderConnections(accounts);
+				const [connections] = await Promise.all([loadProviderConnectionsV2(), refresh()]);
+				setProviderConnections(connections);
               }}
             />
           )}
@@ -1264,26 +1264,21 @@ function Usage({ stats, signal, session }: { stats: PoolStats | null; signal: Si
   );
 }
 
-function upstreamAccountID(account: OperatorProviderConnection | null | undefined) {
-  if (!account) return "";
-  return account.account_id || account.id_token_chatgpt_account_id || "";
+function connectionEmail(account: ProviderConnectionStats, connection?: OperatorProviderConnectionV2 | null) {
+  return connection?.identity.attributes?.email || account.identity_attributes?.email || "";
 }
 
-function connectionEmail(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
-  return account.identity_attributes?.email || adminAccount?.identity_attributes?.email || account.account_email || adminAccount?.email || "";
+function connectionSubject(account: ProviderConnectionStats, connection?: OperatorProviderConnectionV2 | null) {
+  return connection?.identity.external_subject || account.external_subject || "";
 }
 
-function connectionSubject(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
-  return account.external_subject || adminAccount?.external_subject || account.upstream_account_id || upstreamAccountID(adminAccount) || "";
+function connectionDisplayName(account: ProviderConnectionStats, connection?: OperatorProviderConnectionV2 | null) {
+  return connection?.identity.display_name || account.display_name || `${PROVIDERS[account.type].label} connection`;
 }
 
-function connectionDisplayName(account: ProviderConnectionStats, adminAccount?: OperatorProviderConnection | null) {
-  return account.display_name || adminAccount?.display_name || `${PROVIDERS[account.type].label} connection`;
-}
-
-function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
+function Accounts({ stats, providerConnections, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
   stats: PoolStats | null;
-  adminAccounts: OperatorProviderConnection[];
+  providerConnections: OperatorProviderConnectionV2[];
   isAdmin: boolean;
   mfaStatus: MFAStatus | null;
   adminElevated: boolean;
@@ -1297,22 +1292,22 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   if (!stats) return <SignalSkeleton />;
-  const selectedAdmin = adminAccounts.find((account) => account.id === selected) ?? null;
+  const selectedConnection = providerConnections.find((connection) => connection.id === selected) ?? null;
   const selectedAccount = stats.accounts.find((account) => {
-    const adminMatch = adminAccounts.find((candidate) => candidate.public_id === account.id);
-    return (adminMatch?.id ?? account.id) === selected;
+    const connection = providerConnections.find((candidate) => candidate.public_id === account.id);
+    return (connection?.id ?? account.id) === selected;
   }) ?? null;
 
   const perform = async (nextAction: typeof action) => {
-    if (!selectedAdmin || !nextAction) return;
+    if (!selectedConnection || !nextAction) return;
     if (action !== nextAction) {
       setAction(nextAction);
       return;
     }
     setBusy(true);
     try {
-      await mutateAccount(selectedAdmin.id, nextAction);
-      setMessage(`${selectedAdmin.id} ${nextAction} complete`);
+      await mutateAccount(selectedConnection.id, nextAction);
+      setMessage(`${selectedConnection.id} ${nextAction} complete`);
       setAction(null);
       await onAccountsChanged();
     } catch (cause) {
@@ -1324,13 +1319,13 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
 
   const renameConnection = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedAdmin) return;
+    if (!selectedConnection) return;
     const form = new FormData(event.currentTarget);
     const displayName = String(form.get("display_name") ?? "").trim();
     if (!displayName) return;
     setBusy(true);
     try {
-      await renameProviderConnection(selectedAdmin.id, displayName);
+      await renameProviderConnection(selectedConnection.id, displayName);
       setMessage(`Connection renamed to ${displayName}`);
       await onAccountsChanged();
     } catch (cause) {
@@ -1351,17 +1346,17 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
           {adminElevated && <button className="operator-badge" onClick={async () => { await reloadAccounts(); await onAccountsChanged(); }}>OPERATOR // RELOAD POOL</button>}
         </div>
       </div>
-      <div className={classNames("accounts-layout", selectedAdmin && "inspecting")}>
+      <div className={classNames("accounts-layout", selectedConnection && "inspecting")}>
         <div className="account-table" role="table" aria-label="Provider accounts">
           <div className="account-row account-head" role="row">
             <span>PROVIDER / PLAN / ACCOUNT</span><span>STATE</span><span>WEEKLY PACE</span><span>RESET WINDOWS</span><span>BANKED RESETS</span><span>BURN</span><span>VALUE</span><span>SPEND</span><span>ROI</span><span>TRACE</span>
           </div>
           {stats.accounts.map((account) => {
-            const adminMatch = adminAccounts.find((candidate) => candidate.public_id === account.id);
-            const rowID = adminMatch?.id ?? account.id;
+            const connection = providerConnections.find((candidate) => candidate.public_id === account.id);
+            const rowID = connection?.id ?? account.id;
             return (
               <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={connectionSubject(account, adminMatch) || connectionDisplayName(account, adminMatch)}>{connectionDisplayName(account, adminMatch)}</span></small></span>
+                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={connectionSubject(account, connection) || connectionDisplayName(account, connection)}>{connectionDisplayName(account, connection)}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1384,11 +1379,11 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             {selectedAccount ? (
               <>
                 <span className="inspector-code">ACCOUNT // SIGNAL VIEW</span>
-                <h2>{connectionDisplayName(selectedAccount, selectedAdmin)}</h2>
+                <h2>{connectionDisplayName(selectedAccount, selectedConnection)}</h2>
                 <div className="inspector-provider" style={{ color: PROVIDERS[selectedAccount.type].color }}>{PROVIDERS[selectedAccount.type].label.toUpperCase()} / {selectedAccount.plan_type}</div>
-                {connectionEmail(selectedAccount, selectedAdmin) && <div className="account-admission">EMAIL // {connectionEmail(selectedAccount, selectedAdmin)}</div>}
-                {connectionSubject(selectedAccount, selectedAdmin) && <div className="account-admission">EXTERNAL SUBJECT // {connectionSubject(selectedAccount, selectedAdmin)}</div>}
-                <div className="account-admission">CONNECTION HASH // {selectedAdmin?.id || selectedAccount.id}</div>
+                {connectionEmail(selectedAccount, selectedConnection) && <div className="account-admission">EMAIL // {connectionEmail(selectedAccount, selectedConnection)}</div>}
+                {connectionSubject(selectedAccount, selectedConnection) && <div className="account-admission">EXTERNAL SUBJECT // {connectionSubject(selectedAccount, selectedConnection)}</div>}
+                <div className="account-admission">CONNECTION HASH // {selectedConnection?.id || selectedAccount.id}</div>
                 <div className="account-admission">IN POOL {formatAdmission(selectedAccount.account_added_at)} // SPEND {money.format(selectedAccount.subscription_spend)}</div>
                 <div className="inspector-windows" aria-label="Account usage reset windows">
                   <ResetWindow label="PRIMARY WINDOW" available={selectedAccount.primary_window_available} used={selectedAccount.primary_window_used_pct} resetMinutes={selectedAccount.primary_reset_minutes} paceRatio={selectedAccount.primary_pace_ratio} showPace />
@@ -1409,24 +1404,24 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
                   <Instrument label="VALUE" value={money.format(selectedAccount.api_cost_estimate)} />
                   <Instrument label="ROI" value={selectedAccount.subscription_spend ? `${selectedAccount.roi.toFixed(2)}×` : "—"} />
                 </div>
-                {selectedAdmin ? (
+                {selectedConnection ? (
                   <>
-                    <span className="inspector-code operator-section">OPERATOR // {selectedAdmin.id}</span>
+                    <span className="inspector-code operator-section">OPERATOR // {selectedConnection.id}</span>
                     <div className="inspector-metrics operator-metrics">
-                      <Instrument label="SCORE" value={selectedAdmin.score.toFixed(2)} accent />
-                      <Instrument label="PENALTY" value={selectedAdmin.penalty.toFixed(1)} danger={selectedAdmin.penalty > 2} />
-                      <Instrument label="INFLIGHT" value={String(selectedAdmin.inflight)} />
-                      <Instrument label="PRIMARY" value={selectedAdmin.is_primary ? "YES" : "NO"} />
+                      <Instrument label="SCORE" value={selectedConnection.score.toFixed(2)} accent />
+                      <Instrument label="PENALTY" value={selectedConnection.penalty.toFixed(1)} danger={selectedConnection.penalty > 2} />
+                      <Instrument label="INFLIGHT" value={String(selectedConnection.inflight)} />
+                      <Instrument label="PRIMARY" value={selectedConnection.is_primary ? "YES" : "NO"} />
                     </div>
-                    <pre className="score-trace">{selectedAdmin.score_tooltip || "NO SCORE TRACE"}</pre>
+                    <pre className="score-trace">{selectedConnection.score_tooltip || "NO SCORE TRACE"}</pre>
                     <form className="connection-rename" onSubmit={renameConnection}>
                       <label htmlFor="connection-display-name">DISPLAY NAME</label>
-                      <input id="connection-display-name" name="display_name" defaultValue={selectedAdmin.display_name || selectedAccount.display_name} maxLength={120} required />
+                      <input id="connection-display-name" name="display_name" defaultValue={selectedConnection.identity.display_name || selectedAccount.display_name} maxLength={120} required />
                       <button disabled={busy} type="submit">RENAME CONNECTION</button>
                     </form>
                     <div className="operator-actions">
-                      <button disabled={busy} className={action === (selectedAdmin.disabled ? "enable" : "disable") ? "confirm" : ""} onClick={() => perform(selectedAdmin.disabled ? "enable" : "disable")}>{action === (selectedAdmin.disabled ? "enable" : "disable") ? `CONFIRM ${selectedAdmin.disabled ? "ENABLE" : "DISABLE"}` : selectedAdmin.disabled ? "ENABLE ACCOUNT" : "DISABLE ACCOUNT"}</button>
-                      <button disabled={busy || !selectedAdmin.dead} className={action === "resurrect" ? "confirm" : ""} onClick={() => perform("resurrect")}>{action === "resurrect" ? "CONFIRM RESURRECT" : "RESURRECT"}</button>
+                      <button disabled={busy} className={action === (selectedConnection.disabled ? "enable" : "disable") ? "confirm" : ""} onClick={() => perform(selectedConnection.disabled ? "enable" : "disable")}>{action === (selectedConnection.disabled ? "enable" : "disable") ? `CONFIRM ${selectedConnection.disabled ? "ENABLE" : "DISABLE"}` : selectedConnection.disabled ? "ENABLE ACCOUNT" : "DISABLE ACCOUNT"}</button>
+                      <button disabled={busy || !selectedConnection.dead} className={action === "resurrect" ? "confirm" : ""} onClick={() => perform("resurrect")}>{action === "resurrect" ? "CONFIRM RESURRECT" : "RESURRECT"}</button>
                       <button disabled={busy} className={action === "refresh" ? "confirm" : ""} onClick={() => perform("refresh")}>{action === "refresh" ? "CONFIRM REFRESH" : "FORCE REFRESH"}</button>
                     </div>
                     {message && <div className="operator-message" role="status">{message}</div>}

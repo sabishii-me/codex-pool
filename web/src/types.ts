@@ -74,7 +74,7 @@ export interface PoolStats {
   active_accounts: number;
   total_pool_users: number;
   last_24h_tokens: number;
-  accounts: AccountStats[];
+  accounts: ProviderConnectionStats[];
   aggregate: {
     total_input_tokens: number;
     total_cached_tokens: number;

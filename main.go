@@ -1407,6 +1407,14 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 	}
 	rewrittenPrefix := prefix
 	delta := 0
+	if routeProvider.Type() == AccountTypeGrok {
+		limit := int64(streamedModelRoutePeekBytes)
+		if h.cfg != nil && h.cfg.maxInMemoryBodyBytes > 0 {
+			limit = h.cfg.maxInMemoryBodyBytes
+		}
+		restoreBody(prefix)
+		return provider, targetBase, fmt.Errorf("large Grok request requires full-body sanitization; reduce the request below %d bytes", limit)
+	}
 	if canonicalModel != requestedModel {
 		rewrittenPrefix, delta, err = replaceJSONStringToken(prefix, valueStart, valueEnd, canonicalModel)
 	}

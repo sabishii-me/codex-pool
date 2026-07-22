@@ -24,7 +24,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 | MiniMax | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Z.ai | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Xiaomi | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
-| Grok | OpenAI Responses custom | model | Verified | Verified | Verified | N/A | Verified | Verified | Gap | Gap |
+| Grok | OpenAI Responses custom | model | Verified | Verified | Verified | N/A | Verified | Verified | Verified | Verified |
 | DeepSeek | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | Qwen | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
 | OpenRouter | Anthropic Messages | model | Verified | Verified | Verified | Verified | Verified | Verified | Verified | Verified |
@@ -32,7 +32,7 @@ Adding a registered provider without a complete declared row fails `TestProvider
 
 ## Phase 0 closure work
 
-1. Add end-to-end custom-engine proxy fixtures for Codex, Gemini, Antigravity, and Grok; Claude now participates in the canonical Anthropic harness.
+1. Add end-to-end custom-engine proxy fixtures for Codex, Gemini, and Antigravity; Claude and Grok now participate in canonical proxy harnesses.
 2. Exercise OpenAI-target providers through translated large-body requests or explicitly reject unsupported oversized translation.
 3. Add canonical exactly-once event assertions for every custom protocol path.
 4. Characterize Gemini/Antigravity large-body behavior and translation parity.

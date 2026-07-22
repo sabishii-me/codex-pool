@@ -42,6 +42,12 @@ func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 			original := []byte(`{"model":"` + test.model + `","messages":[{"role":"user","content":"` + padding + `"}]}`)
 			request := &http.Request{Method: http.MethodPost, URL: &url.URL{Path: "/v1/messages"}, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(bytes.NewReader(original)), ContentLength: int64(len(original))}
 			provider, routedBase, err := handler.applyStreamedModelRoute(request, fallback, base, "route-contract")
+			if test.wantType == AccountTypeGrok {
+				if err == nil || !strings.Contains(err.Error(), "requires full-body sanitization") {
+					t.Fatalf("large Grok route error = %v, want explicit sanitization rejection", err)
+				}
+				return
+			}
 			if err != nil {
 				t.Fatal(err)
 			}

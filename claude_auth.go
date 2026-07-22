@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -528,7 +529,7 @@ func parseScopes(scope string) []string {
 
 // probeClaudeAccountUUIDs iterates all Claude OAuth accounts and probes
 // Anthropic's bootstrap endpoint for any that don't have an AccountUUID yet.
-func (h *proxyHandler) probeClaudeAccountUUIDs() {
+func (h *proxyHandler) probeClaudeAccountUUIDs(ctx context.Context) {
 	h.pool.mu.RLock()
 	accounts := make([]*ProviderConnection, 0, len(h.pool.accounts))
 	for _, acc := range h.pool.accounts {
@@ -558,6 +559,9 @@ func (h *proxyHandler) probeClaudeAccountUUIDs() {
 	log.Printf("probing account UUIDs for %d claude accounts...", len(needsProbe))
 
 	for _, acc := range needsProbe {
+		if ctx.Err() != nil {
+			return
+		}
 		acc.mu.Lock()
 		token := acc.AccessToken
 		acc.mu.Unlock()
@@ -578,7 +582,13 @@ func (h *proxyHandler) probeClaudeAccountUUIDs() {
 			log.Printf("claude account %s: learned account_uuid=%s", acc.ID, uuid)
 		}
 
-		// Rate limit: 1 request per second to avoid hammering Anthropic
-		time.Sleep(time.Second)
+		// Rate limit without delaying shutdown.
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
 	}
 }

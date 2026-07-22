@@ -19,26 +19,41 @@ import (
 const resetCreditAutoRedeemWindow = 15 * time.Minute
 const resetCreditPollInterval = 5 * time.Minute
 
-func (h *proxyHandler) startUsagePoller() {
+func (h *proxyHandler) startUsagePoller(ctx context.Context, jobs *backgroundJobs) {
 	if h == nil || h.cfg.usageRefresh <= 0 {
 		return
 	}
 	// Fetch usage immediately on startup
-	go h.pollUpstreamUsage()
+	jobs.Go(ctx, func(ctx context.Context) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			h.pollUpstreamUsageContext(ctx)
+		}
+	})
 
 	pollInterval := h.cfg.usageRefresh
 	if pollInterval > resetCreditPollInterval {
 		pollInterval = resetCreditPollInterval
 	}
 	ticker := time.NewTicker(pollInterval)
-	go func() {
-		for range ticker.C {
-			h.pollUpstreamUsage()
+	jobs.Go(ctx, func(ctx context.Context) {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				h.pollUpstreamUsageContext(ctx)
+			}
 		}
-	}()
+	})
 }
 
-func (h *proxyHandler) pollUpstreamUsage() {
+func (h *proxyHandler) pollUpstreamUsage() { h.pollUpstreamUsageContext(context.Background()) }
+
+func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 	if !h.usagePollMu.TryLock() {
 		return
 	}
@@ -50,10 +65,18 @@ func (h *proxyHandler) pollUpstreamUsage() {
 	h.pool.mu.RUnlock()
 
 	for i, a := range accs {
-		// Stagger requests to avoid rate limiting
-		// Usage polling should not sleep minutes between accounts; refreshAccount already rate limits OAuth.
+		if ctx.Err() != nil {
+			return
+		}
+		// Stagger requests to avoid rate limiting.
 		if i > 0 {
-			time.Sleep(500 * time.Millisecond)
+			timer := time.NewTimer(500 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
 		}
 		if a == nil {
 			continue

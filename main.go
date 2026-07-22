@@ -278,6 +278,8 @@ func main() {
 		return
 	}
 	cfg := buildConfig()
+	processCtx, stopProcess := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	jobs := &backgroundJobs{}
 	codexOAuthSessionsPath := strings.TrimSpace(os.Getenv("CODEX_OAUTH_SESSIONS_PATH"))
 	if codexOAuthSessionsPath == "" {
 		codexOAuthSessionsPath = filepath.Join(filepath.Dir(cfg.storePath), "codex_oauth_sessions.json")
@@ -285,7 +287,7 @@ func main() {
 	if err := configureCodexOAuthSessions(codexOAuthSessionsPath); err != nil {
 		log.Fatalf("initialize Codex OAuth sessions: %v", err)
 	}
-	startCodexFingerprintUpdater()
+	startCodexFingerprintUpdater(processCtx, jobs)
 
 	// Create provider registry
 	codexProvider := NewCodexProvider(cfg.responsesBase, cfg.whamBase, cfg.refreshBase)
@@ -463,7 +465,7 @@ func main() {
 
 	// Initialize pricing data
 	pricing := newPricingData()
-	pricing.startPricingRefresh()
+	pricing.startPricingRefresh(processCtx, jobs)
 
 	// Initialize analytics store (SQLite)
 	analyticsDBPath := "./data/analytics.db"
@@ -492,7 +494,7 @@ func main() {
 			pool.mu.RUnlock()
 			log.Printf("restored canonical usage totals for %d/%d connections", restored, len(persisted))
 		}
-		analyticsStore.startDailyRollup()
+		analyticsStore.startDailyRollup(processCtx, jobs)
 		log.Printf("analytics store initialized at %s", analyticsDBPath)
 	}
 
@@ -535,24 +537,33 @@ func main() {
 		retryPolicy:          RetryPolicy{ConfiguredAttempts: cfg.maxAttempts, MaxCooldownWait: 10 * time.Second},
 		startTime:            time.Now(),
 		pacer:                pacer,
+		jobs:                 jobs,
 	}
-	h.startUsagePoller()
-	h.startQuotaIntelligenceRefresher()
-	startAntigravityVersionUpdater(context.Background())
-	h.startAntigravityModelPoller()
+	if h.bruteForce != nil {
+		defer h.bruteForce.stop()
+	}
+	h.startUsagePoller(processCtx, jobs)
+	h.startQuotaIntelligenceRefresher(processCtx, jobs)
+	startAntigravityVersionUpdater(processCtx, jobs)
+	h.startAntigravityModelPoller(processCtx, jobs)
 
 	// Probe account UUIDs for Claude OAuth accounts that don't have one yet.
-	go h.probeClaudeAccountUUIDs()
+	jobs.Go(processCtx, func(ctx context.Context) { h.probeClaudeAccountUUIDs(ctx) })
 
 	// Background cleanup for request pacer (every 5 minutes)
 	if pacer != nil {
-		go func() {
+		jobs.Go(processCtx, func(ctx context.Context) {
 			ticker := time.NewTicker(5 * time.Minute)
 			defer ticker.Stop()
-			for range ticker.C {
-				pacer.cleanup(10 * time.Minute)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					pacer.cleanup(10 * time.Minute)
+				}
 			}
-		}()
+		})
 	}
 
 	// Start file watcher for hot-reload of pool directory and config.
@@ -560,7 +571,7 @@ func main() {
 	if v := os.Getenv("CONFIG_PATH"); v != "" {
 		configPath = v
 	}
-	if watcher, err := newPoolWatcher(cfg.poolDir, configPath, cfg.providerSpecsDir, h); err != nil {
+	if watcher, err := newPoolWatcher(processCtx, jobs, cfg.poolDir, configPath, cfg.providerSpecsDir, h); err != nil {
 		log.Printf("warning: failed to start file watcher: %v (hot-reload disabled)", err)
 	} else {
 		defer watcher.close()
@@ -595,10 +606,11 @@ func main() {
 	if cfg.claudeTraceDir != "" {
 		log.Printf("claude traffic tracing enabled: dir=%s body_limit=%d include_secrets=%v", cfg.claudeTraceDir, cfg.claudeTraceBodyLimit, cfg.claudeTraceSecrets)
 	}
-	shutdownCtx, stopShutdownSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stopShutdownSignals()
-	if err := serveUntilShutdown(srv, h, shutdownCtx.Done(), cfg.shutdownGrace); err != nil {
-		log.Fatalf("server error: %v", err)
+	serveErr := serveUntilShutdown(srv, h, processCtx.Done(), cfg.shutdownGrace)
+	stopProcess()
+	jobs.Wait()
+	if serveErr != nil {
+		log.Fatalf("server error: %v", serveErr)
 	}
 }
 
@@ -673,6 +685,7 @@ type proxyHandler struct {
 	inflight                int64
 	startTime               time.Time
 	pacer                   *requestPacer // Per-session request pacing
+	jobs                    *backgroundJobs
 	webSocketRegistryMu     sync.Mutex
 	webSockets              *webSocketRegistry
 

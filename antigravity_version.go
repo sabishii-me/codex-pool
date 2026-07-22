@@ -79,9 +79,9 @@ var antigravityVersions = newAntigravityVersionState(antigravityFallbackClientVe
 
 // startAntigravityVersionUpdater refreshes the Hub version independently from
 // requests. The last valid value remains available until its six-hour TTL.
-func startAntigravityVersionUpdater(ctx context.Context) {
+func startAntigravityVersionUpdater(ctx context.Context, jobs *backgroundJobs) {
 	client := &http.Client{Timeout: antigravityVersionFetchTimeout}
-	go func() {
+	jobs.Go(ctx, func(ctx context.Context) {
 		refresh := func() {
 			_ = antigravityVersions.refresh(ctx, client, antigravityVersionManifestURL, time.Now())
 		}
@@ -96,5 +96,5 @@ func startAntigravityVersionUpdater(ctx context.Context) {
 				refresh()
 			}
 		}
-	}()
+	})
 }

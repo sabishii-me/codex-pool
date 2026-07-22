@@ -70,6 +70,27 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestGatewayBackgroundLoopsUseSharedOwnership(t *testing.T) {
+	for _, path := range []string{"usage_tracking.go", "quota_intelligence.go", "pricing.go", "analytics_store.go", "antigravity_models.go", "antigravity_version.go", "codex_fingerprint.go", "watcher.go"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "for range ticker.C") {
+			t.Errorf("%s contains uncancelable process ticker loop", path)
+		}
+	}
+	mainData, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"processCtx", "backgroundJobs", "jobs.Wait()", "serveUntilShutdown"} {
+		if !strings.Contains(string(mainData), required) {
+			t.Errorf("main lifecycle lacks %q", required)
+		}
+	}
+}
+
 func TestHostedMCPFilteringRemainsBounded(t *testing.T) {
 	for _, path := range []string{"hosted_mcp_filter.go", "hosted_mcp_stream_filter.go", "main.go"} {
 		data, err := os.ReadFile(path)

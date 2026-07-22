@@ -340,11 +340,9 @@ Reviewed `darvell/codex-pool` through upstream commit `2aa8320` on 2026-07-22:
 
 ### Phase 7 — Operational hardening
 
-Status: in progress. WebSocket lifecycle hardening from upstream `a1049d8` has been adapted across both general and Codex cyber-swap relays without bypassing model-route or hosted-MCP boundaries. Relay termination preserves valid peer close codes, classifies client/upstream/relay outcomes, records labeled metrics, reports heartbeat failures in both directions, normalizes upstream EOF only after a terminal Responses event, tracks active turns, and drains idle/complete sessions with close code 1012 during graceful process shutdown. Active turns receive the configurable `SHUTDOWN_GRACE_SECONDS` period before forced closure.
+Status: complete for the modular-monolith hardening scope. WebSocket lifecycle hardening from upstream `a1049d8` has been adapted across both general and Codex cyber-swap relays without bypassing model-route or hosted-MCP boundaries. Relay termination preserves valid peer close codes, classifies client/upstream/relay outcomes, records labeled metrics, reports heartbeat failures in both directions, normalizes upstream EOF only after a terminal Responses event, tracks active turns, and drains idle/complete sessions with close code 1012 during graceful process shutdown. Active turns receive the configurable `SHUTDOWN_GRACE_SECONDS` period before forced closure. A shared process cancellation context and `backgroundJobs` owner now govern usage polling, quota intelligence, pricing refresh, analytics rollups, Antigravity version/model refresh, Codex fingerprint updates, Claude UUID probing, request-pacer cleanup, and file watching; shutdown joins these jobs before deferred persistence teardown.
 
-- Give remaining background jobs a shared cancellation context.
-- Add graceful shutdown and bounded worker ownership.
-- Add persistence health metrics, dead-letter/retry visibility, and reconciliation checks.
+- Remaining persistence health, dead-letter/retry, and reconciliation observability can proceed as ongoing operations work rather than blocking the UI phase.
 
 Exit criterion: startup, reload, failure, and shutdown behavior are deterministic and observable.
 

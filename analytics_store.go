@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -637,22 +638,33 @@ func (s *AnalyticsStore) runDailyRollup() {
 }
 
 // startDailyRollup runs the rollup once at startup and then daily at midnight UTC.
-func (s *AnalyticsStore) startDailyRollup() {
-	// Run once at startup to catch up
-	go func() {
-		time.Sleep(10 * time.Second) // brief delay to let startup finish
-		s.runDailyRollup()
-	}()
-
-	go func() {
-		for {
-			// Sleep until next midnight UTC
-			now := time.Now().UTC()
-			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 5, 0, 0, time.UTC)
-			time.Sleep(time.Until(next))
+func (s *AnalyticsStore) startDailyRollup(ctx context.Context, jobs *backgroundJobs) {
+	// Run once after a brief startup delay to catch up.
+	jobs.Go(ctx, func(ctx context.Context) {
+		timer := time.NewTimer(10 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
 			s.runDailyRollup()
 		}
-	}()
+	})
+
+	jobs.Go(ctx, func(ctx context.Context) {
+		for {
+			now := time.Now().UTC()
+			next := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 5, 0, 0, time.UTC)
+			timer := time.NewTimer(time.Until(next))
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+				s.runDailyRollup()
+			}
+		}
+	})
 }
 
 // seedFromBoltDB backfills daily_costs from historical BoltDB request data.

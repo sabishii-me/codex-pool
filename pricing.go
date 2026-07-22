@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"io"
@@ -164,16 +165,22 @@ func (pd *PricingData) fetchAndUpdate() {
 }
 
 // startPricingRefresh fetches pricing on startup and refreshes every 24h.
-func (pd *PricingData) startPricingRefresh() {
+func (pd *PricingData) startPricingRefresh(ctx context.Context, jobs *backgroundJobs) {
 	// Fetch fresh data on startup (in background)
-	go pd.fetchAndUpdate()
+	jobs.Go(ctx, func(context.Context) { pd.fetchAndUpdate() })
 
 	ticker := time.NewTicker(24 * time.Hour)
-	go func() {
-		for range ticker.C {
-			pd.fetchAndUpdate()
+	jobs.Go(ctx, func(ctx context.Context) {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				pd.fetchAndUpdate()
+			}
 		}
-	}()
+	})
 }
 
 var pricingModelAliases = map[string]string{

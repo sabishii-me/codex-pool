@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,7 +28,7 @@ type poolWatcher struct {
 
 const watcherDebounce = 500 * time.Millisecond
 
-func newPoolWatcher(poolDir, configPath, providerSpecsDir string, handler *proxyHandler) (*poolWatcher, error) {
+func newPoolWatcher(ctx context.Context, jobs *backgroundJobs, poolDir, configPath, providerSpecsDir string, handler *proxyHandler) (*poolWatcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -86,13 +87,15 @@ func newPoolWatcher(poolDir, configPath, providerSpecsDir string, handler *proxy
 		log.Printf("watching provider specs directory: %s", providerSpecsDir)
 	}
 
-	go pw.loop()
+	jobs.Go(ctx, pw.loop)
 	return pw, nil
 }
 
-func (pw *poolWatcher) loop() {
+func (pw *poolWatcher) loop(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case event, ok := <-pw.watcher.Events:
 			if !ok {
 				return
@@ -197,5 +200,12 @@ func (pw *poolWatcher) reloadConfig() {
 }
 
 func (pw *poolWatcher) close() {
+	pw.mu.Lock()
+	for _, timer := range []*time.Timer{pw.debouncePool, pw.debounceCfg, pw.debounceSpecs} {
+		if timer != nil {
+			timer.Stop()
+		}
+	}
+	pw.mu.Unlock()
 	pw.watcher.Close()
 }

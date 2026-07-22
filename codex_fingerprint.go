@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -195,11 +196,11 @@ func isPersistedCodexCookie(name string) bool {
 	}
 }
 
-func startCodexFingerprintUpdater() {
+func startCodexFingerprintUpdater(ctx context.Context, jobs *backgroundJobs) {
 	if getenv("CODEX_FINGERPRINT_AUTO_UPDATE", "1") == "0" {
 		return
 	}
-	go func() {
+	jobs.Go(ctx, func(ctx context.Context) {
 		checkCodexFingerprintUpdate()
 		period := codexFingerprintPollPeriod
 		if raw := strings.TrimSpace(os.Getenv("CODEX_FINGERPRINT_UPDATE_SECONDS")); raw != "" {
@@ -209,10 +210,15 @@ func startCodexFingerprintUpdater() {
 		}
 		ticker := time.NewTicker(period)
 		defer ticker.Stop()
-		for range ticker.C {
-			checkCodexFingerprintUpdate()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				checkCodexFingerprintUpdate()
+			}
 		}
-	}()
+	})
 }
 
 func checkCodexFingerprintUpdate() {

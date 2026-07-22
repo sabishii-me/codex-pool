@@ -163,17 +163,17 @@ func poolModelDescriptorsWithRegistry(pool *ProviderPool, registry *ProviderRegi
 	if registry == nil {
 		return models
 	}
-	seen := make(map[string]bool, len(models))
-	for _, model := range models {
-		seen[strings.ToLower(model.ID)] = true
+	index := make(map[string]int, len(models))
+	for modelIndex, model := range models {
+		index[strings.ToLower(model.ID)] = modelIndex
 	}
 	for _, provider := range registry.DeclarativeProviders() {
 		spec := provider.Spec()
+		protocol := "anthropic"
+		if spec.Protocol == ProtocolOpenAIChat {
+			protocol = "openai"
+		}
 		for _, model := range spec.Models {
-			if seen[strings.ToLower(model.ID)] {
-				continue
-			}
-			seen[strings.ToLower(model.ID)] = true
 			supporting, available, availableNow := poolModelAvailability(pool, spec.ID)
 			name := model.DisplayName
 			if name == "" {
@@ -183,13 +183,20 @@ func poolModelDescriptorsWithRegistry(pool *ProviderPool, registry *ProviderRegi
 			if len(modalities) == 0 {
 				modalities = []string{"text"}
 			}
-			models = append(models, poolModelDescriptor{
+			descriptor := poolModelDescriptor{
 				ID: model.ID, Name: name, Description: model.Description,
-				Protocol: "anthropic", Protocols: []string{"anthropic"}, Provider: string(spec.ID), UpstreamID: model.ID,
+				Protocol: protocol, Protocols: []string{protocol}, Provider: string(spec.ID), UpstreamID: model.ID,
 				ContextWindow: model.ContextWindow, MaxOutputTokens: model.MaxOutputTokens,
 				Modalities: modalities, Capabilities: map[string]bool{"reasoning": model.Reasoning, "tools": true},
 				Aliases: append([]string(nil), model.Aliases...), SupportingAccounts: supporting, AvailableAccounts: available, AvailableNow: availableNow,
-			})
+			}
+			key := strings.ToLower(model.ID)
+			if existing, ok := index[key]; ok {
+				models[existing] = descriptor
+			} else {
+				index[key] = len(models)
+				models = append(models, descriptor)
+			}
 		}
 	}
 	return models

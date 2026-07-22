@@ -1255,43 +1255,6 @@ func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Prov
 		}
 		return p, p.UpstreamURL(path), nil
 	}
-	if isKimiPlatformModel(model) {
-		p := h.registry.ForType(AccountTypeKimiPlatform)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := kimiPlatformCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isMinimaxModel(model) {
-		p := h.registry.ForType(AccountTypeMinimax)
-		if p == nil {
-			return nil, nil, nil
-		}
-		// Rewrite the model name to the canonical upstream name
-		canonical := minimaxCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isZAIModel(model) {
-		p := h.registry.ForType(AccountTypeZAI)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := zaiCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isXiaomiModel(model) {
-		p := h.registry.ForType(AccountTypeXiaomi)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := xiaomiCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
 	if isGrokModel(model) {
 		p := h.registry.ForType(AccountTypeGrok)
 		if p == nil {
@@ -1299,42 +1262,6 @@ func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Prov
 		}
 		canonical := grokCanonicalModel(model)
 		rewritten := rewriteAndSanitizeGrokRequestBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isDeepSeekModel(model) {
-		p := h.registry.ForType(AccountTypeDeepSeek)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := deepseekCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isQwenModel(model) {
-		p := h.registry.ForType(AccountTypeQwen)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := qwenCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isOpenRouterModel(model) {
-		p := h.registry.ForType(AccountTypeOpenRouter)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := openrouterCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
-		return p, p.UpstreamURL(path), rewritten
-	}
-	if isNvidiaModel(model) {
-		p := h.registry.ForType(AccountTypeNvidia)
-		if p == nil {
-			return nil, nil, nil
-		}
-		canonical := nvidiaCanonicalModel(model)
-		rewritten := rewriteModelInBody(body, canonical)
 		return p, p.UpstreamURL(path), rewritten
 	}
 	// Cross-format model routing: detect if the model belongs to a different provider
@@ -1453,15 +1380,7 @@ func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, 
 	routes := []route{
 		{AccountTypeAntigravity, shouldRouteAntigravityModel, antigravityCanonicalModel},
 		{AccountTypeKimi, isKimiModel, func(model string) string { return model }},
-		{AccountTypeKimiPlatform, isKimiPlatformModel, kimiPlatformCanonicalModel},
-		{AccountTypeMinimax, isMinimaxModel, minimaxCanonicalModel},
-		{AccountTypeZAI, isZAIModel, zaiCanonicalModel},
-		{AccountTypeXiaomi, isXiaomiModel, xiaomiCanonicalModel},
 		{AccountTypeGrok, isGrokModel, grokCanonicalModel},
-		{AccountTypeDeepSeek, isDeepSeekModel, deepseekCanonicalModel},
-		{AccountTypeQwen, isQwenModel, qwenCanonicalModel},
-		{AccountTypeOpenRouter, isOpenRouterModel, openrouterCanonicalModel},
-		{AccountTypeNvidia, isNvidiaModel, nvidiaCanonicalModel},
 	}
 	for _, candidate := range routes {
 		if !candidate.matches(model) {
@@ -1984,7 +1903,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 	// --- Format translation: detect mismatch between client format and provider format ---
 	sourceFormat := detectRequestFormat(r.URL.Path)
-	targetFormat := providerTargetFormat(accountType)
+	targetFormat := targetFormatForProvider(provider)
 	translateDir := TranslateNone
 	if sourceFormat != FormatUnknown && targetFormat != FormatUnknown && sourceFormat != targetFormat {
 		if sourceFormat == FormatClaude && targetFormat == FormatOpenAI {

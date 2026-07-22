@@ -1,95 +1,35 @@
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"path/filepath"
-	"strings"
-)
+import "net/url"
 
-// QwenProvider handles Qwen (Alibaba DashScope Coding Plan) accounts through
-// its Anthropic-compatible API.
-type QwenProvider struct {
-	qwenBase *url.URL
+var qwenProviderSpec = ProviderSpec{
+	ID: AccountTypeQwen, Protocol: ProtocolAnthropicMessages,
+	BaseURL: "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic", PlanType: "qwen", CredentialField: "api_key",
+	Auth: ProviderAuthSpec{Type: AuthBearer},
 }
 
-// NewQwenProvider creates a new Qwen provider.
-func NewQwenProvider(qwenBase *url.URL) *QwenProvider {
-	return &QwenProvider{
-		qwenBase: qwenBase,
+type QwenProvider = DeclarativeProvider
+
+func NewQwenProvider(base *url.URL) *QwenProvider {
+	spec := qwenProviderSpec
+	spec.Models = modelRouteSpecsForProvider(AccountTypeQwen)
+	if base != nil {
+		spec.BaseURL = base.String()
 	}
-}
-
-func (p *QwenProvider) Type() AccountType {
-	return AccountTypeQwen
-}
-
-type QwenAuthJSON struct {
-	APIKey string `json:"api_key"`
-}
-
-func (p *QwenProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
-	var qj QwenAuthJSON
-	if err := json.Unmarshal(data, &qj); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	provider, err := NewDeclarativeProvider(spec)
+	if err != nil {
+		panic(err)
 	}
-	if qj.APIKey == "" {
-		return nil, nil
-	}
-
-	acc := &ProviderConnection{
-		Type:        AccountTypeQwen,
-		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
-		File:        path,
-		AccessToken: qj.APIKey,
-		PlanType:    "qwen",
-	}
-	return acc, nil
-}
-
-func (p *QwenProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
-	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
-}
-
-func (p *QwenProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
-	return nil
-}
-
-func (p *QwenProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	return anthropicMessagesEngine.ParseUsage(obj)
-}
-
-func (p *QwenProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
-	// Qwen's Anthropic-compatible endpoint does not currently expose quota headers.
-}
-
-func (p *QwenProvider) UpstreamURL(path string) *url.URL {
-	return p.qwenBase
-}
-
-func (p *QwenProvider) MatchesPath(path string) bool {
-	// Qwen is model-routed.
-	return false
-}
-
-func (p *QwenProvider) NormalizePath(path string) string {
-	return path
-}
-
-func (p *QwenProvider) DetectsSSE(path string, contentType string) bool {
-	return eventStreamDetector.Detect(path, contentType)
+	return provider
 }
 
 func isQwenModel(model string) bool {
-	_, ok := modelForProvider(AccountTypeQwen, model)
+	_, ok := NewQwenProvider(nil).MatchModel(model)
 	return ok
 }
 
 func qwenCanonicalModel(model string) string {
-	if found, ok := modelForProvider(AccountTypeQwen, model); ok {
+	if found, ok := NewQwenProvider(nil).MatchModel(model); ok {
 		return found.ID
 	}
 	return model

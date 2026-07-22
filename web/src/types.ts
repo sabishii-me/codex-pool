@@ -1,4 +1,4 @@
-export type Provider = "codex" | "claude" | "gemini" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia";
+export type Provider = string;
 
 export interface FriendSession {
   public_url: string;

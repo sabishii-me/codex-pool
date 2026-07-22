@@ -10,25 +10,37 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
 	ProtocolAnthropicMessages = "anthropic-messages"
+	ProtocolOpenAIChat        = "openai-chat"
 	AuthBearer                = "bearer"
 	AuthHeader                = "header"
+	UsageAnthropicMessages    = "anthropic-messages"
+	UsageOpenAIChat           = "openai-chat"
+	UsageOpenAIChatKimi       = "openai-chat-kimi-billing"
+	UsageResponses            = "openai-responses"
+	QuotaNone                 = ""
+	QuotaMinimax              = "minimax"
 )
 
 // ProviderSpec is the strict runtime schema for standard providers layered on
 // a shared protocol engine. It deliberately describes data, not arbitrary
 // behavior; unusual OAuth, signing, discovery, and transports remain plugins.
 type ProviderSpec struct {
-	ID              ProviderID       `json:"id"`
-	Protocol        string           `json:"protocol"`
-	BaseURL         string           `json:"base_url"`
-	PlanType        string           `json:"plan_type"`
-	CredentialField string           `json:"credential_field"`
-	Auth            ProviderAuthSpec `json:"auth"`
-	Models          []ModelRouteSpec `json:"models"`
+	ID               ProviderID       `json:"id"`
+	Protocol         string           `json:"protocol"`
+	BaseURL          string           `json:"base_url"`
+	PlanType         string           `json:"plan_type"`
+	CredentialField  string           `json:"credential_field"`
+	Auth             ProviderAuthSpec `json:"auth"`
+	UsageProfiles    []string         `json:"usage_profiles,omitempty"`
+	QuotaProfile     string           `json:"quota_profile,omitempty"`
+	ModelPrefix      string           `json:"model_prefix,omitempty"`
+	StripModelPrefix bool             `json:"strip_model_prefix,omitempty"`
+	Models           []ModelRouteSpec `json:"models"`
 }
 
 type ProviderAuthSpec struct {
@@ -50,9 +62,9 @@ type ModelRouteSpec struct {
 
 // DeclarativeProvider is immutable after construction.
 type DeclarativeProvider struct {
-	spec    ProviderSpec
-	baseURL *url.URL
-	usage   func(map[string]any) *RequestUsage
+	spec          ProviderSpec
+	baseURL       *url.URL
+	usageProfiles []func(map[string]any) *RequestUsage
 }
 
 func ParseProviderSpec(data []byte) (ProviderSpec, error) {
@@ -82,8 +94,31 @@ func ValidateProviderSpec(spec ProviderSpec) error {
 	if !isSafeProviderDirectoryName(id) {
 		return fmt.Errorf("provider spec id %q must be a lowercase directory-safe slug", spec.ID)
 	}
-	if spec.Protocol != ProtocolAnthropicMessages {
+	switch spec.Protocol {
+	case ProtocolAnthropicMessages, ProtocolOpenAIChat:
+	default:
 		return fmt.Errorf("provider %s: unsupported protocol %q", spec.ID, spec.Protocol)
+	}
+	profiles := spec.UsageProfiles
+	if len(profiles) == 0 {
+		profiles = []string{spec.Protocol}
+	}
+	for _, profile := range profiles {
+		switch profile {
+		case UsageAnthropicMessages, UsageOpenAIChat, UsageOpenAIChatKimi, UsageResponses:
+		default:
+			return fmt.Errorf("provider %s: unsupported usage profile %q", spec.ID, profile)
+		}
+	}
+	if spec.QuotaProfile != QuotaNone && spec.QuotaProfile != QuotaMinimax {
+		return fmt.Errorf("provider %s: unsupported quota profile %q", spec.ID, spec.QuotaProfile)
+	}
+	if spec.ModelPrefix != "" {
+		if strings.TrimSpace(spec.ModelPrefix) != spec.ModelPrefix || strings.ContainsAny(spec.ModelPrefix, " \t\r\n") {
+			return fmt.Errorf("provider %s: model_prefix must be non-whitespace", spec.ID)
+		}
+	} else if spec.StripModelPrefix {
+		return fmt.Errorf("provider %s: strip_model_prefix requires model_prefix", spec.ID)
 	}
 	base, err := url.Parse(spec.BaseURL)
 	if err != nil || base.Scheme == "" || base.Host == "" || (base.Scheme != "https" && base.Scheme != "http") {
@@ -131,15 +166,28 @@ func NewDeclarativeProvider(spec ProviderSpec) (*DeclarativeProvider, error) {
 	}
 	base, _ := url.Parse(spec.BaseURL)
 	provider := &DeclarativeProvider{spec: cloneProviderSpec(spec), baseURL: base}
-	switch spec.Protocol {
-	case ProtocolAnthropicMessages:
-		provider.usage = anthropicMessagesEngine.ParseUsage
+	profiles := spec.UsageProfiles
+	if len(profiles) == 0 {
+		profiles = []string{spec.Protocol}
+	}
+	for _, profile := range profiles {
+		switch profile {
+		case UsageAnthropicMessages:
+			provider.usageProfiles = append(provider.usageProfiles, anthropicMessagesEngine.ParseUsage)
+		case UsageOpenAIChat:
+			provider.usageProfiles = append(provider.usageProfiles, openAIChatEngine.ParseUsage)
+		case UsageOpenAIChatKimi:
+			provider.usageProfiles = append(provider.usageProfiles, openAIChatLegacyKimiEngine.ParseUsage)
+		case UsageResponses:
+			provider.usageProfiles = append(provider.usageProfiles, openAIResponsesEngine.ParseUsage)
+		}
 	}
 	return provider, nil
 }
 
 func cloneProviderSpec(spec ProviderSpec) ProviderSpec {
 	clone := spec
+	clone.UsageProfiles = append([]string(nil), spec.UsageProfiles...)
 	clone.Models = append([]ModelRouteSpec(nil), spec.Models...)
 	for index := range clone.Models {
 		clone.Models[index].Aliases = append([]string(nil), spec.Models[index].Aliases...)
@@ -184,19 +232,43 @@ func (p *DeclarativeProvider) RefreshToken(context.Context, *ProviderConnection,
 	return nil
 }
 func (p *DeclarativeProvider) ParseUsage(object map[string]any) *RequestUsage {
-	if p != nil && p.usage != nil {
-		return p.usage(object)
+	if p != nil {
+		for _, parse := range p.usageProfiles {
+			if usage := parse(object); usage != nil {
+				return usage
+			}
+		}
+		if len(p.usageProfiles) > 0 {
+			return nil
+		}
 	}
 	// Preserve source compatibility for zero-value aliases of the first
 	// Anthropic declarative providers. Runtime providers are always validated.
 	return anthropicMessagesEngine.ParseUsage(object)
 }
-func (p *DeclarativeProvider) ParseUsageHeaders(*ProviderConnection, http.Header) {}
-func (p *DeclarativeProvider) UpstreamURL(string) *url.URL                        { return p.baseURL }
-func (p *DeclarativeProvider) MatchesPath(string) bool                            { return false }
-func (p *DeclarativeProvider) NormalizePath(path string) string                   { return path }
+func (p *DeclarativeProvider) ParseUsageHeaders(connection *ProviderConnection, headers http.Header) {
+	if p != nil && p.spec.QuotaProfile == QuotaMinimax {
+		applyMinimaxRateLimits(connection, headers, time.Now())
+	}
+}
+func (p *DeclarativeProvider) UpstreamURL(string) *url.URL      { return p.baseURL }
+func (p *DeclarativeProvider) MatchesPath(string) bool          { return false }
+func (p *DeclarativeProvider) NormalizePath(path string) string { return path }
 func (p *DeclarativeProvider) DetectsSSE(path, contentType string) bool {
 	return eventStreamDetector.Detect(path, contentType)
+}
+
+func modelRouteSpecsForProvider(providerID ProviderID) []ModelRouteSpec {
+	models := modelsForProvider(providerID)
+	specs := make([]ModelRouteSpec, 0, len(models))
+	for _, model := range models {
+		specs = append(specs, ModelRouteSpec{
+			ID: model.ID, DisplayName: model.DisplayName, Description: model.Description,
+			Aliases: append([]string(nil), model.Aliases...), ContextWindow: model.ContextWindow,
+			MaxOutputTokens: model.MaxTokens, Reasoning: model.Reasoning, Input: append([]string(nil), model.Input...),
+		})
+	}
+	return specs
 }
 
 func isSafeProviderDirectoryName(value string) bool {
@@ -211,8 +283,22 @@ func isSafeProviderDirectoryName(value string) bool {
 	return true
 }
 
+func (p *DeclarativeProvider) TargetFormat() RequestFormat {
+	if p != nil && p.spec.Protocol == ProtocolOpenAIChat {
+		return FormatOpenAI
+	}
+	return FormatClaude
+}
+
 func (p *DeclarativeProvider) MatchModel(name string) (ModelRouteSpec, bool) {
 	name = strings.TrimSpace(name)
+	if p.spec.ModelPrefix != "" && strings.HasPrefix(name, p.spec.ModelPrefix) {
+		canonical := name
+		if p.spec.StripModelPrefix {
+			canonical = strings.TrimPrefix(name, p.spec.ModelPrefix)
+		}
+		return ModelRouteSpec{ID: canonical}, true
+	}
 	for _, model := range p.spec.Models {
 		if strings.EqualFold(model.ID, name) {
 			return model, true

@@ -1,0 +1,23 @@
+{
+  "id": "nvidia",
+  "protocol": "openai-chat",
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "plan_type": "nvidia",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "model_prefix": "nvidia/",
+  "strip_model_prefix": true,
+  "models": [
+    {
+      "id": "nvidia/meta/llama-3.3-70b-instruct",
+      "display_name": "NVIDIA: Llama 3.3 70B Instruct",
+      "context_window": 128000,
+      "max_output_tokens": 8192,
+      "input": [
+        "text"
+      ]
+    }
+  ]
+}

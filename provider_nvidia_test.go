@@ -79,7 +79,7 @@ func TestNvidiaProviderTargetsOpenAIFormat(t *testing.T) {
 func TestNvidiaParseUsageReadsOpenAIShape(t *testing.T) {
 	t.Parallel()
 
-	p := &NvidiaProvider{}
+	p := NewNvidiaProvider(nil)
 
 	// Non-streaming OpenAI Chat Completions response shape.
 	ru := p.ParseUsage(map[string]any{

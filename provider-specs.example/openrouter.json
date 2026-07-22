@@ -1,0 +1,25 @@
+{
+  "id": "openrouter",
+  "protocol": "anthropic-messages",
+  "base_url": "https://openrouter.ai/api",
+  "plan_type": "openrouter",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "model_prefix": "openrouter/",
+  "strip_model_prefix": true,
+  "models": [
+    {
+      "id": "openrouter/anthropic/claude-haiku-4.5",
+      "display_name": "OpenRouter: Claude Haiku 4.5",
+      "context_window": 200000,
+      "max_output_tokens": 64000,
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ]
+    }
+  ]
+}

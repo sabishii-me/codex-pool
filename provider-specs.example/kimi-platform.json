@@ -1,0 +1,32 @@
+{
+  "id": "kimi-platform",
+  "protocol": "anthropic-messages",
+  "base_url": "https://api.moonshot.ai/anthropic",
+  "plan_type": "kimi-platform",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "usage_profiles": [
+    "anthropic-messages",
+    "openai-chat-kimi-billing"
+  ],
+  "model_prefix": "kimi-platform/",
+  "strip_model_prefix": true,
+  "models": [
+    {
+      "id": "kimi-k3",
+      "display_name": "Kimi K3",
+      "aliases": [
+        "kimi-k3[1m]"
+      ],
+      "context_window": 1048576,
+      "max_output_tokens": 131072,
+      "reasoning": true,
+      "input": [
+        "text",
+        "image"
+      ]
+    }
+  ]
+}

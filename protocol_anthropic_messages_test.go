@@ -9,12 +9,12 @@ func TestAnthropicMessagesEngineNormalizesCompatibleProviders(t *testing.T) {
 		"claude":        &ClaudeProvider{},
 		"deepseek":      &DeepSeekProvider{},
 		"zai":           &ZAIProvider{},
-		"minimax":       &MinimaxProvider{},
-		"openrouter":    &OpenRouterProvider{},
-		"qwen":          &QwenProvider{},
+		"minimax":       NewMinimaxProvider(nil),
+		"openrouter":    NewOpenRouterProvider(nil),
+		"qwen":          NewQwenProvider(nil),
 		"kimi":          &KimiProvider{},
-		"kimi-platform": &KimiPlatformProvider{},
-		"xiaomi":        &XiaomiProvider{},
+		"kimi-platform": NewKimiPlatformProvider(nil),
+		"xiaomi":        NewXiaomiProvider(nil),
 	}
 	fixtures := []map[string]any{
 		{
@@ -54,8 +54,8 @@ func TestMixedAnthropicProvidersRetainTopLevelUsageFallback(t *testing.T) {
 		usage    map[string]any
 	}{
 		"kimi":          {provider: &KimiProvider{}, usage: map[string]any{"prompt_tokens": 40, "completion_tokens": 10, "cached_tokens": 5}},
-		"kimi-platform": {provider: &KimiPlatformProvider{}, usage: map[string]any{"prompt_tokens": 40, "completion_tokens": 10, "cached_tokens": 5}},
-		"xiaomi":        {provider: &XiaomiProvider{}, usage: map[string]any{"input_tokens": 40, "output_tokens": 10, "cache_read_input_tokens": 5}},
+		"kimi-platform": {provider: NewKimiPlatformProvider(nil), usage: map[string]any{"prompt_tokens": 40, "completion_tokens": 10, "cached_tokens": 5}},
+		"xiaomi":        {provider: NewXiaomiProvider(nil), usage: map[string]any{"input_tokens": 40, "output_tokens": 10, "cache_read_input_tokens": 5}},
 	}
 	for name, fixture := range fixtures {
 		usage := fixture.provider.ParseUsage(map[string]any{"model": "fallback-model", "usage": fixture.usage})

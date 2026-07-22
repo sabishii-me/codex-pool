@@ -1,0 +1,29 @@
+{
+  "id": "xiaomi",
+  "protocol": "anthropic-messages",
+  "base_url": "https://token-plan-sgp.xiaomimimo.com/anthropic",
+  "plan_type": "xiaomi",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "usage_profiles": [
+    "anthropic-messages",
+    "openai-responses"
+  ],
+  "models": [
+    {
+      "id": "mimo-v2.5-pro",
+      "display_name": "MiMo-V2.5-Pro",
+      "aliases": [
+        "mimo-v2.5-pro[1m]"
+      ],
+      "context_window": 1000000,
+      "max_output_tokens": 131072,
+      "reasoning": true,
+      "input": [
+        "text"
+      ]
+    }
+  ]
+}

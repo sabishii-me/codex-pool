@@ -58,7 +58,22 @@ func detectRequestFormat(path string) RequestFormat {
 	}
 }
 
-// providerTargetFormat returns the format the provider expects.
+type providerTargetFormatter interface {
+	TargetFormat() RequestFormat
+}
+
+func targetFormatForProvider(provider Provider) RequestFormat {
+	if formatter, ok := provider.(providerTargetFormatter); ok {
+		return formatter.TargetFormat()
+	}
+	if provider == nil {
+		return FormatUnknown
+	}
+	return providerTargetFormat(provider.Type())
+}
+
+// providerTargetFormat is retained for source compatibility and code-backed
+// providers that have not declared a target-format capability.
 func providerTargetFormat(accountType AccountType) RequestFormat {
 	switch accountType {
 	case AccountTypeClaude:

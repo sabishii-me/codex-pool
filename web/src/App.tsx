@@ -75,7 +75,9 @@ import type {
 
 type View = "pulse" | "insights" | "usage" | "accounts" | "models" | "setup" | "profile";
 
-const PROVIDERS: Record<Provider, { label: string; color: string; dither: DitherColor; glyph: string }> = {
+type ProviderPresentation = { label: string; color: string; dither: DitherColor; glyph: string };
+
+const PROVIDERS: Record<string, ProviderPresentation> = {
   codex: { label: "Codex", color: "#39e75f", dither: "green", glyph: "◎" },
   claude: { label: "Claude", color: "#a678ff", dither: "purple", glyph: "◉" },
   gemini: { label: "Gemini", color: "#27d8d1", dither: "cyan", glyph: "✦" },
@@ -91,6 +93,13 @@ const PROVIDERS: Record<Provider, { label: string; color: string; dither: Dither
   openrouter: { label: "OpenRouter", color: "#8b8b8b", dither: "grey", glyph: "◒" },
   nvidia: { label: "NVIDIA", color: "#76b900", dither: "green", glyph: "◓" },
 };
+
+export function providerPresentation(provider: string): ProviderPresentation {
+  const known = PROVIDERS[provider];
+  if (known) return known;
+  const label = provider.split("-").filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ") || "Unknown";
+  return { label, color: "#8b8b8b", dither: "grey", glyph: "◇" };
+}
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -496,8 +505,8 @@ function Pulse({ stats, signal, onAccounts }: { stats: PoolStats | null; signal:
         <button className="intervention-strip" onClick={onAccounts}>
           <span>INTERVENTION QUEUE</span>
           {intervention.slice(0, 5).map((account) => (
-            <b key={account.id} style={{ color: PROVIDERS[account.type].color }}>
-              {PROVIDERS[account.type].label.toUpperCase()} {account.status === "dead" ? "COOKED" : account.secondary_window_used_pct >= 80 ? "LEANING HARD" : account.status.toUpperCase()}
+            <b key={account.id} style={{ color: providerPresentation(account.type).color }}>
+              {providerPresentation(account.type).label.toUpperCase()} {account.status === "dead" ? "COOKED" : account.secondary_window_used_pct >= 80 ? "LEANING HARD" : account.status.toUpperCase()}
             </b>
           ))}
           <i>OPEN ACCOUNTS →</i>
@@ -569,7 +578,7 @@ function BurnChart({ hourly }: { hourly: HourlyUsage[] }) {
   const data = aggregateHourly(hourly);
   const providers = Object.keys(PROVIDERS).filter((provider) => data.some((row) => Number(row[provider]) > 0)) as Provider[];
   if (data.length < 2 || providers.length === 0) return <EmptyChart label="BURN TRACE ACQUIRING" />;
-  const config = Object.fromEntries(providers.map((provider) => [provider, { label: PROVIDERS[provider].label, color: PROVIDERS[provider].dither }])) as ChartConfig;
+  const config = Object.fromEntries(providers.map((provider) => [provider, { label: providerPresentation(provider).label, color: providerPresentation(provider).dither }])) as ChartConfig;
   return (
     <div className="chart-stage large">
       <LineChart data={data} config={config} margins={{ left: 48, bottom: 28 }} bloom="low" bloomOnHover>
@@ -612,13 +621,13 @@ function ProviderLanes({ accounts }: { accounts: ProviderConnectionStats[] }) {
         const spark = rows.map(accountThroughput);
         const status = rows.some((row) => row.status === "dead") ? "cooked" : used > 80 ? "leaning hard" : roi > 2 ? "carrying" : roi < 0.5 && spend ? "paid for" : "live";
         return (
-          <div className="provider-lane" key={provider} style={{ "--provider": PROVIDERS[provider].color } as CSSProperties}>
-            <div className="provider-name"><span>{PROVIDERS[provider].glyph}</span><b>{PROVIDERS[provider].label}</b><small>{rows.length} acct</small></div>
+          <div className="provider-lane" key={provider} style={{ "--provider": providerPresentation(provider).color } as CSSProperties}>
+            <div className="provider-name"><span>{providerPresentation(provider).glyph}</span><b>{providerPresentation(provider).label}</b><small>{rows.length} acct</small></div>
             <div className="quota-field"><i style={{ width: `${Math.min(100, used)}%` }} /><span>{used ? `${used.toFixed(0)}% week` : "window n/a"}</span></div>
             <div className="lane-stat"><span>API VALUE</span><b>{money.format(value)}</b></div>
             <div className="lane-stat"><span>SPEND</span><b>{money.format(spend)}</b></div>
             <div className="lane-stat"><span>ROI</span><b>{roi ? `${roi.toFixed(2)}×` : "—"}</b></div>
-            <div className="lane-spark"><Sparkline data={spark.length > 1 ? spark : [0, ...spark]} color={PROVIDERS[provider].dither} /></div>
+            <div className="lane-spark"><Sparkline data={spark.length > 1 ? spark : [0, ...spark]} color={providerPresentation(provider).dither} /></div>
             <div className="lane-status">{status}</div>
           </div>
         );
@@ -680,7 +689,7 @@ function OriginDrain({ rows }: { rows: OriginWeeklyUsage[] }) {
           <span>{poolTotal ? `${((origin.total / poolTotal) * 100).toFixed(1)}%` : "0%"}</span>
           <div className="footprint" aria-label="Provider footprint">
             {Object.entries(origin.providers).map(([provider, value]) => (
-              <i key={provider} title={`${PROVIDERS[provider as Provider].label}: ${formatTokens(value ?? 0)}`} style={{ background: PROVIDERS[provider as Provider].color, flex: value }} />
+              <i key={provider} title={`${providerPresentation(provider as Provider).label}: ${formatTokens(value ?? 0)}`} style={{ background: providerPresentation(provider as Provider).color, flex: value }} />
             ))}
           </div>
         </div>
@@ -780,8 +789,8 @@ function CapacityForecastTable({ forecasts }: { forecasts: CapacityForecast[] })
       {forecasts.map((forecast) => {
         const state = forecast.minimumToAdd > 0 ? "gap" : forecast.bufferedToAdd > 0 ? "buffer" : "covered";
         return (
-          <div className={classNames("capacity-row", state)} role="row" key={forecast.provider} style={{ "--provider": PROVIDERS[forecast.provider].color } as CSSProperties}>
-            <span className="capacity-provider"><i>{PROVIDERS[forecast.provider].glyph}</i><b>{PROVIDERS[forecast.provider].label}</b><small>{forecast.measuredAccounts} measured</small></span>
+          <div className={classNames("capacity-row", state)} role="row" key={forecast.provider} style={{ "--provider": providerPresentation(forecast.provider).color } as CSSProperties}>
+            <span className="capacity-provider"><i>{providerPresentation(forecast.provider).glyph}</i><b>{providerPresentation(forecast.provider).label}</b><small>{forecast.measuredAccounts} measured</small></span>
             <span><b>{forecast.loadEquivalents.toFixed(1)}</b><small>ACCT-EQ</small></span>
             <span><b>{forecast.activeAccounts}</b><small>ACTIVE</small></span>
             <span><b>{forecast.baselineAccounts}</b><small>BASELINE</small></span>
@@ -798,7 +807,7 @@ type InsightMode = "overview" | "capacity" | "flow" | "demand";
 
 function providerDisplay(provider: Provider | "unknown") {
   return provider in PROVIDERS
-    ? PROVIDERS[provider as Provider]
+    ? providerPresentation(provider as Provider)
     : { label: "Unknown", color: "#9c967f", dither: "grey" as DitherColor, glyph: "·" };
 }
 
@@ -841,7 +850,7 @@ function CapacityHistoryChart({ rows }: { rows: QuotaCapacityPoint[] }) {
   if (data.length === 0) return <EmptyChart label="TOKEN CAPACITY MODEL ACQUIRING // QUOTA TICKS REQUIRED" />;
   const config = Object.fromEntries(series.map((key) => {
     const [provider, plan] = key.split("|") as [Provider, string];
-    return [key, { label: `${PROVIDERS[provider].label} ${plan}`, color: PROVIDERS[provider].dither }];
+    return [key, { label: `${providerPresentation(provider).label} ${plan}`, color: providerPresentation(provider).dither }];
   })) as ChartConfig;
   return (
     <div className="chart-stage large">
@@ -952,7 +961,7 @@ function ScenarioPlanner({ forecasts, onAccounts }: { forecasts: CapacityForecas
         <div className={classNames("scenario-outcome", totalAdds > 0 && "risk")}><span>POOL ACTION</span><strong>{totalAdds ? `ADD ${totalAdds}` : "CAPACITY HOLDS"}</strong><button onClick={onAccounts}>OPEN ACCOUNTS →</button></div>
       </div>
       <div className="scenario-rows">
-        {rows.map((row) => <div key={row.provider} style={{ "--provider": PROVIDERS[row.provider].color } as CSSProperties}><b>{PROVIDERS[row.provider].glyph} {PROVIDERS[row.provider].label}</b><span>{row.scenarioLoad.toFixed(1)} acct-eq demand</span><span>{row.activeAccounts} active</span><strong>{row.add ? `+${row.add} REQUIRED` : `${row.required} REQUIRED`}</strong></div>)}
+        {rows.map((row) => <div key={row.provider} style={{ "--provider": providerPresentation(row.provider).color } as CSSProperties}><b>{providerPresentation(row.provider).glyph} {providerPresentation(row.provider).label}</b><span>{row.scenarioLoad.toFixed(1)} acct-eq demand</span><span>{row.activeAccounts} active</span><strong>{row.add ? `+${row.add} REQUIRED` : `${row.required} REQUIRED`}</strong></div>)}
       </div>
       <footer>SCENARIO SCALES THE CURRENT OBSERVED QUOTA DRAIN; IT DOES NOT ASSUME TOKENS ARE INTERCHANGEABLE BETWEEN PROVIDERS.</footer>
     </div>
@@ -1015,7 +1024,7 @@ function AccountFlowTable({ rows }: { rows: AccountFlow[] }) {
     <div className="flow-table">
       <div className="flow-row flow-head"><span>ACCOUNT</span><span>USED</span><span>PROJECTED AT RESET</span><span>UNUSED</span><span>ROUTING CALL</span></div>
       {rows.map((row) => {
-        const provider = PROVIDERS[row.provider];
+        const provider = providerPresentation(row.provider);
         const canReceiveShift = row.state === "stranded" && rows.some((candidate) => candidate.provider === row.provider && candidate.id !== row.id && (candidate.state === "exhausts" || candidate.state === "tight"));
         return <div className={`flow-row ${row.state}`} key={row.id} style={{ "--provider": provider.color } as CSSProperties}>
           <span><i>{provider.glyph}</i><b>{provider.label}</b><small>{row.id.slice(-7)}</small></span>
@@ -1057,8 +1066,8 @@ function FlowDashboard({ stats, signal, onAccounts }: { stats: PoolStats; signal
         <SignalPanel code="F.10" title="ACCOUNT FLOW // PROJECTED WEEK-END UTILIZATION"><AccountFlowTable rows={flows} /></SignalPanel>
         <SignalPanel code="F.11" title="ROUTING BALANCE // WITHIN PROVIDER">
           <div className="routing-calls">
-            {routingCalls.map((call) => <div className={call.score < 60 ? "risk" : ""} key={call.provider} style={{ "--provider": PROVIDERS[call.provider].color } as CSSProperties}>
-              <span><i>{PROVIDERS[call.provider].glyph}</i><b>{PROVIDERS[call.provider].label}</b><small>{call.score.toFixed(0)}/100 BALANCE</small></span>
+            {routingCalls.map((call) => <div className={call.score < 60 ? "risk" : ""} key={call.provider} style={{ "--provider": providerPresentation(call.provider).color } as CSSProperties}>
+              <span><i>{providerPresentation(call.provider).glyph}</i><b>{providerPresentation(call.provider).label}</b><small>{call.score.toFixed(0)}/100 BALANCE</small></span>
               <p>{call.hot && call.cold && call.hot.id !== call.cold.id && call.spread > 20 ? <>Shift new traffic from <b>{call.hot.id.slice(-5)}</b> toward <b>{call.cold.id.slice(-5)}</b>; projected utilization differs by {call.spread.toFixed(0)} points.</> : <>Current accounts are draining within a reasonable range.</>}</p>
             </div>)}
           </div>
@@ -1067,7 +1076,7 @@ function FlowDashboard({ stats, signal, onAccounts }: { stats: PoolStats; signal
       <section className="flow-lower-grid">
         <SignalPanel code="F.20" title="STRANDED CAPACITY // LIKELY TO RESET UNUSED">
           <div className="stranded-list">
-            {flows.filter((row) => row.strandedPct >= 20).slice(0, 10).map((row) => <div key={row.id}><span style={{ color: PROVIDERS[row.provider].color }}>{PROVIDERS[row.provider].glyph}</span><b>{PROVIDERS[row.provider].label} {row.id.slice(-5)}</b><div><i style={{ width: `${row.strandedPct}%` }} /></div><strong>{row.strandedPct.toFixed(0)}% UNUSED</strong></div>)}
+            {flows.filter((row) => row.strandedPct >= 20).slice(0, 10).map((row) => <div key={row.id}><span style={{ color: providerPresentation(row.provider).color }}>{providerPresentation(row.provider).glyph}</span><b>{providerPresentation(row.provider).label} {row.id.slice(-5)}</b><div><i style={{ width: `${row.strandedPct}%` }} /></div><strong>{row.strandedPct.toFixed(0)}% UNUSED</strong></div>)}
             {flows.every((row) => row.strandedPct < 20) && <div className="empty-signal">NO MATERIAL STRANDED WEEKLY CAPACITY</div>}
           </div>
         </SignalPanel>
@@ -1202,7 +1211,7 @@ function InsightsOverview({ stats, signal, onAccounts }: { stats: PoolStats; sig
         <span>PRIMARY ACTION</span>
         {primaryRisk ? (
           <>
-            <strong>{primaryRisk.minimumToAdd > 0 ? `ADD ${primaryRisk.minimumToAdd} ${PROVIDERS[primaryRisk.provider].label.toUpperCase()} ACCOUNT${primaryRisk.minimumToAdd === 1 ? "" : "S"} MINIMUM` : primaryRisk.bufferedToAdd > 0 ? `ADD ${primaryRisk.bufferedToAdd} ${PROVIDERS[primaryRisk.provider].label.toUpperCase()} FOR RESERVE` : "CURRENT CAPACITY HOLDS"}</strong>
+            <strong>{primaryRisk.minimumToAdd > 0 ? `ADD ${primaryRisk.minimumToAdd} ${providerPresentation(primaryRisk.provider).label.toUpperCase()} ACCOUNT${primaryRisk.minimumToAdd === 1 ? "" : "S"} MINIMUM` : primaryRisk.bufferedToAdd > 0 ? `ADD ${primaryRisk.bufferedToAdd} ${providerPresentation(primaryRisk.provider).label.toUpperCase()} FOR RESERVE` : "CURRENT CAPACITY HOLDS"}</strong>
             <p>Observed drain equals {primaryRisk.loadEquivalents.toFixed(1)} current-plan account equivalents against {primaryRisk.activeAccounts} active. Target {primaryRisk.bufferedAccounts} for a 20% operating buffer.</p>
           </>
         ) : <><strong>CAPACITY MODEL ACQUIRING</strong><p>No provider is reporting enough weekly-window history yet.</p></>}
@@ -1218,13 +1227,13 @@ function InsightsOverview({ stats, signal, onAccounts }: { stats: PoolStats; sig
         <header><span>I.20</span><h2>OPERATING CALLS</h2><small>{sampleDays.toFixed(1)} ACCOUNT-DAYS OBSERVED</small></header>
         {forecasts.map((forecast) => (
           <div className="insight-action-row" key={forecast.provider}>
-            <span style={{ color: PROVIDERS[forecast.provider].color }}>{PROVIDERS[forecast.provider].glyph}</span>
-            <b>{PROVIDERS[forecast.provider].label.toUpperCase()}</b>
+            <span style={{ color: providerPresentation(forecast.provider).color }}>{providerPresentation(forecast.provider).glyph}</span>
+            <b>{providerPresentation(forecast.provider).label.toUpperCase()}</b>
             <p>{forecast.minimumToAdd > 0 ? `Add ${forecast.minimumToAdd} now to make the current weekly drain sustainable; add ${forecast.bufferedToAdd} total for the 20% reserve.` : forecast.bufferedToAdd > 0 ? `Baseline is covered. Add ${forecast.bufferedToAdd} for a 20% reserve against demand growth and uneven routing.` : "Current supply covers observed demand with the 20% reserve intact."}</p>
             <strong>{forecast.headroomPct >= 0 ? `${forecast.headroomPct.toFixed(0)}% HEADROOM` : `${Math.abs(forecast.headroomPct).toFixed(0)}% OVER CAPACITY`}</strong>
           </div>
         ))}
-        {unmodeled.length > 0 && <footer>CAPACITY UNMODELED // {unmodeled.map((provider) => PROVIDERS[provider].label.toUpperCase()).join(" · ")} DO NOT REPORT A WEEKLY LIMIT. THEIR TOKENS ARE INCLUDED IN DEMAND TRENDS, NOT ACCOUNT RECOMMENDATIONS.</footer>}
+        {unmodeled.length > 0 && <footer>CAPACITY UNMODELED // {unmodeled.map((provider) => providerPresentation(provider).label.toUpperCase()).join(" · ")} DO NOT REPORT A WEEKLY LIMIT. THEIR TOKENS ARE INCLUDED IN DEMAND TRENDS, NOT ACCOUNT RECOMMENDATIONS.</footer>}
       </section>
 
       <section className="insight-method">
@@ -1273,7 +1282,7 @@ function connectionSubject(account: ProviderConnectionStats, connection?: Operat
 }
 
 function connectionDisplayName(account: ProviderConnectionStats, connection?: OperatorProviderConnectionV2 | null) {
-  return connection?.identity.display_name || account.display_name || `${PROVIDERS[account.type].label} connection`;
+  return connection?.identity.display_name || account.display_name || `${providerPresentation(account.type).label} connection`;
 }
 
 function Accounts({ stats, providerConnections, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
@@ -1355,8 +1364,8 @@ function Accounts({ stats, providerConnections, isAdmin, mfaStatus, adminElevate
             const connection = providerConnections.find((candidate) => candidate.public_id === account.id);
             const rowID = connection?.id ?? account.id;
             return (
-              <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={connectionSubject(account, connection) || connectionDisplayName(account, connection)}>{connectionDisplayName(account, connection)}</span></small></span>
+              <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": providerPresentation(account.type).color } as CSSProperties}>
+                <span className="account-identity"><i>{providerPresentation(account.type).glyph}</i><b>{providerPresentation(account.type).label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={connectionSubject(account, connection) || connectionDisplayName(account, connection)}>{connectionDisplayName(account, connection)}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1368,7 +1377,7 @@ function Accounts({ stats, providerConnections, isAdmin, mfaStatus, adminElevate
                 <span>{money.format(account.api_cost_estimate)}</span>
                 <span>{money.format(account.subscription_spend)}</span>
                 <strong>{account.subscription_spend ? `${account.roi.toFixed(2)}×` : "—"}</strong>
-                <span className="account-spark"><Sparkline data={[0, account.total_input_tokens, accountThroughput(account), account.total_output_tokens]} color={PROVIDERS[account.type].dither} /></span>
+                <span className="account-spark"><Sparkline data={[0, account.total_input_tokens, accountThroughput(account), account.total_output_tokens]} color={providerPresentation(account.type).dither} /></span>
               </button>
             );
           })}
@@ -1380,7 +1389,7 @@ function Accounts({ stats, providerConnections, isAdmin, mfaStatus, adminElevate
               <>
                 <span className="inspector-code">ACCOUNT // SIGNAL VIEW</span>
                 <h2>{connectionDisplayName(selectedAccount, selectedConnection)}</h2>
-                <div className="inspector-provider" style={{ color: PROVIDERS[selectedAccount.type].color }}>{PROVIDERS[selectedAccount.type].label.toUpperCase()} / {selectedAccount.plan_type}</div>
+                <div className="inspector-provider" style={{ color: providerPresentation(selectedAccount.type).color }}>{providerPresentation(selectedAccount.type).label.toUpperCase()} / {selectedAccount.plan_type}</div>
                 {connectionEmail(selectedAccount, selectedConnection) && <div className="account-admission">EMAIL // {connectionEmail(selectedAccount, selectedConnection)}</div>}
                 {connectionSubject(selectedAccount, selectedConnection) && <div className="account-admission">EXTERNAL SUBJECT // {connectionSubject(selectedAccount, selectedConnection)}</div>}
                 <div className="account-admission">CONNECTION HASH // {selectedConnection?.id || selectedAccount.id}</div>
@@ -1812,7 +1821,7 @@ function Models({ models }: { models: ModelDescriptor[] }) {
 				<label><span>SEARCH</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="model name or alias" /></label>
 				<div className="model-provider-filter" aria-label="Filter by provider">
 					<button className={provider === "all" ? "active" : ""} onClick={() => setProvider("all")}>ALL</button>
-					{providers.map((id) => <button key={id} className={provider === id ? "active" : ""} onClick={() => setProvider(id)}>{PROVIDERS[id].label}</button>)}
+					{providers.map((id) => <button key={id} className={provider === id ? "active" : ""} onClick={() => setProvider(id)}>{providerPresentation(id).label}</button>)}
 				</div>
 				<span>{filtered.length} MATCHES</span>
 			</div>
@@ -1821,9 +1830,9 @@ function Models({ models }: { models: ModelDescriptor[] }) {
 				{filtered.map((model) => {
 					const reset = model.next_reset_at ? new Date(model.next_reset_at) : null;
 					const hasReset = Boolean(reset && !Number.isNaN(reset.valueOf()) && reset.getUTCFullYear() > 2000);
-					return <div className="model-row" role="row" key={`${model.provider}:${model.id}`} style={{ "--provider": PROVIDERS[model.provider].color } as CSSProperties}>
+					return <div className="model-row" role="row" key={`${model.provider}:${model.id}`} style={{ "--provider": providerPresentation(model.provider).color } as CSSProperties}>
 						<span className="model-route"><button onClick={() => copyID(model.id)}>{copied === model.id ? "COPIED" : model.id}</button><small>{model.name && model.name !== model.id ? model.name : "canonical"}{model.aliases?.length ? ` // ${model.aliases.join(" // ")}` : ""}</small></span>
-						<span className="model-provider">{PROVIDERS[model.provider].label}</span>
+						<span className="model-provider">{providerPresentation(model.provider).label}</span>
 						<span className={classNames("model-status", model.available_now ? "available" : "unavailable")}>{model.available_now ? "AVAILABLE" : hasReset && reset ? `RESET ${reset.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "UNAVAILABLE"}{model.stale ? " / STALE" : ""}</span>
 						<span>{(model.protocols?.length ? model.protocols : [model.protocol]).join(" / ")}</span>
 						<span>{model.contextWindow ? formatTokens(model.contextWindow) : "n/a"}</span>

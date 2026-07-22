@@ -1,121 +1,36 @@
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"path/filepath"
-	"strings"
-	"time"
-)
+import "net/url"
 
-// XiaomiProvider handles Xiaomi MiMo Token Plan accounts through the Anthropic-compatible API.
-type XiaomiProvider struct {
-	xiaomiBase *url.URL
+var xiaomiProviderSpec = ProviderSpec{
+	ID: AccountTypeXiaomi, Protocol: ProtocolAnthropicMessages,
+	BaseURL: "https://token-plan-sgp.xiaomimimo.com/anthropic", PlanType: "xiaomi", CredentialField: "api_key",
+	Auth:          ProviderAuthSpec{Type: AuthBearer},
+	UsageProfiles: []string{UsageAnthropicMessages, UsageResponses},
 }
 
-// NewXiaomiProvider creates a new Xiaomi MiMo provider.
-func NewXiaomiProvider(xiaomiBase *url.URL) *XiaomiProvider {
-	return &XiaomiProvider{xiaomiBase: xiaomiBase}
-}
+type XiaomiProvider = DeclarativeProvider
 
-func (p *XiaomiProvider) Type() AccountType {
-	return AccountTypeXiaomi
-}
-
-type XiaomiAuthJSON struct {
-	APIKey   string `json:"api_key"`
-	Dead     bool   `json:"dead"`
-	Disabled bool   `json:"disabled"`
-}
-
-func (p *XiaomiProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
-	var xj XiaomiAuthJSON
-	if err := json.Unmarshal(data, &xj); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+func NewXiaomiProvider(base *url.URL) *XiaomiProvider {
+	spec := xiaomiProviderSpec
+	spec.Models = modelRouteSpecsForProvider(AccountTypeXiaomi)
+	if base != nil {
+		spec.BaseURL = base.String()
 	}
-	if xj.APIKey == "" {
-		return nil, nil
+	provider, err := NewDeclarativeProvider(spec)
+	if err != nil {
+		panic(err)
 	}
-
-	acc := &ProviderConnection{
-		Type:        AccountTypeXiaomi,
-		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
-		File:        path,
-		AccessToken: xj.APIKey,
-		PlanType:    "xiaomi",
-		Dead:        xj.Dead,
-		Disabled:    xj.Disabled,
-	}
-	return acc, nil
-}
-
-func (p *XiaomiProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
-	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
-}
-
-func (p *XiaomiProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
-	return nil
-}
-
-func (p *XiaomiProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usage := anthropicMessagesEngine.ParseUsage(obj); usage != nil {
-		return usage
-	}
-	if usageMap, ok := obj["usage"].(map[string]any); ok {
-		ru := xiaomiUsageFromMap(usageMap)
-		if ru == nil {
-			return nil
-		}
-		if model, ok := obj["model"].(string); ok {
-			ru.Model = model
-		}
-		return ru
-	}
-
-	return nil
-}
-
-func xiaomiUsageFromMap(usageMap map[string]any) *RequestUsage {
-	ru := &RequestUsage{Timestamp: time.Now()}
-	ru.InputTokens = readInt64(usageMap, "input_tokens")
-	ru.OutputTokens = readInt64(usageMap, "output_tokens")
-	ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-	if ru.InputTokens == 0 && ru.OutputTokens == 0 {
-		return nil
-	}
-	ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens + ru.OutputTokens)
-	return ru
-}
-
-func (p *XiaomiProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
-}
-
-func (p *XiaomiProvider) UpstreamURL(path string) *url.URL {
-	return p.xiaomiBase
-}
-
-func (p *XiaomiProvider) MatchesPath(path string) bool {
-	return false
-}
-
-func (p *XiaomiProvider) NormalizePath(path string) string {
-	return path
-}
-
-func (p *XiaomiProvider) DetectsSSE(path string, contentType string) bool {
-	return eventStreamDetector.Detect(path, contentType)
+	return provider
 }
 
 func isXiaomiModel(model string) bool {
-	_, ok := modelForProvider(AccountTypeXiaomi, model)
+	_, ok := NewXiaomiProvider(nil).MatchModel(model)
 	return ok
 }
 
 func xiaomiCanonicalModel(model string) string {
-	if found, ok := modelForProvider(AccountTypeXiaomi, model); ok {
+	if found, ok := NewXiaomiProvider(nil).MatchModel(model); ok {
 		return found.ID
 	}
 	return model

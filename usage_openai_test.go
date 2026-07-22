@@ -21,7 +21,7 @@ func TestOpenAIChatUsageNormalizesNestedCacheAndReasoning(t *testing.T) {
 }
 
 func TestNvidiaUsageUsesSharedOpenAIChatSemantics(t *testing.T) {
-	provider := &NvidiaProvider{}
+	provider := NewNvidiaProvider(nil)
 	usage := provider.ParseUsage(map[string]any{
 		"model": "model", "usage": map[string]any{
 			"prompt_tokens": float64(100), "completion_tokens": float64(25),

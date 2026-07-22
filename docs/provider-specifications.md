@@ -81,6 +81,25 @@ Provider IDs must be lowercase directory-safe slugs containing only `a-z`, `0-9`
 Current protocol support:
 
 - `anthropic-messages`
+- `openai-chat`
+
+Optional usage profiles are evaluated in order until one recognizes an event:
+
+- `anthropic-messages`
+- `openai-chat`
+- `openai-chat-kimi-billing` — preserves Kimi's cache-inclusive historical billing
+- `openai-responses`
+
+When `usage_profiles` is omitted, it defaults to the selected `protocol`.
+
+Optional routing fields:
+
+- `model_prefix` matches arbitrary model names with the given prefix.
+- `strip_model_prefix` removes that prefix before upstream forwarding.
+
+Optional quota profiles:
+
+- `minimax` parses MiniMax request/token limit headers.
 
 Current authentication support:
 

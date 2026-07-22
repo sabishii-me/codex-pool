@@ -39,9 +39,9 @@ func TestOpenAIChatCompatibleProvidersDelegateWithDeclaredPolicy(t *testing.T) {
 		provider Provider
 		billable int64
 	}{
-		{name: "nvidia", provider: &NvidiaProvider{}, billable: 95},
+		{name: "nvidia", provider: NewNvidiaProvider(nil), billable: 95},
 		{name: "kimi", provider: &KimiProvider{}, billable: 125},
-		{name: "kimi-platform", provider: &KimiPlatformProvider{}, billable: 125},
+		{name: "kimi-platform", provider: NewKimiPlatformProvider(nil), billable: 125},
 	}
 	for _, tc := range cases {
 		usage := tc.provider.ParseUsage(fixture)

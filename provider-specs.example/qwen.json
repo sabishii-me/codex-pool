@@ -1,0 +1,27 @@
+{
+  "id": "qwen",
+  "protocol": "anthropic-messages",
+  "base_url": "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic",
+  "plan_type": "qwen",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "models": [
+    {
+      "id": "qwen3.6-plus",
+      "display_name": "Qwen3.6-Plus",
+      "aliases": [
+        "qwen",
+        "qwen-coder",
+        "qwen3-coder"
+      ],
+      "context_window": 1000000,
+      "max_output_tokens": 65536,
+      "reasoning": true,
+      "input": [
+        "text"
+      ]
+    }
+  ]
+}

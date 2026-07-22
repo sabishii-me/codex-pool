@@ -40,6 +40,7 @@ import {
   regenerateMFA,
   regenerateRecoveryCodes,
   reloadAccounts,
+  renameProviderConnection,
   startAccountOAuth,
 	  startAntigravityOAuth,
   verifyMFA,
@@ -1268,8 +1269,16 @@ function upstreamAccountID(account: AdminAccount | null | undefined) {
   return account.account_id || account.id_token_chatgpt_account_id || "";
 }
 
-function providerAccountEmail(account: AccountStats, adminAccount?: AdminAccount | null) {
-  return account.account_email || adminAccount?.email || "";
+function connectionEmail(account: AccountStats, adminAccount?: AdminAccount | null) {
+  return account.identity_attributes?.email || adminAccount?.identity_attributes?.email || account.account_email || adminAccount?.email || "";
+}
+
+function connectionSubject(account: AccountStats, adminAccount?: AdminAccount | null) {
+  return account.external_subject || adminAccount?.external_subject || account.upstream_account_id || upstreamAccountID(adminAccount) || "";
+}
+
+function connectionDisplayName(account: AccountStats, adminAccount?: AdminAccount | null) {
+  return account.display_name || adminAccount?.display_name || `${PROVIDERS[account.type].label} connection`;
 }
 
 function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onElevated, onAccountsChanged }: {
@@ -1313,6 +1322,24 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
     }
   };
 
+  const renameConnection = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedAdmin) return;
+    const form = new FormData(event.currentTarget);
+    const displayName = String(form.get("display_name") ?? "").trim();
+    if (!displayName) return;
+    setBusy(true);
+    try {
+      await renameProviderConnection(selectedAdmin.id, displayName);
+      setMessage(`Connection renamed to ${displayName}`);
+      await onAccountsChanged();
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : "Rename failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="signal-view accounts-view">
       <div className="view-title account-title">
@@ -1334,7 +1361,7 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             const rowID = adminMatch?.id ?? account.id;
             return (
               <button className={classNames("account-row", selected === rowID && "selected")} key={account.id} onClick={() => setSelected(rowID)} style={{ "--provider": PROVIDERS[account.type].color } as CSSProperties}>
-                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}>{providerAccountEmail(account, adminMatch) || account.upstream_account_id || upstreamAccountID(adminMatch) || account.id}</span></small></span>
+                <span className="account-identity"><i>{PROVIDERS[account.type].glyph}</i><b>{PROVIDERS[account.type].label}</b><small><em>{account.plan_type || "unknown plan"}</em><span title={connectionSubject(account, adminMatch) || connectionDisplayName(account, adminMatch)}>{connectionDisplayName(account, adminMatch)}</span></small></span>
                 <span className={`state ${account.status}`}>{account.status === "dead" ? "cooked" : account.status}</span>
                 <WeeklyPace account={account} />
                 <span className="account-windows">
@@ -1357,10 +1384,10 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
             {selectedAccount ? (
               <>
                 <span className="inspector-code">ACCOUNT // SIGNAL VIEW</span>
-                <h2>{providerAccountEmail(selectedAccount, selectedAdmin) || selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin) || selectedAccount.id}</h2>
+                <h2>{connectionDisplayName(selectedAccount, selectedAdmin)}</h2>
                 <div className="inspector-provider" style={{ color: PROVIDERS[selectedAccount.type].color }}>{PROVIDERS[selectedAccount.type].label.toUpperCase()} / {selectedAccount.plan_type}</div>
-                {providerAccountEmail(selectedAccount, selectedAdmin) && <div className="account-admission">ACCOUNT EMAIL // {providerAccountEmail(selectedAccount, selectedAdmin)}</div>}
-                {(selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin)) && <div className="account-admission">UPSTREAM ACCOUNT ID // {selectedAccount.upstream_account_id || upstreamAccountID(selectedAdmin)}</div>}
+                {connectionEmail(selectedAccount, selectedAdmin) && <div className="account-admission">EMAIL // {connectionEmail(selectedAccount, selectedAdmin)}</div>}
+                {connectionSubject(selectedAccount, selectedAdmin) && <div className="account-admission">EXTERNAL SUBJECT // {connectionSubject(selectedAccount, selectedAdmin)}</div>}
                 <div className="account-admission">CONNECTION HASH // {selectedAdmin?.id || selectedAccount.id}</div>
                 <div className="account-admission">IN POOL {formatAdmission(selectedAccount.account_added_at)} // SPEND {money.format(selectedAccount.subscription_spend)}</div>
                 <div className="inspector-windows" aria-label="Account usage reset windows">
@@ -1392,6 +1419,11 @@ function Accounts({ stats, adminAccounts, isAdmin, mfaStatus, adminElevated, onE
                       <Instrument label="PRIMARY" value={selectedAdmin.is_primary ? "YES" : "NO"} />
                     </div>
                     <pre className="score-trace">{selectedAdmin.score_tooltip || "NO SCORE TRACE"}</pre>
+                    <form className="connection-rename" onSubmit={renameConnection}>
+                      <label htmlFor="connection-display-name">DISPLAY NAME</label>
+                      <input id="connection-display-name" name="display_name" defaultValue={selectedAdmin.display_name || selectedAccount.display_name} maxLength={120} required />
+                      <button disabled={busy} type="submit">RENAME CONNECTION</button>
+                    </form>
                     <div className="operator-actions">
                       <button disabled={busy} className={action === (selectedAdmin.disabled ? "enable" : "disable") ? "confirm" : ""} onClick={() => perform(selectedAdmin.disabled ? "enable" : "disable")}>{action === (selectedAdmin.disabled ? "enable" : "disable") ? `CONFIRM ${selectedAdmin.disabled ? "ENABLE" : "DISABLE"}` : selectedAdmin.disabled ? "ENABLE ACCOUNT" : "DISABLE ACCOUNT"}</button>
                       <button disabled={busy || !selectedAdmin.dead} className={action === "resurrect" ? "confirm" : ""} onClick={() => perform("resurrect")}>{action === "resurrect" ? "CONFIRM RESURRECT" : "RESURRECT"}</button>

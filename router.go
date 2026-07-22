@@ -447,6 +447,21 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Provider connection rename: /admin/accounts/:id/identity
+	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") && strings.HasSuffix(r.URL.Path, "/identity") {
+		if !h.checkAdminAuth(w, r) {
+			return
+		}
+		if r.Method != http.MethodPatch {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		path := strings.TrimPrefix(r.URL.Path, "/admin/accounts/")
+		connectionID := strings.TrimSuffix(path, "/identity")
+		h.renameProviderConnection(w, r, connectionID)
+		return
+	}
+
 	// Account enable/disable: /admin/accounts/:id/{enable,disable}
 	if strings.HasPrefix(r.URL.Path, "/admin/accounts/") &&
 		(strings.HasSuffix(r.URL.Path, "/enable") || strings.HasSuffix(r.URL.Path, "/disable")) {

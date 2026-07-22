@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 func (h *proxyHandler) serveHealth(w http.ResponseWriter) {
@@ -23,34 +25,38 @@ func (h *proxyHandler) serveHealth(w http.ResponseWriter) {
 
 func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
 	type row struct {
-		ID                      string      `json:"id"`
-		PublicID                string      `json:"public_id"`
-		Type                    AccountType `json:"type"`
-		PlanType                string      `json:"plan_type,omitempty"`
-		AccountID               string      `json:"account_id,omitempty"`
-		IDTokenChatGPTAccountID string      `json:"id_token_chatgpt_account_id,omitempty"`
-		Email                   string      `json:"email,omitempty"`
-		Disabled                bool        `json:"disabled"`
-		Dead                    bool        `json:"dead"`
-		NeedsVerification       bool        `json:"needs_verification,omitempty"`
-		VerificationURL         string      `json:"verification_url,omitempty"`
-		HealthError             string      `json:"health_error,omitempty"`
-		CyberAccess             bool        `json:"cyber_access,omitempty"`
-		Inflight                int64       `json:"inflight"`
-		ExpiresAt               time.Time   `json:"expires_at,omitempty"`
-		LastRefresh             time.Time   `json:"last_refresh,omitempty"`
-		Penalty                 float64     `json:"penalty"`
-		Score                   float64     `json:"score"`
-		ScoreTooltip            string      `json:"score_tooltip,omitempty"`
-		IsPrimary               bool        `json:"is_primary"`
-		Usage                   any         `json:"usage"`
-		Totals                  any         `json:"totals"`
+		ID                      string            `json:"id"`
+		PublicID                string            `json:"public_id"`
+		Type                    AccountType       `json:"type"`
+		DisplayName             string            `json:"display_name"`
+		ExternalSubject         string            `json:"external_subject,omitempty"`
+		IdentityAttributes      map[string]string `json:"identity_attributes,omitempty"`
+		PlanType                string            `json:"plan_type,omitempty"`
+		AccountID               string            `json:"account_id,omitempty"`
+		IDTokenChatGPTAccountID string            `json:"id_token_chatgpt_account_id,omitempty"`
+		Email                   string            `json:"email,omitempty"`
+		Disabled                bool              `json:"disabled"`
+		Dead                    bool              `json:"dead"`
+		NeedsVerification       bool              `json:"needs_verification,omitempty"`
+		VerificationURL         string            `json:"verification_url,omitempty"`
+		HealthError             string            `json:"health_error,omitempty"`
+		CyberAccess             bool              `json:"cyber_access,omitempty"`
+		Inflight                int64             `json:"inflight"`
+		ExpiresAt               time.Time         `json:"expires_at,omitempty"`
+		LastRefresh             time.Time         `json:"last_refresh,omitempty"`
+		Penalty                 float64           `json:"penalty"`
+		Score                   float64           `json:"score"`
+		ScoreTooltip            string            `json:"score_tooltip,omitempty"`
+		IsPrimary               bool              `json:"is_primary"`
+		Usage                   any               `json:"usage"`
+		Totals                  any               `json:"totals"`
 	}
 	now := time.Now()
 	h.pool.mu.RLock()
 	out := make([]row, 0, len(h.pool.accounts))
 	for _, a := range h.pool.accounts {
 		a.mu.Lock()
+		identity := a.connectionIdentityLocked()
 		planType := a.PlanType
 		accountID := a.AccountID
 		idTokID := a.IDTokenChatGPTAccountID
@@ -75,6 +81,9 @@ func (h *proxyHandler) serveAccounts(w http.ResponseWriter) {
 			ID:                      a.ID,
 			PublicID:                hashAccountID(a.ID),
 			Type:                    a.Type,
+			DisplayName:             identity.DisplayName,
+			ExternalSubject:         identity.ExternalSubject,
+			IdentityAttributes:      identity.Attributes,
 			PlanType:                planType,
 			AccountID:               accountID,
 			IDTokenChatGPTAccountID: idTokID,
@@ -182,6 +191,50 @@ func preserveUsageSnapshots(current, loaded []*Account) {
 		account.ResetCreditsRetrievedAt = resetCreditsRetrievedAt
 		account.mu.Unlock()
 	}
+}
+
+func (h *proxyHandler) renameProviderConnection(w http.ResponseWriter, r *http.Request, connectionID string) {
+	var request struct {
+		DisplayName string `json:"display_name"`
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		respondJSONError(w, http.StatusBadRequest, "invalid identity request")
+		return
+	}
+	displayName := strings.TrimSpace(request.DisplayName)
+	if displayName == "" || utf8.RuneCountInString(displayName) > 120 || strings.IndexFunc(displayName, unicode.IsControl) >= 0 {
+		respondJSONError(w, http.StatusBadRequest, "display_name must contain 1-120 printable characters")
+		return
+	}
+	h.pool.mu.RLock()
+	var target *Account
+	for _, connection := range h.pool.accounts {
+		if connection.ID == connectionID {
+			target = connection
+			break
+		}
+	}
+	h.pool.mu.RUnlock()
+	if target == nil {
+		respondJSONError(w, http.StatusNotFound, "provider connection not found")
+		return
+	}
+	target.mu.Lock()
+	previousIdentity, previousLabel := target.Identity, target.Label
+	target.Identity.DisplayName = displayName
+	target.Label = displayName
+	target.mu.Unlock()
+	if err := saveAccount(target); err != nil {
+		target.mu.Lock()
+		target.Identity, target.Label = previousIdentity, previousLabel
+		target.mu.Unlock()
+		respondJSONError(w, http.StatusInternalServerError, "failed to persist provider connection identity")
+		return
+	}
+	respondJSON(w, map[string]any{
+		"status": "ok", "connection_id": connectionID, "identity": target.ConnectionIdentity(),
+	})
 }
 
 // setAccountDisabled changes whether an account may receive traffic and

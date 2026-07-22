@@ -66,6 +66,14 @@ export async function loadAdminAccounts(): Promise<AdminAccount[]> {
   return decode(await fetch("/admin/accounts", { cache: "no-store" }));
 }
 
+export async function renameProviderConnection(accountID: string, displayName: string): Promise<{ status: string; connection_id: string }> {
+  return decode(await fetch(`/admin/accounts/${encodeURIComponent(accountID)}/identity`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ display_name: displayName }),
+  }));
+}
+
 export async function mutateAccount(accountID: string, action: "enable" | "disable" | "resurrect" | "refresh") {
   return decode<Record<string, unknown>>(await fetch(`/admin/accounts/${encodeURIComponent(accountID)}/${action}`, {
     method: "POST",

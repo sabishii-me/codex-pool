@@ -251,6 +251,8 @@ Exit criterion: every provider has an explicit support matrix and executable fix
 
 ### Phase 1 — Establish domain language
 
+Status: in progress. The provider-neutral `ConnectionIdentity` seam is implemented with durable `display_name`, optional `external_subject`/attributes, migration-safe legacy fallback, normalized stats/operator DTOs, and an elevated-operator rename endpoint. Existing `Account` names and compatibility API fields remain until the next slices.
+
 - Introduce `GatewayUser`, `Provider`, `ProviderConnection`, `ProviderPool`, and `ModelRoute`.
 - Add `ConnectionIdentity` with a required `display_name` and optional provider metadata.
 - Backfill deterministic display names for existing connections and support operator rename.

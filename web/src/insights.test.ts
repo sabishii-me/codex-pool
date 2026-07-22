@@ -5,6 +5,7 @@ import type { AccountStats, HourlyUsage, ModelDailyUsage, OriginWeeklyUsage } fr
 function account(overrides: Partial<AccountStats>): AccountStats {
   return {
     id: "account",
+    display_name: "Test connection",
     type: "codex",
     plan_type: "pro",
     status: "healthy",

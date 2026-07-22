@@ -23,7 +23,12 @@ export interface MFAStatus {
 
 export interface AccountStats {
   id: string;
+  display_name: string;
+  external_subject?: string;
+  identity_attributes?: Record<string, string>;
+  /** @deprecated Use external_subject/identity_attributes. */
   upstream_account_id?: string;
+  /** @deprecated Use identity_attributes.email. */
   account_email?: string;
   type: Provider;
   plan_type: string;
@@ -229,6 +234,9 @@ export interface AdminAccount {
   id: string;
   public_id: string;
   type: Provider;
+  display_name: string;
+  external_subject?: string;
+  identity_attributes?: Record<string, string>;
   plan_type: string;
   account_id?: string;
   id_token_chatgpt_account_id?: string;

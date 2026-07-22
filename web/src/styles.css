@@ -443,6 +443,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .inspector-metrics .instrument:nth-child(2n) { border-right: 0; }
 .inspector-metrics .instrument:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
 .score-trace { color: var(--muted); background: #070706; border: 1px solid var(--rule); padding: 12px; white-space: pre-wrap; font: .61rem/1.65 "IBM Plex Mono", monospace; }
+.connection-rename { display: grid; gap: 7px; }
+.connection-rename label { color: var(--muted); font: .57rem "IBM Plex Mono", monospace; letter-spacing: .1em; }
+.connection-rename input { min-height: 38px; border: 1px solid var(--rule); background: var(--void); color: var(--paper); padding: 0 10px; font: .7rem "IBM Plex Mono", monospace; }
+.connection-rename button { min-height: 36px; border: 1px solid var(--rule-hot); background: transparent; color: var(--gold); cursor: pointer; font: .59rem "IBM Plex Mono", monospace; }
 .operator-actions { display: grid; gap: 7px; }
 .operator-actions button { min-height: 38px; border: 1px solid var(--rule-hot); background: transparent; color: var(--gold); cursor: pointer; font: .59rem "IBM Plex Mono", monospace; }
 .operator-actions button:hover { border-color: var(--gold-hot); color: var(--gold-hot); }

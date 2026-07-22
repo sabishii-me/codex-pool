@@ -17,20 +17,20 @@ import (
 type AccountType string
 
 const (
-	AccountTypeCodex       AccountType = "codex"
-	AccountTypeGemini      AccountType = "gemini"
-	AccountTypeAntigravity AccountType = "antigravity"
-	AccountTypeClaude      AccountType = "claude"
-	AccountTypeKimi        AccountType = "kimi"
+	AccountTypeCodex        AccountType = "codex"
+	AccountTypeGemini       AccountType = "gemini"
+	AccountTypeAntigravity  AccountType = "antigravity"
+	AccountTypeClaude       AccountType = "claude"
+	AccountTypeKimi         AccountType = "kimi"
 	AccountTypeKimiPlatform AccountType = "kimi-platform"
-	AccountTypeMinimax     AccountType = "minimax"
-	AccountTypeZAI         AccountType = "zai"
-	AccountTypeXiaomi      AccountType = "xiaomi"
-	AccountTypeGrok        AccountType = "grok"
-	AccountTypeDeepSeek    AccountType = "deepseek"
-	AccountTypeQwen        AccountType = "qwen"
-	AccountTypeOpenRouter  AccountType = "openrouter"
-	AccountTypeNvidia      AccountType = "nvidia"
+	AccountTypeMinimax      AccountType = "minimax"
+	AccountTypeZAI          AccountType = "zai"
+	AccountTypeXiaomi       AccountType = "xiaomi"
+	AccountTypeGrok         AccountType = "grok"
+	AccountTypeDeepSeek     AccountType = "deepseek"
+	AccountTypeQwen         AccountType = "qwen"
+	AccountTypeOpenRouter   AccountType = "openrouter"
+	AccountTypeNvidia       AccountType = "nvidia"
 )
 
 type Account struct {
@@ -39,7 +39,8 @@ type Account struct {
 	Type         AccountType // codex, gemini, or claude
 	ID           string
 	File         string
-	Label        string
+	Label        string // Deprecated compatibility alias for Identity.DisplayName.
+	Identity     ConnectionIdentity
 	AccessToken  string
 	RefreshToken string
 	IDToken      string
@@ -339,20 +340,20 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*Account, error) {
 
 	// Load accounts from provider subdirectories: pool/codex/, pool/claude/, pool/gemini/
 	providerDirs := map[string]AccountType{
-		"codex":       AccountTypeCodex,
-		"claude":      AccountTypeClaude,
-		"gemini":      AccountTypeGemini,
-		"antigravity": AccountTypeAntigravity,
-		"kimi":        AccountTypeKimi,
+		"codex":         AccountTypeCodex,
+		"claude":        AccountTypeClaude,
+		"gemini":        AccountTypeGemini,
+		"antigravity":   AccountTypeAntigravity,
+		"kimi":          AccountTypeKimi,
 		"kimi-platform": AccountTypeKimiPlatform,
-		"minimax":     AccountTypeMinimax,
-		"zai":         AccountTypeZAI,
-		"xiaomi":      AccountTypeXiaomi,
-		"grok":        AccountTypeGrok,
-		"deepseek":    AccountTypeDeepSeek,
-		"qwen":        AccountTypeQwen,
-		"openrouter":  AccountTypeOpenRouter,
-		"nvidia":      AccountTypeNvidia,
+		"minimax":       AccountTypeMinimax,
+		"zai":           AccountTypeZAI,
+		"xiaomi":        AccountTypeXiaomi,
+		"grok":          AccountTypeGrok,
+		"deepseek":      AccountTypeDeepSeek,
+		"qwen":          AccountTypeQwen,
+		"openrouter":    AccountTypeOpenRouter,
+		"nvidia":        AccountTypeNvidia,
 	}
 
 	for subdir, accountType := range providerDirs {
@@ -399,6 +400,22 @@ func applyCommonAccountFileState(account *Account, data []byte) {
 	if json.Unmarshal(data, &root) != nil {
 		return
 	}
+	if displayName, ok := root["display_name"].(string); ok {
+		account.Identity.DisplayName = strings.TrimSpace(displayName)
+	}
+	if externalSubject, ok := root["external_subject"].(string); ok {
+		account.Identity.ExternalSubject = strings.TrimSpace(externalSubject)
+	}
+	if attributes, ok := root["identity_attributes"].(map[string]any); ok {
+		account.Identity.Attributes = make(map[string]string, len(attributes))
+		for key, value := range attributes {
+			if text, ok := value.(string); ok && strings.TrimSpace(key) != "" && strings.TrimSpace(text) != "" {
+				account.Identity.Attributes[strings.TrimSpace(key)] = strings.TrimSpace(text)
+			}
+		}
+	}
+	account.Identity = account.connectionIdentityLocked()
+	account.Label = account.Identity.DisplayName
 	if disabled, ok := root["disabled"].(bool); ok {
 		account.Disabled = disabled
 	}
@@ -1272,6 +1289,7 @@ func persistAccountAddedAt(root map[string]any, a *Account) {
 		a.AddedAt = time.Now().UTC()
 	}
 	root["added_at"] = a.AddedAt.UTC().Format(time.RFC3339Nano)
+	persistConnectionIdentity(root, a)
 }
 
 func saveCodexAccount(a *Account) error {

@@ -269,8 +269,8 @@ func saveAntigravityAccount(acc *Account) error {
 		}
 	}
 	root["model_rate_limits"] = cooldowns
-	persistAccountAddedAt(root, acc)
 	acc.mu.Unlock()
+	persistAccountAddedAt(root, acc)
 	if snapshot, ok := antigravityModels.AccountSnapshot(acc.ID); ok {
 		root["model_snapshot"] = snapshot
 	}

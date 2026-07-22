@@ -36,7 +36,7 @@ type KimiPlatformAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *KimiPlatformProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *KimiPlatformProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var kj KimiPlatformAuthJSON
 	if err := json.Unmarshal(data, &kj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -45,7 +45,7 @@ func (p *KimiPlatformProvider) LoadAccount(name, path string, data []byte) (*Acc
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeKimiPlatform,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -55,11 +55,11 @@ func (p *KimiPlatformProvider) LoadAccount(name, path string, data []byte) (*Acc
 	return acc, nil
 }
 
-func (p *KimiPlatformProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *KimiPlatformProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *KimiPlatformProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *KimiPlatformProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	// API keys don't need refresh
 	return nil
 }
@@ -132,7 +132,7 @@ func (p *KimiPlatformProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *KimiPlatformProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *KimiPlatformProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// The Open Platform's Anthropic-compatible endpoint does not currently
 	// expose the coding-plan-style quota headers, so there is nothing to parse.
 }

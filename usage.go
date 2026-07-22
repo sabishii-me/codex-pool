@@ -307,14 +307,14 @@ func parseTokenCountEvent(obj map[string]any) *RequestUsage {
 	return ru
 }
 
-func (h *proxyHandler) recordUsageForRequest(a *Account, ru RequestUsage, requestID string) {
+func (h *proxyHandler) recordUsageForRequest(a *ProviderConnection, ru RequestUsage, requestID string) {
 	if ru.RequestID == "" {
 		ru.RequestID = requestID
 	}
 	h.recordUsage(a, ru)
 }
 
-func (h *proxyHandler) recordUsage(a *Account, ru RequestUsage) {
+func (h *proxyHandler) recordUsage(a *ProviderConnection, ru RequestUsage) {
 	if a == nil {
 		return
 	}

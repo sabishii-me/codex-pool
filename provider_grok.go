@@ -92,14 +92,14 @@ type grokBillingResponse struct {
 	Config *grokBillingConfig `json:"config"`
 }
 
-func (p *GrokProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *GrokProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	if acc, err := loadGrokSimpleAccount(name, path, data); err != nil || acc != nil {
 		return acc, err
 	}
 	return loadGrokCLIAccount(name, path, data)
 }
 
-func loadGrokSimpleAccount(name, path string, data []byte) (*Account, error) {
+func loadGrokSimpleAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var gj grokSimpleAuthJSON
 	if err := json.Unmarshal(data, &gj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -109,7 +109,7 @@ func loadGrokSimpleAccount(name, path string, data []byte) (*Account, error) {
 	if accessToken == "" && refreshToken == "" {
 		return nil, nil
 	}
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:         AccountTypeGrok,
 		ID:           strings.TrimSuffix(name, filepath.Ext(name)),
 		File:         path,
@@ -129,7 +129,7 @@ func loadGrokSimpleAccount(name, path string, data []byte) (*Account, error) {
 	return acc, nil
 }
 
-func loadGrokCLIAccount(name, path string, data []byte) (*Account, error) {
+func loadGrokCLIAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -161,7 +161,7 @@ func loadGrokCLIAccount(name, path string, data []byte) (*Account, error) {
 	if id == "auth" && entry.TeamID != "" {
 		id = "grok-" + entry.TeamID[:min(len(entry.TeamID), 8)]
 	}
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:         AccountTypeGrok,
 		ID:           id,
 		File:         path,
@@ -176,7 +176,7 @@ func loadGrokCLIAccount(name, path string, data []byte) (*Account, error) {
 	return acc, nil
 }
 
-func (p *GrokProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *GrokProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 	req.Header.Set("X-XAI-Token-Auth", "xai-grok-cli")
 	req.Header.Set("x-grok-client-identifier", grokClientIdentifier)
@@ -184,7 +184,7 @@ func (p *GrokProvider) SetAuthHeaders(req *http.Request, acc *Account) {
 	req.Header.Del("X-Api-Key")
 }
 
-func (p *GrokProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *GrokProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	acc.mu.Lock()
 	refreshTok := strings.TrimSpace(acc.RefreshToken)
 	tokenEndpoint := strings.TrimSpace(acc.AccountID)
@@ -300,7 +300,7 @@ func grokUsageFromMap(obj map[string]any, usageMap map[string]any) *RequestUsage
 	return ru
 }
 
-func (p *GrokProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *GrokProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	if acc == nil || headers == nil {
 		return
 	}

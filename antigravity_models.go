@@ -391,7 +391,7 @@ func decodeRaw(raw map[string]json.RawMessage, key string, target any) {
 	}
 }
 
-func fetchAntigravityModels(ctx context.Context, transport http.RoundTripper, account *Account, bases ...*url.URL) (AntigravityAccountSnapshot, error) {
+func fetchAntigravityModels(ctx context.Context, transport http.RoundTripper, account *ProviderConnection, bases ...*url.URL) (AntigravityAccountSnapshot, error) {
 	body := []byte(`{}`)
 	var lastErr error
 	for _, base := range bases {
@@ -430,7 +430,7 @@ func fetchAntigravityModels(ctx context.Context, transport http.RoundTripper, ac
 	return AntigravityAccountSnapshot{}, lastErr
 }
 
-func syncAntigravityModels(ctx context.Context, transport http.RoundTripper, account *Account, bases ...*url.URL) error {
+func syncAntigravityModels(ctx context.Context, transport http.RoundTripper, account *ProviderConnection, bases ...*url.URL) error {
 	snapshot, err := fetchAntigravityModels(ctx, transport, account, bases...)
 	if err != nil {
 		return err
@@ -458,7 +458,7 @@ func antigravityCanonicalModel(model string) string {
 	return canonical
 }
 
-func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclude map[string]bool, model, clientIP string) *Account {
+func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclude map[string]bool, model, clientIP string) *ProviderConnection {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	model = antigravityCanonicalModel(model)
@@ -482,7 +482,7 @@ func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclu
 			delete(p.convPin, pinKey)
 		}
 	}
-	var best *Account
+	var best *ProviderConnection
 	bestScore := -1e9
 	for _, account := range p.accounts {
 		if account.Type != AccountTypeAntigravity || (exclude != nil && exclude[account.ID]) || !antigravityModels.Supports(account.ID, model) {
@@ -504,7 +504,7 @@ func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclu
 	return best
 }
 
-func setAntigravityModelCooldown(account *Account, model string, until time.Time) {
+func setAntigravityModelCooldown(account *ProviderConnection, model string, until time.Time) {
 	if account == nil || until.IsZero() {
 		return
 	}
@@ -520,7 +520,7 @@ func setAntigravityModelCooldown(account *Account, model string, until time.Time
 	_ = saveAccount(account)
 }
 
-func clearAntigravityModelCooldown(account *Account, model string) {
+func clearAntigravityModelCooldown(account *ProviderConnection, model string) {
 	if account == nil {
 		return
 	}

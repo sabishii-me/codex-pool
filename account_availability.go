@@ -11,7 +11,7 @@ const (
 	secondaryHardExcludeThreshold  = 0.99
 )
 
-func accountPrimaryUsageLocked(a *Account) float64 {
+func accountPrimaryUsageLocked(a *ProviderConnection) float64 {
 	if a == nil {
 		return 0
 	}
@@ -22,7 +22,7 @@ func accountPrimaryUsageLocked(a *Account) float64 {
 	return used
 }
 
-func accountSecondaryUsageLocked(a *Account) float64 {
+func accountSecondaryUsageLocked(a *ProviderConnection) float64 {
 	if a == nil {
 		return 0
 	}
@@ -33,14 +33,14 @@ func accountSecondaryUsageLocked(a *Account) float64 {
 	return used
 }
 
-func accountCoolingDownLocked(a *Account, now time.Time) bool {
+func accountCoolingDownLocked(a *ProviderConnection, now time.Time) bool {
 	if a == nil {
 		return false
 	}
 	return !a.RateLimitUntil.IsZero() && a.RateLimitUntil.After(now)
 }
 
-func accountUsageExhaustedLocked(a *Account) bool {
+func accountUsageExhaustedLocked(a *ProviderConnection) bool {
 	if a == nil {
 		return false
 	}
@@ -48,7 +48,7 @@ func accountUsageExhaustedLocked(a *Account) bool {
 		accountSecondaryUsageLocked(a) >= secondaryHardExcludeThreshold
 }
 
-func accountAvailableForRoutingLocked(a *Account, now time.Time) bool {
+func accountAvailableForRoutingLocked(a *ProviderConnection, now time.Time) bool {
 	if a == nil {
 		return false
 	}
@@ -61,7 +61,7 @@ func accountAvailableForRoutingLocked(a *Account, now time.Time) bool {
 	return !accountUsageExhaustedLocked(a)
 }
 
-func syncUsageCooldown(a *Account) {
+func syncUsageCooldown(a *ProviderConnection) {
 	if a == nil {
 		return
 	}

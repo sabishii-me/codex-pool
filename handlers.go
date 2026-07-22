@@ -224,8 +224,8 @@ func (h *proxyHandler) reloadAccounts() {
 	}
 }
 
-func preserveUsageSnapshots(current, loaded []*Account) {
-	byID := make(map[string]*Account, len(current))
+func preserveUsageSnapshots(current, loaded []*ProviderConnection) {
+	byID := make(map[string]*ProviderConnection, len(current))
 	for _, account := range current {
 		if account != nil {
 			byID[string(account.Type)+"\x00"+account.ID] = account
@@ -269,7 +269,7 @@ func (h *proxyHandler) renameProviderConnection(w http.ResponseWriter, r *http.R
 		return
 	}
 	h.pool.mu.RLock()
-	var target *Account
+	var target *ProviderConnection
 	for _, connection := range h.pool.accounts {
 		if connection.ID == connectionID {
 			target = connection
@@ -302,7 +302,7 @@ func (h *proxyHandler) renameProviderConnection(w http.ResponseWriter, r *http.R
 // persists the state in its provider file.
 func (h *proxyHandler) setAccountDisabled(w http.ResponseWriter, accountID string, disabled bool) {
 	h.pool.mu.RLock()
-	var target *Account
+	var target *ProviderConnection
 	for _, account := range h.pool.accounts {
 		if account.ID == accountID {
 			target = account
@@ -402,7 +402,7 @@ func (h *proxyHandler) purgeAnonymousUsers(w http.ResponseWriter) {
 // forceRefreshAccount forces a token refresh for a specific account, bypassing rate limits.
 func (h *proxyHandler) forceRefreshAccount(w http.ResponseWriter, accountID string) {
 	h.pool.mu.RLock()
-	var target *Account
+	var target *ProviderConnection
 	for _, a := range h.pool.accounts {
 		if a.ID == accountID {
 			target = a

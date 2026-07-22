@@ -46,7 +46,7 @@ func (h *proxyHandler) pollUpstreamUsage() {
 
 	now := time.Now()
 	h.pool.mu.RLock()
-	accs := append([]*Account{}, h.pool.accounts...)
+	accs := append([]*ProviderConnection{}, h.pool.accounts...)
 	h.pool.mu.RUnlock()
 
 	for i, a := range accs {
@@ -216,7 +216,7 @@ func (h *proxyHandler) pollUpstreamUsage() {
 	}
 }
 
-func (h *proxyHandler) fetchGrokUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) fetchGrokUsage(now time.Time, a *ProviderConnection) error {
 	if h == nil || a == nil || h.cfg.grokBase == nil {
 		return fmt.Errorf("grok billing is not configured")
 	}
@@ -238,7 +238,7 @@ func (h *proxyHandler) fetchGrokUsage(now time.Time, a *Account) error {
 	return nil
 }
 
-func (h *proxyHandler) fetchGrokBillingPart(a *Account, weekly bool) ([]byte, error) {
+func (h *proxyHandler) fetchGrokBillingPart(a *ProviderConnection, weekly bool) ([]byte, error) {
 	base := *h.cfg.grokBase
 	base.Path = singleJoin(base.Path, "/billing")
 	if weekly {
@@ -270,7 +270,7 @@ func (h *proxyHandler) fetchGrokBillingPart(a *Account, weekly bool) ([]byte, er
 	return io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 }
 
-func (h *proxyHandler) fetchUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) fetchUsage(now time.Time, a *ProviderConnection) error {
 	// Proactively refresh expired tokens before making the request.
 	// This ensures tokens stay fresh even if access tokens outlive ID token expiry.
 	if !h.cfg.disableRefresh && h.needsRefresh(a) {
@@ -461,7 +461,7 @@ func buildWhamConsumeResetCreditURL(base *url.URL) string {
 	return copy.String()
 }
 
-func (h *proxyHandler) fetchCodexResetCredits(a *Account) error {
+func (h *proxyHandler) fetchCodexResetCredits(a *ProviderConnection) error {
 	req, err := http.NewRequest(http.MethodGet, buildWhamResetCreditsURL(h.cfg.whamBase), nil)
 	if err != nil {
 		return err
@@ -528,7 +528,7 @@ func (h *proxyHandler) fetchCodexResetCredits(a *Account) error {
 	return nil
 }
 
-func (h *proxyHandler) autoRedeemExpiringCodexResetCredit(now time.Time, a *Account) error {
+func (h *proxyHandler) autoRedeemExpiringCodexResetCredit(now time.Time, a *ProviderConnection) error {
 	a.mu.Lock()
 	if a.ResetCreditRedeeming {
 		a.mu.Unlock()
@@ -571,7 +571,7 @@ func (h *proxyHandler) autoRedeemExpiringCodexResetCredit(now time.Time, a *Acco
 	return h.fetchCodexResetCredits(a)
 }
 
-func (h *proxyHandler) consumeCodexResetCredit(a *Account, credit RateLimitResetCredit) (string, int, error) {
+func (h *proxyHandler) consumeCodexResetCredit(a *ProviderConnection, credit RateLimitResetCredit) (string, int, error) {
 	body, err := json.Marshal(map[string]string{
 		"redeem_request_id": "codex-pool:" + credit.ID,
 		"credit_id":         credit.ID,
@@ -655,7 +655,7 @@ func parseClaudeResetAt(value any) (time.Time, bool) {
 }
 
 // fetchClaudeUsage fetches usage data from Claude's /api/oauth/usage endpoint.
-func (h *proxyHandler) fetchClaudeUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) fetchClaudeUsage(now time.Time, a *ProviderConnection) error {
 	// Only OAuth tokens can use the usage endpoint
 	a.mu.Lock()
 	access := a.AccessToken
@@ -872,7 +872,7 @@ type DailyBreakdownDay struct {
 }
 
 // fetchDailyBreakdownData fetches the daily token usage breakdown and returns structured data.
-func (h *proxyHandler) fetchDailyBreakdownData(a *Account) ([]DailyBreakdownDay, error) {
+func (h *proxyHandler) fetchDailyBreakdownData(a *ProviderConnection) ([]DailyBreakdownDay, error) {
 	base := h.cfg.whamBase
 	joined := singleJoin(base.Path, "/wham/usage/daily-token-usage-breakdown")
 	u := *base
@@ -1108,7 +1108,7 @@ func (h *proxyHandler) replaceUsageHeaders(hdr http.Header) {
 }
 
 // fetchKimiUsage fetches usage data from Kimi's /v1/usages endpoint.
-func (h *proxyHandler) fetchKimiUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) fetchKimiUsage(now time.Time, a *ProviderConnection) error {
 	a.mu.Lock()
 	access := a.AccessToken
 	a.mu.Unlock()
@@ -1211,7 +1211,7 @@ func (h *proxyHandler) fetchKimiUsage(now time.Time, a *Account) error {
 }
 
 // seedMinimaxUsage sends a minimal request to capture initial rate limit headers.
-func (h *proxyHandler) seedMinimaxUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) seedMinimaxUsage(now time.Time, a *ProviderConnection) error {
 	a.mu.Lock()
 	access := a.AccessToken
 	a.mu.Unlock()
@@ -1250,7 +1250,7 @@ func (h *proxyHandler) seedMinimaxUsage(now time.Time, a *Account) error {
 	return nil
 }
 
-func (h *proxyHandler) seedZAIUsage(now time.Time, a *Account) error {
+func (h *proxyHandler) seedZAIUsage(now time.Time, a *ProviderConnection) error {
 	a.mu.Lock()
 	access := a.AccessToken
 	a.mu.Unlock()
@@ -1292,7 +1292,7 @@ func (h *proxyHandler) seedZAIUsage(now time.Time, a *Account) error {
 }
 
 // applyMinimaxRateLimits extracts rate limit data from MiniMax response headers and updates the account.
-func applyMinimaxRateLimits(a *Account, headers http.Header, now time.Time) {
+func applyMinimaxRateLimits(a *ProviderConnection, headers http.Header, now time.Time) {
 	remaining := headers.Get("x-ratelimit-remaining")
 	limit := headers.Get("x-ratelimit-limit")
 	if remaining == "" && limit == "" {

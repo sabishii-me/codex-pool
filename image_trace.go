@@ -11,7 +11,7 @@ import (
 
 const imageTraceLimit = 8 * 1024 * 1024
 
-func (h *proxyHandler) writeImageGenerationTrace(reqID string, account *Account, rawStream, assembled []byte, cause error) {
+func (h *proxyHandler) writeImageGenerationTrace(reqID string, account *ProviderConnection, rawStream, assembled []byte, cause error) {
 	dir := strings.TrimSpace(os.Getenv("PROXY_IMAGE_TRACE_DIR"))
 	if dir == "" {
 		dir = "./data/image-traces"

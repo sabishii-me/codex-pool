@@ -20,7 +20,7 @@ func accountUsesStaticAPIKey(accountType AccountType) bool {
 	}
 }
 
-func applyProxyAuthFailure(a *Account, refreshFailed bool) (markedDead bool, penaltyNow float64) {
+func applyProxyAuthFailure(a *ProviderConnection, refreshFailed bool) (markedDead bool, penaltyNow float64) {
 	if a == nil {
 		return false, 0
 	}
@@ -48,7 +48,7 @@ func applyProxyAuthFailure(a *Account, refreshFailed bool) (markedDead bool, pen
 // restoreValidatedAccount clears stale retirement state after a provider-specific
 // credential check succeeds. The validation request is the authority for static
 // API keys; a historical proxied 401 is not.
-func restoreValidatedAccount(a *Account, validation string) {
+func restoreValidatedAccount(a *ProviderConnection, validation string) {
 	if a == nil {
 		return
 	}
@@ -71,7 +71,7 @@ func restoreValidatedAccount(a *Account, validation string) {
 
 // disableAccountPermanently marks an account as permanently unavailable for
 // routing and persists that state to disk.
-func (h *proxyHandler) disableAccountPermanently(a *Account, reqID string, reason string) {
+func (h *proxyHandler) disableAccountPermanently(a *ProviderConnection, reqID string, reason string) {
 	if a == nil {
 		return
 	}

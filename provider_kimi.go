@@ -33,7 +33,7 @@ type KimiAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *KimiProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *KimiProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var kj KimiAuthJSON
 	if err := json.Unmarshal(data, &kj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -42,7 +42,7 @@ func (p *KimiProvider) LoadAccount(name, path string, data []byte) (*Account, er
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeKimi,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -52,11 +52,11 @@ func (p *KimiProvider) LoadAccount(name, path string, data []byte) (*Account, er
 	return acc, nil
 }
 
-func (p *KimiProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *KimiProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *KimiProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *KimiProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	// API keys don't need refresh
 	return nil
 }
@@ -129,7 +129,7 @@ func (p *KimiProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *KimiProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *KimiProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	snap, ok := parseKimiResponseRateLimits(headers)
 	if !ok {
 		return

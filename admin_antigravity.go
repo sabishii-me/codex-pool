@@ -349,7 +349,7 @@ func (h *proxyHandler) completeAntigravityOAuth(ctx context.Context, session *an
 		token.ExpiresIn = 3600
 	}
 	file := filepath.Join(h.cfg.poolDir, "antigravity", accountID+".json")
-	account := &Account{
+	account := &ProviderConnection{
 		Type: AccountTypeAntigravity, ID: accountID, File: file, Email: email,
 		ProjectID: projectID, AccessToken: token.AccessToken, RefreshToken: token.RefreshToken,
 		PlanType: planType, ExpiresAt: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second),

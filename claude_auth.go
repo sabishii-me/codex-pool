@@ -363,7 +363,7 @@ func SaveClaudeAccount(poolDir, accountID string, tokens *ClaudeTokenResponse) e
 }
 
 // saveClaudeAccount persists a Claude OAuth account back to its JSON file.
-func saveClaudeAccount(a *Account) error {
+func saveClaudeAccount(a *ProviderConnection) error {
 	// Read existing file to preserve any extra fields
 	raw, err := os.ReadFile(a.File)
 	if err != nil && !os.IsNotExist(err) {
@@ -449,7 +449,7 @@ func saveClaudeAccount(a *Account) error {
 }
 
 // RefreshClaudeAccountTokens refreshes tokens for a Claude account and updates it.
-func RefreshClaudeAccountTokens(acc *Account) error {
+func RefreshClaudeAccountTokens(acc *ProviderConnection) error {
 	if acc.RefreshToken == "" {
 		return errors.New("no refresh token")
 	}
@@ -530,7 +530,7 @@ func parseScopes(scope string) []string {
 // Anthropic's bootstrap endpoint for any that don't have an AccountUUID yet.
 func (h *proxyHandler) probeClaudeAccountUUIDs() {
 	h.pool.mu.RLock()
-	accounts := make([]*Account, 0, len(h.pool.accounts))
+	accounts := make([]*ProviderConnection, 0, len(h.pool.accounts))
 	for _, acc := range h.pool.accounts {
 		if acc.Type == AccountTypeClaude {
 			accounts = append(accounts, acc)
@@ -542,7 +542,7 @@ func (h *proxyHandler) probeClaudeAccountUUIDs() {
 		return
 	}
 
-	needsProbe := make([]*Account, 0, len(accounts))
+	needsProbe := make([]*ProviderConnection, 0, len(accounts))
 	for _, acc := range accounts {
 		acc.mu.Lock()
 		if strings.HasPrefix(acc.AccessToken, "sk-ant-oat") && acc.AccountUUID == "" {

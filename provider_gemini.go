@@ -33,7 +33,7 @@ func (p *GeminiProvider) Type() AccountType {
 	return AccountTypeGemini
 }
 
-func (p *GeminiProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *GeminiProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var gj GeminiAuthJSON
 	if err := json.Unmarshal(data, &gj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -45,7 +45,7 @@ func (p *GeminiProvider) LoadAccount(name, path string, data []byte) (*Account, 
 	if planType == "" {
 		planType = "gemini" // default
 	}
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:         AccountTypeGemini,
 		ID:           strings.TrimSuffix(name, filepath.Ext(name)),
 		File:         path,
@@ -68,7 +68,7 @@ func (p *GeminiProvider) LoadAccount(name, path string, data []byte) (*Account, 
 	return acc, nil
 }
 
-func (p *GeminiProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *GeminiProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	// Gemini uses Bearer token
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
@@ -96,7 +96,7 @@ func geminiOAuthClientSecret() string {
 	return "GOCSPX-" + "4uHgMPm-1o7Sk-geV6Cu5clXFsxl"
 }
 
-func (p *GeminiProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *GeminiProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	acc.mu.Lock()
 	refreshTok := acc.RefreshToken
 	acc.mu.Unlock()
@@ -193,7 +193,7 @@ func (p *GeminiProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return ru
 }
 
-func (p *GeminiProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *GeminiProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// Gemini doesn't currently expose usage via response headers
 	// This is a no-op for now
 }

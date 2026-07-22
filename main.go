@@ -1003,7 +1003,7 @@ func (h *proxyHandler) pinConversationToCyberAccess(conversationID string, accou
 // caller has retries left. The buffered translator output is empty in
 // this case anyway, so retrying is strictly better UX than writing the
 // empty translation.
-func (h *proxyHandler) shouldRetryBufferedSSEForCyberPolicy(cyberPinned bool, attempt, attempts int, acc *Account, reqID, label string) bool {
+func (h *proxyHandler) shouldRetryBufferedSSEForCyberPolicy(cyberPinned bool, attempt, attempts int, acc *ProviderConnection, reqID, label string) bool {
 	if !cyberPinned || attempt >= attempts || acc == nil || acc.CyberAccess {
 		return false
 	}
@@ -1020,7 +1020,7 @@ func (h *proxyHandler) shouldRetryBufferedSSEForCyberPolicy(cyberPinned bool, at
 // non-streaming buffered paths where we can't synthesize a refusal
 // inline (the buffered translator owns the final shape) — the loop's
 // retry mechanism then discards the buffer and tries a cyber account.
-func (h *proxyHandler) wrapBufferedSSEWithCyberDetector(under io.Writer, accountType AccountType, acc *Account, conversationID, requiredPlan, originIP, reqID string, cyberPinned *bool) io.Writer {
+func (h *proxyHandler) wrapBufferedSSEWithCyberDetector(under io.Writer, accountType AccountType, acc *ProviderConnection, conversationID, requiredPlan, originIP, reqID string, cyberPinned *bool) io.Writer {
 	if accountType != AccountTypeCodex || acc == nil || acc.CyberAccess {
 		return under
 	}
@@ -2167,7 +2167,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	imageFanoutIndex, _ := strconv.Atoi(r.Header.Get("X-Codex-Pool-Image-Fanout-Index"))
 
 	for attempt := 1; attempt <= attempts; attempt++ {
-		var acc *Account
+		var acc *ProviderConnection
 		candidateExclude := exclude
 		if imageGenerationRequest {
 			candidateExclude = make(map[string]bool, len(exclude)+h.pool.countByType(accountType))
@@ -3097,7 +3097,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 			ReadLimit:                   readLimit,
 			CompressionEnabled:          h.cfg.websocketCompression,
 			LogLabel:                    relayLabel,
-			SetActiveAccount: func(next *Account) {
+			SetActiveAccount: func(next *ProviderConnection) {
 				prev := inflightAcc
 				if prev == next || next == nil {
 					return
@@ -3162,7 +3162,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 // (rate-limit cooldown, auth-failure marking, success-path penalty
 // decay, conversation pinning) shared between the Codex cyber-aware
 // relay and the legacy passthrough/Claude/Gemini relay.
-func (h *proxyHandler) applyWebSocketStatusEffects(reqID string, acc *Account, conversationID string, cyberPinned, refreshFailed bool, statusCode int) {
+func (h *proxyHandler) applyWebSocketStatusEffects(reqID string, acc *ProviderConnection, conversationID string, cyberPinned, refreshFailed bool, statusCode int) {
 	switch {
 	case statusCode == http.StatusTooManyRequests:
 		h.applyRateLimit(acc, nil)
@@ -4009,7 +4009,7 @@ func backoffDuration(level int) time.Duration {
 	return d
 }
 
-func (h *proxyHandler) applyRateLimit(a *Account, hdr http.Header) time.Duration {
+func (h *proxyHandler) applyRateLimit(a *ProviderConnection, hdr http.Header) time.Duration {
 	if a == nil {
 		return 0
 	}
@@ -4536,7 +4536,7 @@ func (h *proxyHandler) tryOnce(
 	bodyBytes []byte,
 	targetBase *url.URL,
 	provider Provider,
-	acc *Account,
+	acc *ProviderConnection,
 	reqID string,
 	translateDir TranslateDirection,
 	requestedModel string,
@@ -4952,7 +4952,7 @@ func applyStreamingResponseHeaders(header http.Header) {
 	}
 }
 
-func shouldSampleResponseBodyForRequest(provider Provider, acc *Account, path string, resp *http.Response, translateDir TranslateDirection, conversationID string, logBodies bool) bool {
+func shouldSampleResponseBodyForRequest(provider Provider, acc *ProviderConnection, path string, resp *http.Response, translateDir TranslateDirection, conversationID string, logBodies bool) bool {
 	if provider == nil || resp == nil {
 		return true
 	}
@@ -4971,7 +4971,7 @@ func shouldSampleResponseBodyForRequest(provider Provider, acc *Account, path st
 	return false
 }
 
-func (h *proxyHandler) needsRefresh(a *Account) bool {
+func (h *proxyHandler) needsRefresh(a *ProviderConnection) bool {
 	if a == nil {
 		return false
 	}
@@ -5014,7 +5014,7 @@ const refreshMinInterval = 5 * time.Second
 // 15 minutes balances between preventing hammering and allowing recovery from expired tokens
 const refreshPerAccountInterval = 15 * time.Minute
 
-func (h *proxyHandler) refreshAccount(ctx context.Context, a *Account) error {
+func (h *proxyHandler) refreshAccount(ctx context.Context, a *ProviderConnection) error {
 	if a == nil {
 		return errors.New("nil account")
 	}
@@ -5045,14 +5045,14 @@ func (h *proxyHandler) refreshAccount(ctx context.Context, a *Account) error {
 	return err
 }
 
-func (h *proxyHandler) refreshAccountAfterAuthFailure(ctx context.Context, a *Account) error {
+func (h *proxyHandler) refreshAccountAfterAuthFailure(ctx context.Context, a *ProviderConnection) error {
 	a.mu.Lock()
 	a.LastRefresh = time.Time{}
 	a.mu.Unlock()
 	return h.refreshAccount(ctx, a)
 }
 
-func (h *proxyHandler) refreshAccountOnce(ctx context.Context, a *Account) error {
+func (h *proxyHandler) refreshAccountOnce(ctx context.Context, a *ProviderConnection) error {
 	// Per-account rate limiting (persisted to disk via LastRefresh)
 	a.mu.Lock()
 	sinceLastRefresh := time.Since(a.LastRefresh)
@@ -5107,7 +5107,7 @@ func (h *proxyHandler) waitForRefreshSlot(ctx context.Context) error {
 	}
 }
 
-func (h *proxyHandler) updateUsageFromBody(a *Account, sample []byte, userID, originID, reqID string) {
+func (h *proxyHandler) updateUsageFromBody(a *ProviderConnection, sample []byte, userID, originID, reqID string) {
 	if a == nil || len(sample) == 0 {
 		return
 	}

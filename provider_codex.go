@@ -36,7 +36,7 @@ func (p *CodexProvider) Type() AccountType {
 	return AccountTypeCodex
 }
 
-func (p *CodexProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *CodexProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var aj CodexAuthJSON
 	if err := json.Unmarshal(data, &aj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -44,7 +44,7 @@ func (p *CodexProvider) LoadAccount(name, path string, data []byte) (*Account, e
 	if aj.Tokens == nil {
 		return nil, nil
 	}
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:         AccountTypeCodex,
 		ID:           strings.TrimSuffix(name, filepath.Ext(name)),
 		File:         path,
@@ -85,7 +85,7 @@ func (p *CodexProvider) LoadAccount(name, path string, data []byte) (*Account, e
 	return acc, nil
 }
 
-func (p *CodexProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *CodexProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 	// ChatGPT Account ID needed for some endpoints
 	chatgptAccID := acc.AccountID
@@ -98,7 +98,7 @@ func (p *CodexProvider) SetAuthHeaders(req *http.Request, acc *Account) {
 	applyCodexRequestFingerprint(req, acc)
 }
 
-func (p *CodexProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *CodexProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	acc.mu.Lock()
 	refreshTok := acc.RefreshToken
 	acc.mu.Unlock()
@@ -256,7 +256,7 @@ func (p *CodexProvider) parseResponseUsage(obj map[string]any) *RequestUsage {
 	return ru
 }
 
-func (p *CodexProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *CodexProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	if acc == nil {
 		return
 	}

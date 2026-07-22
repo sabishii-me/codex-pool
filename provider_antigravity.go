@@ -38,7 +38,7 @@ func NewAntigravityProvider(dailyBase, prodBase *url.URL) *AntigravityProvider {
 
 func (p *AntigravityProvider) Type() AccountType { return AccountTypeAntigravity }
 
-func (p *AntigravityProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *AntigravityProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var auth AntigravityAuthJSON
 	if err := json.Unmarshal(data, &auth); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -49,7 +49,7 @@ func (p *AntigravityProvider) LoadAccount(name, path string, data []byte) (*Acco
 	if auth.Type != "" && auth.Type != string(AccountTypeAntigravity) {
 		return nil, nil
 	}
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:              AccountTypeAntigravity,
 		ID:                strings.TrimSuffix(name, filepath.Ext(name)),
 		File:              path,
@@ -89,7 +89,7 @@ func (p *AntigravityProvider) LoadAccount(name, path string, data []byte) (*Acco
 	return acc, nil
 }
 
-func (p *AntigravityProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *AntigravityProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", antigravityUserAgent())
@@ -135,7 +135,7 @@ func antigravityClientVersion() string {
 	return antigravityVersions.current(time.Now())
 }
 
-func (p *AntigravityProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *AntigravityProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	acc.mu.Lock()
 	refreshToken := acc.RefreshToken
 	acc.mu.Unlock()
@@ -218,7 +218,7 @@ func (p *AntigravityProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return result
 }
 
-func (p *AntigravityProvider) ParseUsageHeaders(_ *Account, _ http.Header) {}
+func (p *AntigravityProvider) ParseUsageHeaders(_ *ProviderConnection, _ http.Header) {}
 
 func (p *AntigravityProvider) UpstreamURL(_ string) *url.URL { return p.dailyBase }
 func (p *AntigravityProvider) DailyURL() *url.URL            { return p.dailyBase }
@@ -231,7 +231,7 @@ func (p *AntigravityProvider) DetectsSSE(path, contentType string) bool {
 	return strings.Contains(path, "streamGenerateContent") || strings.Contains(strings.ToLower(contentType), "text/event-stream")
 }
 
-func saveAntigravityAccount(acc *Account) error {
+func saveAntigravityAccount(acc *ProviderConnection) error {
 	lockValue, _ := antigravityAccountSaveLocks.LoadOrStore(acc.File, &sync.Mutex{})
 	fileLock := lockValue.(*sync.Mutex)
 	fileLock.Lock()

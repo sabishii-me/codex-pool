@@ -38,7 +38,7 @@ type NvidiaAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *NvidiaProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *NvidiaProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var nj NvidiaAuthJSON
 	if err := json.Unmarshal(data, &nj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -47,7 +47,7 @@ func (p *NvidiaProvider) LoadAccount(name, path string, data []byte) (*Account, 
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeNvidia,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -57,11 +57,11 @@ func (p *NvidiaProvider) LoadAccount(name, path string, data []byte) (*Account, 
 	return acc, nil
 }
 
-func (p *NvidiaProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *NvidiaProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *NvidiaProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *NvidiaProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -72,7 +72,7 @@ func (p *NvidiaProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return parseOpenAIChatUsage(obj)
 }
 
-func (p *NvidiaProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *NvidiaProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// NVIDIA's OpenAI-compatible endpoint does not currently expose quota headers.
 }
 

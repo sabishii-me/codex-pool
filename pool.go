@@ -90,7 +90,7 @@ type ProviderConnection struct {
 	Totals AccountUsage
 }
 
-// Account is retained while call sites migrate to ProviderConnection.
+// Account is retained for source compatibility.
 // Deprecated: use ProviderConnection.
 type Account = ProviderConnection
 
@@ -107,7 +107,7 @@ type accountUsageSnapshot struct {
 	Usage          UsageSnapshot
 }
 
-func snapshotAccountUsage(a *Account) accountUsageSnapshot {
+func snapshotAccountUsage(a *ProviderConnection) accountUsageSnapshot {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return accountUsageSnapshot{
@@ -119,7 +119,7 @@ func snapshotAccountUsage(a *Account) accountUsageSnapshot {
 	}
 }
 
-func (a *Account) applyRateLimitObject(rl map[string]any) {
+func (a *ProviderConnection) applyRateLimitObject(rl map[string]any) {
 	if a == nil {
 		return
 	}
@@ -133,7 +133,7 @@ func (a *Account) applyRateLimitObject(rl map[string]any) {
 }
 
 // applyRateLimitsFromTokenCount updates account usage from Codex token_count rate_limits.
-func (a *Account) applyRateLimitsFromTokenCount(rl map[string]any) {
+func (a *ProviderConnection) applyRateLimitsFromTokenCount(rl map[string]any) {
 	if a == nil {
 		return
 	}
@@ -258,7 +258,7 @@ type TokenCapacity struct {
 }
 
 // applyRequestUsage increments aggregate counters for the account.
-func (a *Account) applyRequestUsage(u RequestUsage) {
+func (a *ProviderConnection) applyRequestUsage(u RequestUsage) {
 	a.mu.Lock()
 	a.Totals.TotalInputTokens += u.InputTokens
 	a.Totals.TotalCachedTokens += u.CachedInputTokens
@@ -360,8 +360,8 @@ type ClaudeOAuthData struct {
 	RateLimitTier    string   `json:"rateLimitTier"`
 }
 
-func loadPool(dir string, registry *ProviderRegistry) ([]*Account, error) {
-	var accs []*Account
+func loadPool(dir string, registry *ProviderRegistry) ([]*ProviderConnection, error) {
+	var accs []*ProviderConnection
 	antigravityModels.Reset()
 
 	// Load accounts from provider subdirectories: pool/codex/, pool/claude/, pool/gemini/
@@ -421,7 +421,7 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*Account, error) {
 	return accs, nil
 }
 
-func applyCommonAccountFileState(account *Account, data []byte) {
+func applyCommonAccountFileState(account *ProviderConnection, data []byte) {
 	var root map[string]any
 	if json.Unmarshal(data, &root) != nil {
 		return
@@ -471,7 +471,7 @@ func applyCommonAccountFileState(account *Account, data []byte) {
 // ProviderPool coordinates the live connections available for routing.
 type ProviderPool struct {
 	mu            sync.RWMutex
-	accounts      []*Account
+	accounts      []*ProviderConnection
 	convPin       map[string]string // conversation_id -> account ID
 	debug         bool
 	rr            uint64
@@ -493,7 +493,7 @@ func newPoolState(connections []*ProviderConnection, debug bool) *ProviderPool {
 }
 
 // replace swaps the pool accounts (used on reload).
-func (p *ProviderPool) replace(accs []*Account) {
+func (p *ProviderPool) replace(accs []*ProviderConnection) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.accounts = accs
@@ -547,7 +547,7 @@ func isCodexProAccessPlan(planType string) bool {
 	}
 }
 
-func accountAllowsClientIPLocked(a *Account, clientIP string) bool {
+func accountAllowsClientIPLocked(a *ProviderConnection, clientIP string) bool {
 	if a == nil || len(a.AllowedSourceIPs) == 0 {
 		return true
 	}
@@ -605,7 +605,7 @@ func (p *ProviderPool) nearestCooldown(accountType AccountType, exclude map[stri
 //  6. Within a tier, use score as tiebreaker (headroom, drain urgency, recency, inflight)
 //  7. If all non-codex candidates are rate-limited, pick the best rate-limited account as fallback
 //     to avoid hard 503 failures during transient exhaustion.
-func (p *ProviderPool) candidateByID(id string, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidateByID(id string, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
 	if id == "" {
 		return nil
 	}
@@ -631,12 +631,12 @@ func (p *ProviderPool) candidateByID(id string, accountType AccountType, require
 	return a
 }
 
-func (p *ProviderPool) candidateWithCyberAccess(exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidateWithCyberAccess(exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	now := time.Now()
-	var best *Account
+	var best *ProviderConnection
 	bestScore := -1e9
 	for _, a := range p.accounts {
 		if exclude != nil && exclude[a.ID] {
@@ -674,7 +674,7 @@ func (p *ProviderPool) candidateWithCyberAccess(exclude map[string]bool, account
 	return best
 }
 
-func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -742,7 +742,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 
 	// Collect eligible accounts with their tier and score
 	type scoredAccount struct {
-		acc          *Account
+		acc          *ProviderConnection
 		tier         int
 		secondaryPct float64
 		score        float64
@@ -800,7 +800,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		eligible = append(eligible, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score})
 	}
 
-	selectCandidate := func(accounts []scoredAccount) *Account {
+	selectCandidate := func(accounts []scoredAccount) *ProviderConnection {
 		threshold := p.tierThreshold
 		// Try Tier 1 accounts below threshold
 		var bestTier1Below *scoredAccount
@@ -956,7 +956,7 @@ func (p *ProviderPool) excludeImageIncapable(exclude map[string]bool) {
 	}
 }
 
-func recordImageGenerationResult(account *Account, success bool) {
+func recordImageGenerationResult(account *ProviderConnection, success bool) {
 	if account == nil {
 		return
 	}
@@ -971,7 +971,7 @@ func recordImageGenerationResult(account *Account, success bool) {
 	atomic.StoreInt64(&account.ImageGenerationRetryAt, time.Now().Add(10*time.Minute).Unix())
 }
 
-func (p *ProviderPool) imageFanoutCandidate(index int, exclude map[string]bool, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) imageFanoutCandidate(index int, exclude map[string]bool, requiredPlan string, clientIP string) *ProviderConnection {
 	if p == nil {
 		return nil
 	}
@@ -1031,7 +1031,7 @@ func (p *ProviderPool) countByType(accountType AccountType) int {
 	return count
 }
 
-func scoreAccount(a *Account, now time.Time) float64 {
+func scoreAccount(a *ProviderConnection, now time.Time) float64 {
 	if a == nil {
 		return 0
 	}
@@ -1061,7 +1061,7 @@ type scoreBreakdown struct {
 	HeadroomPreCredit  float64
 }
 
-func scoreAccountBreakdownLocked(a *Account, now time.Time) scoreBreakdown {
+func scoreAccountBreakdownLocked(a *ProviderConnection, now time.Time) scoreBreakdown {
 	var out scoreBreakdown
 
 	decayPenaltyLocked(a, now)
@@ -1199,11 +1199,11 @@ func scoreAccountBreakdownLocked(a *Account, now time.Time) scoreBreakdown {
 	return out
 }
 
-func scoreAccountLocked(a *Account, now time.Time) float64 {
+func scoreAccountLocked(a *ProviderConnection, now time.Time) float64 {
 	return scoreAccountBreakdownLocked(a, now).Score
 }
 
-func scoreTooltipFromBreakdownLocked(a *Account, now time.Time, breakdown scoreBreakdown) string {
+func scoreTooltipFromBreakdownLocked(a *ProviderConnection, now time.Time, breakdown scoreBreakdown) string {
 	if a.Disabled {
 		return "Not scored because this account is disabled."
 	}
@@ -1257,7 +1257,7 @@ func scoreTooltipFromBreakdownLocked(a *Account, now time.Time, breakdown scoreB
 	return strings.Join(lines, "\n")
 }
 
-func scoreTooltipLocked(a *Account, now time.Time) string {
+func scoreTooltipLocked(a *ProviderConnection, now time.Time) string {
 	return scoreTooltipFromBreakdownLocked(a, now, scoreAccountBreakdownLocked(a, now))
 }
 
@@ -1271,16 +1271,16 @@ func (p *ProviderPool) pin(conversationID, accountID string) {
 }
 
 // allAccounts returns a copy of all accounts for stats/reporting.
-func (p *ProviderPool) allAccounts() []*Account {
+func (p *ProviderPool) allAccounts() []*ProviderConnection {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	out := make([]*Account, len(p.accounts))
+	out := make([]*ProviderConnection, len(p.accounts))
 	copy(out, p.accounts)
 	return out
 }
 
 // saveAccount persists the account back to its auth.json file.
-func saveAccount(a *Account) error {
+func saveAccount(a *ProviderConnection) error {
 	if a == nil {
 		return fmt.Errorf("nil account")
 	}
@@ -1320,7 +1320,7 @@ func saveAccount(a *Account) error {
 	}
 }
 
-func persistAccountAddedAt(root map[string]any, a *Account) {
+func persistAccountAddedAt(root map[string]any, a *ProviderConnection) {
 	if a.AddedAt.IsZero() {
 		a.AddedAt = time.Now().UTC()
 	}
@@ -1328,7 +1328,7 @@ func persistAccountAddedAt(root map[string]any, a *Account) {
 	persistConnectionIdentity(root, a)
 }
 
-func saveCodexAccount(a *Account) error {
+func saveCodexAccount(a *ProviderConnection) error {
 	// Preserve ALL fields in the original auth.json by modifying only token fields that
 	// refresh updates. If we can't parse the existing file, fail closed to avoid
 	// clobbering user-provided auth.json content.
@@ -1406,7 +1406,7 @@ func saveCodexAccount(a *Account) error {
 	return atomicWriteJSON(a.File, root)
 }
 
-func saveGeminiAccount(a *Account) error {
+func saveGeminiAccount(a *ProviderConnection) error {
 	// Preserve existing fields in the file
 	raw, err := os.ReadFile(a.File)
 	if err != nil {
@@ -1446,7 +1446,7 @@ func saveGeminiAccount(a *Account) error {
 }
 
 // saveAPIKeyAccount saves an API-key-based account (kimi, minimax, etc.)
-func saveAPIKeyAccount(a *Account) error {
+func saveAPIKeyAccount(a *ProviderConnection) error {
 	raw, err := os.ReadFile(a.File)
 	if err != nil {
 		return err
@@ -1473,7 +1473,7 @@ func saveAPIKeyAccount(a *Account) error {
 	return atomicWriteJSON(a.File, root)
 }
 
-func saveGrokAccount(a *Account) error {
+func saveGrokAccount(a *ProviderConnection) error {
 	raw, err := os.ReadFile(a.File)
 	if err != nil {
 		return err
@@ -1512,7 +1512,7 @@ func saveGrokAccount(a *Account) error {
 	return fmt.Errorf("grok account %s has no recognized token entry", a.ID)
 }
 
-func applyGrokTokenFields(target map[string]any, a *Account, accessKey, refreshKey, expiresKey, endpointKey string, expiresAsMillis bool) {
+func applyGrokTokenFields(target map[string]any, a *ProviderConnection, accessKey, refreshKey, expiresKey, endpointKey string, expiresAsMillis bool) {
 	if a.AccessToken != "" {
 		target[accessKey] = a.AccessToken
 	}
@@ -1628,7 +1628,7 @@ func mergeUsage(prev, next UsageSnapshot) UsageSnapshot {
 	return res
 }
 
-func (p *ProviderPool) getLocked(id string) *Account {
+func (p *ProviderPool) getLocked(id string) *ProviderConnection {
 	for _, a := range p.accounts {
 		if a.ID == id {
 			return a
@@ -2296,7 +2296,7 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 }
 
 // decayPenalty slowly reduces penalties over time to avoid permanent punishment.
-func decayPenalty(a *Account, now time.Time) {
+func decayPenalty(a *ProviderConnection, now time.Time) {
 	if a == nil {
 		return
 	}
@@ -2305,7 +2305,7 @@ func decayPenalty(a *Account, now time.Time) {
 	decayPenaltyLocked(a, now)
 }
 
-func decayPenaltyLocked(a *Account, now time.Time) {
+func decayPenaltyLocked(a *ProviderConnection, now time.Time) {
 	if a.LastPenalty.IsZero() {
 		a.LastPenalty = now
 		return

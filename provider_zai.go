@@ -31,7 +31,7 @@ type ZAIAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var zj ZAIAuthJSON
 	if err := json.Unmarshal(data, &zj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -40,7 +40,7 @@ func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*Account, err
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeZAI,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -50,11 +50,11 @@ func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*Account, err
 	return acc, nil
 }
 
-func (p *ZAIProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *ZAIProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("X-Api-Key", acc.AccessToken)
 }
 
-func (p *ZAIProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *ZAIProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -107,7 +107,7 @@ func (p *ZAIProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *ZAIProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *ZAIProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// Z.ai's Anthropic-compatible endpoint does not currently expose quota headers.
 }
 

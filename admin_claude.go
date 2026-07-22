@@ -420,7 +420,7 @@ func (h *proxyHandler) handleClaudeExchange(w http.ResponseWriter, r *http.Reque
 // POST /admin/claude/:id/refresh - refresh single account tokens
 func (h *proxyHandler) handleClaudeRefresh(w http.ResponseWriter, r *http.Request, accountID string) {
 	accounts := h.pool.allAccounts()
-	var target *Account
+	var target *ProviderConnection
 	for _, acc := range accounts {
 		if acc.Type == AccountTypeClaude && acc.ID == accountID {
 			target = acc

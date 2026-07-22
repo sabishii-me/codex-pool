@@ -11,7 +11,7 @@ type ConnectionIdentity struct {
 	Attributes      map[string]string `json:"attributes,omitempty"`
 }
 
-func (a *Account) connectionIdentityLocked() ConnectionIdentity {
+func (a *ProviderConnection) connectionIdentityLocked() ConnectionIdentity {
 	identity := a.Identity
 	identity.DisplayName = strings.TrimSpace(identity.DisplayName)
 	identity.ExternalSubject = strings.TrimSpace(identity.ExternalSubject)
@@ -49,7 +49,7 @@ func (a *Account) connectionIdentityLocked() ConnectionIdentity {
 	return identity
 }
 
-func (a *Account) ConnectionIdentity() ConnectionIdentity {
+func (a *ProviderConnection) ConnectionIdentity() ConnectionIdentity {
 	if a == nil {
 		return ConnectionIdentity{}
 	}
@@ -58,7 +58,7 @@ func (a *Account) ConnectionIdentity() ConnectionIdentity {
 	return a.connectionIdentityLocked()
 }
 
-func connectionExternalSubjectLocked(a *Account) string {
+func connectionExternalSubjectLocked(a *ProviderConnection) string {
 	for _, value := range []string{a.AccountID, a.IDTokenChatGPTAccountID, a.AccountUUID} {
 		if value = strings.TrimSpace(value); value != "" {
 			return value
@@ -67,7 +67,7 @@ func connectionExternalSubjectLocked(a *Account) string {
 	return ""
 }
 
-func suggestedConnectionDisplayNameLocked(a *Account, identity ConnectionIdentity) string {
+func suggestedConnectionDisplayNameLocked(a *ProviderConnection, identity ConnectionIdentity) string {
 	for _, value := range []string{a.Label, a.Email} {
 		if value = strings.TrimSpace(value); value != "" {
 			return value
@@ -90,7 +90,7 @@ func abbreviatedIdentity(value string) string {
 	return value[:6] + "…" + value[len(value)-4:]
 }
 
-func persistConnectionIdentity(root map[string]any, a *Account) {
+func persistConnectionIdentity(root map[string]any, a *ProviderConnection) {
 	if root == nil || a == nil {
 		return
 	}

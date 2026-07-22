@@ -1420,7 +1420,7 @@ func isAntigravityResponsesPath(path string) bool {
 	return false
 }
 
-func (h *proxyHandler) doAntigravityRequest(ctx context.Context, incoming http.Header, account *Account, provider *AntigravityProvider, prepared antigravityPreparedRequest) (*http.Response, error) {
+func (h *proxyHandler) doAntigravityRequest(ctx context.Context, incoming http.Header, account *ProviderConnection, provider *AntigravityProvider, prepared antigravityPreparedRequest) (*http.Response, error) {
 	tryBase := func(base *url.URL) (*http.Response, error) {
 		u := *base
 		operation := prepared.Operation
@@ -1459,7 +1459,7 @@ func (h *proxyHandler) doAntigravityRequest(ctx context.Context, incoming http.H
 	return tryBase(provider.prodBase)
 }
 
-func (h *proxyHandler) doAntigravityRequestWithTransientRetry(ctx context.Context, incoming http.Header, account *Account, provider *AntigravityProvider, prepared antigravityPreparedRequest) (*http.Response, error) {
+func (h *proxyHandler) doAntigravityRequestWithTransientRetry(ctx context.Context, incoming http.Header, account *ProviderConnection, provider *AntigravityProvider, prepared antigravityPreparedRequest) (*http.Response, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		resp, err := h.doAntigravityRequest(ctx, incoming, account, provider, prepared)
 		if err != nil || resp == nil {
@@ -1552,7 +1552,7 @@ func parseAntigravityRetry(body []byte, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func (h *proxyHandler) writeAntigravityResponse(w http.ResponseWriter, resp *http.Response, prepared antigravityPreparedRequest, replayScope antigravityReplayScope, account *Account, userID, originID, reqID string) {
+func (h *proxyHandler) writeAntigravityResponse(w http.ResponseWriter, resp *http.Response, prepared antigravityPreparedRequest, replayScope antigravityReplayScope, account *ProviderConnection, userID, originID, reqID string) {
 	defer resp.Body.Close()
 	w.Header().Set("X-Accel-Buffering", "no")
 	if !prepared.ClientStream {
@@ -1619,7 +1619,7 @@ func (h *proxyHandler) writeAntigravityResponse(w http.ResponseWriter, resp *htt
 	h.recordAntigravityUsage(account, usage, prepared.PublicModel, userID, originID, reqID)
 }
 
-func (h *proxyHandler) recordAntigravityUsage(account *Account, usage *RequestUsage, model, userID, originID, reqID string) {
+func (h *proxyHandler) recordAntigravityUsage(account *ProviderConnection, usage *RequestUsage, model, userID, originID, reqID string) {
 	if usage == nil {
 		return
 	}

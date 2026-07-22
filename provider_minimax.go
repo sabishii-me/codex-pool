@@ -32,7 +32,7 @@ type MinimaxAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *MinimaxProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *MinimaxProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var mj MinimaxAuthJSON
 	if err := json.Unmarshal(data, &mj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -41,7 +41,7 @@ func (p *MinimaxProvider) LoadAccount(name, path string, data []byte) (*Account,
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeMinimax,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -51,11 +51,11 @@ func (p *MinimaxProvider) LoadAccount(name, path string, data []byte) (*Account,
 	return acc, nil
 }
 
-func (p *MinimaxProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *MinimaxProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *MinimaxProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *MinimaxProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -105,7 +105,7 @@ func (p *MinimaxProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *MinimaxProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *MinimaxProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	applyMinimaxRateLimits(acc, headers, time.Now())
 }
 

@@ -2037,7 +2037,7 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 // or every suppression event was paired with a successful swap or a
 // buffered/4xx retry — i.e. no synthetic-refusal fallbacks AND there's
 // still a cyber candidate available for the next hit.
-func (h *proxyHandler) computeCyberPolicyStats(accounts []*Account) CyberPolicyStats {
+func (h *proxyHandler) computeCyberPolicyStats(accounts []*ProviderConnection) CyberPolicyStats {
 	out := CyberPolicyStats{
 		Counters:   map[string]int64{},
 		PerAccount: map[string]map[string]int64{},

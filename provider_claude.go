@@ -27,13 +27,13 @@ func (p *ClaudeProvider) Type() AccountType {
 	return AccountTypeClaude
 }
 
-func (p *ClaudeProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *ClaudeProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var cj ClaudeAuthJSON
 	if err := json.Unmarshal(data, &cj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type: AccountTypeClaude,
 		ID:   strings.TrimSuffix(name, filepath.Ext(name)),
 		File: path,
@@ -93,7 +93,7 @@ func (p *ClaudeProvider) LoadAccount(name, path string, data []byte) (*Account, 
 	return acc, nil
 }
 
-func (p *ClaudeProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *ClaudeProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	// OAuth tokens start with sk-ant-oat, API keys with sk-ant-api
 	if strings.HasPrefix(acc.AccessToken, "sk-ant-oat") {
 		req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
@@ -102,7 +102,7 @@ func (p *ClaudeProvider) SetAuthHeaders(req *http.Request, acc *Account) {
 	}
 }
 
-func (p *ClaudeProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *ClaudeProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	// Only OAuth tokens (not API keys) can be refreshed
 	if !strings.HasPrefix(acc.AccessToken, "sk-ant-oat") {
 		// API keys don't need refresh
@@ -163,7 +163,7 @@ func (p *ClaudeProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *ClaudeProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *ClaudeProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	snap, ok := parseClaudeResponseRateLimits(headers)
 	if !ok {
 		return

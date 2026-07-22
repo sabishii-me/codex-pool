@@ -32,7 +32,7 @@ type QwenAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *QwenProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *QwenProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var qj QwenAuthJSON
 	if err := json.Unmarshal(data, &qj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -41,7 +41,7 @@ func (p *QwenProvider) LoadAccount(name, path string, data []byte) (*Account, er
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeQwen,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -51,11 +51,11 @@ func (p *QwenProvider) LoadAccount(name, path string, data []byte) (*Account, er
 	return acc, nil
 }
 
-func (p *QwenProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *QwenProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *QwenProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *QwenProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -104,7 +104,7 @@ func (p *QwenProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *QwenProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *QwenProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// Qwen's Anthropic-compatible endpoint does not currently expose quota headers.
 }
 

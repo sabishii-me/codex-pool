@@ -56,7 +56,7 @@ func nextGeminiPacificMidnight(now time.Time) (time.Time, bool) {
 	return time.Date(local.Year(), local.Month(), local.Day()+1, 0, 0, 0, 0, location), true
 }
 
-func (h *proxyHandler) applyRateLimitResponse(a *Account, headers http.Header, body []byte) time.Duration {
+func (h *proxyHandler) applyRateLimitResponse(a *ProviderConnection, headers http.Header, body []byte) time.Duration {
 	if a == nil || a.Type != AccountTypeGemini {
 		return h.applyRateLimit(a, headers)
 	}

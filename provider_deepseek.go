@@ -31,7 +31,7 @@ type DeepSeekAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *DeepSeekProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *DeepSeekProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var dj DeepSeekAuthJSON
 	if err := json.Unmarshal(data, &dj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -40,7 +40,7 @@ func (p *DeepSeekProvider) LoadAccount(name, path string, data []byte) (*Account
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeDeepSeek,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -50,11 +50,11 @@ func (p *DeepSeekProvider) LoadAccount(name, path string, data []byte) (*Account
 	return acc, nil
 }
 
-func (p *DeepSeekProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *DeepSeekProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *DeepSeekProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *DeepSeekProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -107,7 +107,7 @@ func (p *DeepSeekProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *DeepSeekProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *DeepSeekProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// DeepSeek's Anthropic-compatible endpoint does not currently expose quota headers.
 }
 

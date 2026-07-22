@@ -89,7 +89,7 @@ func codexDesktopUserAgent(fp codexFingerprintState) string {
 	return fmt.Sprintf("Codex Desktop/%s (%s; %s)", fp.AppVersion, fp.Platform, fp.Arch)
 }
 
-func applyCodexRequestFingerprint(req *http.Request, acc *Account) {
+func applyCodexRequestFingerprint(req *http.Request, acc *ProviderConnection) {
 	if req == nil || acc == nil || acc.Type != AccountTypeCodex {
 		return
 	}
@@ -131,7 +131,7 @@ func codexSecCHPlatform(platform string) string {
 	}
 }
 
-func applyCodexCookies(req *http.Request, acc *Account) {
+func applyCodexCookies(req *http.Request, acc *ProviderConnection) {
 	acc.mu.Lock()
 	cookies := make(map[string]string, len(acc.CodexCookies))
 	for k, v := range acc.CodexCookies {
@@ -160,7 +160,7 @@ func applyCodexCookies(req *http.Request, acc *Account) {
 	req.Header.Set("Cookie", strings.Join(parts, "; "))
 }
 
-func captureCodexResponseState(acc *Account, resp *http.Response, reqID string) {
+func captureCodexResponseState(acc *ProviderConnection, resp *http.Response, reqID string) {
 	if acc == nil || resp == nil || acc.Type != AccountTypeCodex {
 		return
 	}

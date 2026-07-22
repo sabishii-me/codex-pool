@@ -19,7 +19,7 @@ import (
 type codexCyberSwapOptions struct {
 	ReqID                       string
 	Provider                    Provider
-	InitialAccount              *Account
+	InitialAccount              *ProviderConnection
 	InitialOutURL               *url.URL
 	InitialUpstreamHeaders      http.Header
 	ConversationID              string
@@ -36,7 +36,7 @@ type codexCyberSwapOptions struct {
 	// SetActiveAccount lets the caller follow the swap with bookkeeping
 	// (notably the inflight counter transfer) so deferred cleanup
 	// touches the right account.
-	SetActiveAccount func(next *Account)
+	SetActiveAccount func(next *ProviderConnection)
 }
 
 // codexCyberSwapResult tells the caller how the relay finished.
@@ -44,7 +44,7 @@ type codexCyberSwapResult struct {
 	statusCode   int
 	err          error
 	swapped      bool
-	finalAccount *Account
+	finalAccount *ProviderConnection
 }
 
 // swapPendingErr is returned from the upstream pump on a cyber_policy
@@ -53,7 +53,7 @@ type codexCyberSwapResult struct {
 // the client when the swap is skipped or fails so the user sees the
 // real upstream error instead of a fabricated message.
 type swapPendingErr struct {
-	next  *Account
+	next  *ProviderConnection
 	frame []byte
 }
 
@@ -145,7 +145,7 @@ type codexRelayState struct {
 	clientConn    *websocket.Conn
 	clientWriter  *webSocketWriter
 	upstreamConn  *websocket.Conn
-	activeAccount *Account
+	activeAccount *ProviderConnection
 	subprotocols  []string
 
 	clientCh   <-chan wsFrame
@@ -416,7 +416,7 @@ func applyModelAliasToJSONFrame(h *proxyHandler, reqID string, data []byte) []by
 	return data
 }
 
-func (s *codexRelayState) doSwap(cand *Account) error {
+func (s *codexRelayState) doSwap(cand *ProviderConnection) error {
 	newConn, newResp, err := s.h.dialSwappedUpstream(s.ctx, s.opts, cand, s.subprotocols)
 	if err != nil {
 		return err
@@ -453,7 +453,7 @@ func (s *codexRelayState) doSwap(cand *Account) error {
 	return nil
 }
 
-func (s *codexRelayState) pickCyberAccessCandidate() *Account {
+func (s *codexRelayState) pickCyberAccessCandidate() *ProviderConnection {
 	exclude := map[string]bool{}
 	if s.opts.InitialAccount != nil {
 		exclude[s.opts.InitialAccount.ID] = true
@@ -532,7 +532,7 @@ func (s *codexRelayState) result(statusCode int, relayErr error) codexCyberSwapR
 func (h *proxyHandler) dialSwappedUpstream(
 	ctx context.Context,
 	opts codexCyberSwapOptions,
-	acc *Account,
+	acc *ProviderConnection,
 	subprotocols []string,
 ) (*websocket.Conn, *http.Response, error) {
 	if !h.cfg.disableRefresh && h.needsRefresh(acc) {

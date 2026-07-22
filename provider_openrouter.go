@@ -36,7 +36,7 @@ type OpenRouterAuthJSON struct {
 	APIKey string `json:"api_key"`
 }
 
-func (p *OpenRouterProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *OpenRouterProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var oj OpenRouterAuthJSON
 	if err := json.Unmarshal(data, &oj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -45,7 +45,7 @@ func (p *OpenRouterProvider) LoadAccount(name, path string, data []byte) (*Accou
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeOpenRouter,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -55,11 +55,11 @@ func (p *OpenRouterProvider) LoadAccount(name, path string, data []byte) (*Accou
 	return acc, nil
 }
 
-func (p *OpenRouterProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *OpenRouterProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *OpenRouterProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *OpenRouterProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -108,7 +108,7 @@ func (p *OpenRouterProvider) ParseUsage(obj map[string]any) *RequestUsage {
 	return nil
 }
 
-func (p *OpenRouterProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *OpenRouterProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 	// OpenRouter's Anthropic-compatible endpoint does not currently expose quota headers.
 }
 

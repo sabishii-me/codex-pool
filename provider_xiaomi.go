@@ -31,7 +31,7 @@ type XiaomiAuthJSON struct {
 	Disabled bool   `json:"disabled"`
 }
 
-func (p *XiaomiProvider) LoadAccount(name, path string, data []byte) (*Account, error) {
+func (p *XiaomiProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
 	var xj XiaomiAuthJSON
 	if err := json.Unmarshal(data, &xj); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
@@ -40,7 +40,7 @@ func (p *XiaomiProvider) LoadAccount(name, path string, data []byte) (*Account, 
 		return nil, nil
 	}
 
-	acc := &Account{
+	acc := &ProviderConnection{
 		Type:        AccountTypeXiaomi,
 		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
 		File:        path,
@@ -52,11 +52,11 @@ func (p *XiaomiProvider) LoadAccount(name, path string, data []byte) (*Account, 
 	return acc, nil
 }
 
-func (p *XiaomiProvider) SetAuthHeaders(req *http.Request, acc *Account) {
+func (p *XiaomiProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
 	req.Header.Set("Authorization", "Bearer "+acc.AccessToken)
 }
 
-func (p *XiaomiProvider) RefreshToken(ctx context.Context, acc *Account, transport http.RoundTripper) error {
+func (p *XiaomiProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
 	return nil
 }
 
@@ -124,7 +124,7 @@ func xiaomiUsageFromMap(usageMap map[string]any) *RequestUsage {
 	return ru
 }
 
-func (p *XiaomiProvider) ParseUsageHeaders(acc *Account, headers http.Header) {
+func (p *XiaomiProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
 }
 
 func (p *XiaomiProvider) UpstreamURL(path string) *url.URL {

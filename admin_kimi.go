@@ -118,7 +118,7 @@ func (h *proxyHandler) handleAPIKeyList(w http.ResponseWriter, acctType AccountT
 // handleAPIKeyRemove marks an account as dead.
 func (h *proxyHandler) handleAPIKeyRemove(w http.ResponseWriter, acctType AccountType, accountID string) {
 	accounts := h.pool.allAccounts()
-	var target *Account
+	var target *ProviderConnection
 	for _, acc := range accounts {
 		if acc.Type == acctType && acc.ID == accountID {
 			target = acc

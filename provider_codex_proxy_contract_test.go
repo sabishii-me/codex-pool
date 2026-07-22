@@ -83,7 +83,7 @@ func TestCodexToAnthropicStreamFinalizesUnterminatedCompletedEvent(t *testing.T)
 	}
 }
 
-func TestCodexProxyLargeNativeResponsesBodyIntegrity(t *testing.T) {
+func TestCodexProxyRejectsLargeNativeResponsesBeforeUpstream(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "contract-secret")
 	var forwarded []byte
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -114,11 +114,10 @@ func TestCodexProxyLargeNativeResponsesBodyIntegrity(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("contract-secret", "contract-user"))
 	response := httptest.NewRecorder()
 	handler.proxyRequest(response, request, "codex-large-contract")
-	if response.Code != http.StatusOK {
+	if response.Code != http.StatusBadRequest {
 		t.Fatalf("response status=%d body=%s", response.Code, response.Body.String())
 	}
-	if !bytes.Equal(forwarded, requestBody) {
-		t.Fatalf("large native Responses body changed: got %d bytes, want %d", len(forwarded), len(requestBody))
+	if forwarded != nil {
+		t.Fatalf("large native Responses body reached upstream: %d bytes", len(forwarded))
 	}
-	assertCanonicalCustomUsage(t, analytics, account, "codex-large-contract", "contract-user", 120, 30, 0, 40, 7, 130)
 }

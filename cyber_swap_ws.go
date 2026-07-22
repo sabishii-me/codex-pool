@@ -296,9 +296,10 @@ func pumpFrames(
 				if err != nil {
 					return err
 				}
-				if rewritten != nil {
-					data = rewritten
+				if rewritten == nil {
+					continue
 				}
+				data = rewritten
 			}
 			if err := dst.Write(ctx, frame.msgType, data); err != nil {
 				return fmt.Errorf("%s write: %w", label, err)
@@ -309,6 +310,20 @@ func pumpFrames(
 
 func (s *codexRelayState) inspectUpstream(data []byte) ([]byte, error) {
 	s.recordCompletedUsage(data)
+	limit := int64(0)
+	if s.h != nil && s.h.cfg != nil {
+		limit = s.h.cfg.maxInMemoryBodyBytes
+	}
+	filtered, drop, changed, filterErr := filterHostedMCPResponseJSON(data, limit)
+	if filterErr != nil {
+		return nil, filterErr
+	}
+	if drop {
+		return nil, nil
+	}
+	if changed {
+		data = filtered
+	}
 	if !isCyberPolicyError(data) {
 		return data, nil
 	}
@@ -336,6 +351,14 @@ func (s *codexRelayState) inspectClient(data []byte) ([]byte, error) {
 		data, err = applyModelRouteToWebSocketFrame(s.h, s.opts.Provider, data)
 		if err != nil {
 			return data, err
+		}
+		limit := int64(0)
+		if s.h != nil && s.h.cfg != nil {
+			limit = s.h.cfg.maxInMemoryBodyBytes
+		}
+		data, _, err = filterHostedMCPRequestJSON(data, limit)
+		if err != nil {
+			return nil, err
 		}
 		s.lastResponseCreate = append(s.lastResponseCreate[:0], data...)
 		s.requestedModel = extractRequestedModelFromJSON(data)

@@ -70,6 +70,29 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestHostedMCPFilteringRemainsBounded(t *testing.T) {
+	for _, path := range []string{"hosted_mcp_filter.go", "hosted_mcp_stream_filter.go", "main.go"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"hostedMCPMaxSSEEventBytes", "512 * 1024 * 1024"} {
+			if strings.Contains(string(data), forbidden) {
+				t.Errorf("%s contains forbidden unbounded MCP/WebSocket allowance %q", path, forbidden)
+			}
+		}
+	}
+	mainData, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"copyHostedMCPFilteredSSE", "filterHostedMCPHTTPResponse", "filterHostedMCPHTTPRequest", "filterHostedMCPRequestJSON", "filterHostedMCPResponseJSON"} {
+		if !strings.Contains(string(mainData), required) {
+			t.Errorf("main transport boundaries do not use %s", required)
+		}
+	}
+}
+
 func TestCodexFairnessPolicyStaysBehindConnectionSelector(t *testing.T) {
 	selectorData, err := os.ReadFile("connection_selector.go")
 	if err != nil {

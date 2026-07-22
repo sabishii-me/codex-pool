@@ -365,12 +365,11 @@ func TestProxyWebSocketForwardsTurnStateBothWays(t *testing.T) {
 	}
 }
 
-func TestProxyWebSocketRelaysFrameLargerThanOld64MiBLimit(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func TestProxyWebSocketRejectsFrameAboveTransformationLimit(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	const payloadSize = 65 * 1024 * 1024
-	largePayload := strings.Repeat("x", payloadSize)
+	largePayload := strings.Repeat("x", 2048)
 	largeMessage := `{"type":"response.output_text.delta","delta":"` + largePayload + `"}`
 
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -433,12 +432,9 @@ func TestProxyWebSocketRelaysFrameLargerThanOld64MiBLimit(t *testing.T) {
 		t.Fatalf("write response.create: %v", err)
 	}
 
-	_, data, err := conn.Read(ctx)
-	if err != nil {
-		t.Fatalf("read large proxied websocket message: %v", err)
-	}
-	if len(data) != len(largeMessage) {
-		t.Fatalf("large message len = %d, want %d", len(data), len(largeMessage))
+	_, _, err = conn.Read(ctx)
+	if err == nil {
+		t.Fatal("oversized transformed websocket frame reached client")
 	}
 }
 

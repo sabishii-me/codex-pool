@@ -1789,6 +1789,10 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		streamBody = streamBody || accountType == AccountTypeXiaomi
 	}
 	if streamBody {
+		if accountType == AccountTypeCodex && isCodexResponsesPath(r.URL.Path) {
+			http.Error(w, fmt.Sprintf("large Codex Responses request requires hosted MCP inspection; reduce the request below %d bytes", h.cfg.maxInMemoryBodyBytes), http.StatusBadRequest)
+			return
+		}
 		if h.cfg.debug.Load() {
 			log.Printf("[%s] streaming request body: method=%s path=%s provider=%s content-length=%d",
 				reqID, r.Method, r.URL.Path, accountType, r.ContentLength)
@@ -2011,6 +2015,14 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 	if accountType == AccountTypeGrok {
 		bodyBytes = rewriteAndSanitizeGrokRequestBody(bodyBytes, requestedModel)
+	}
+	if accountType == AccountTypeCodex && isCodexResponsesPath(r.URL.Path) {
+		filtered, _, filterErr := filterHostedMCPHTTPRequest(r, bodyBytes, h.cfg.maxInMemoryBodyBytes)
+		if filterErr != nil {
+			http.Error(w, "hosted MCP request filtering error: "+filterErr.Error(), http.StatusBadRequest)
+			return
+		}
+		bodyBytes = filtered
 	}
 
 	if h.cfg.debug.Load() && conversationID == "" && len(inspect) > 0 {
@@ -2309,12 +2321,24 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		headerSecondaryPct := acc.Usage.SecondaryUsedPercent
 		acc.mu.Unlock()
 
-		// Prepare response headers.
+		flusher, _ := w.(http.Flusher)
+		respContentType := resp.Header.Get("Content-Type")
+		isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
+		if accountType == AccountTypeCodex && !isSSE && resp.StatusCode < 400 {
+			if filterErr := filterHostedMCPHTTPResponse(resp, h.cfg.maxInMemoryBodyBytes); filterErr != nil {
+				h.recent.add(filterErr.Error())
+				h.metrics.inc("error", acc.ID)
+				http.Error(w, filterErr.Error(), http.StatusBadGateway)
+				return
+			}
+		}
+
+		// Prepare response headers after any bounded body transformation.
 		copyHeader(w.Header(), resp.Header)
 		removeHopByHopHeaders(w.Header())
 		h.replaceUsageHeaders(w.Header())
 
-		// Inject Claude models into model catalog response
+		// Inject Claude models into model catalog response.
 		if strings.Contains(r.URL.Path, "codex/models") && resp.StatusCode == 200 {
 			w.Header().Del("Content-Length")
 			w.Header().Del("Content-Encoding") // We'll return uncompressed JSON
@@ -2330,10 +2354,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			return
 		}
 
-		flusher, _ := w.(http.Flusher)
-		respContentType := resp.Header.Get("Content-Type")
-		isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
-		// When translating to Responses API, the path-based SSE detection may
+		// When translating to Responses API, path-based SSE detection may
 		// incorrectly flag non-SSE error responses (plain JSON 4xx/5xx) as SSE.
 		// Check the actual content-type on error responses to avoid feeding
 		// plain JSON through the SSE translator (which would silently drop it).
@@ -2357,7 +2378,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			bufWriter := &responsesBufferingWriter{model: requestedModel}
 			inspectWriter := h.wrapBufferedSSEWithCyberDetector(bufWriter, accountType, acc, conversationID, requiredPlan, originIP, reqID, &cyberPinned)
-			if _, err := io.Copy(inspectWriter, resp.Body); err != nil {
+			if err := copyHostedMCPFilteredSSE(inspectWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] buffering Responses SSE error: %v", reqID, err)
 				}
@@ -2409,7 +2430,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				model:    requestedModel,
 			}
 
-			if _, err := io.Copy(bufWriter, resp.Body); err != nil {
+			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] buffering Claude SSE error: %v", reqID, err)
 				}
@@ -2431,7 +2452,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			bufWriter := &responsesBufferingWriter{model: requestedModel}
 			inspectWriter := h.wrapBufferedSSEWithCyberDetector(bufWriter, accountType, acc, conversationID, requiredPlan, originIP, reqID, &cyberPinned)
 			var rawImageStream bytes.Buffer
-			if _, err := io.Copy(inspectWriter, io.TeeReader(resp.Body, &rawImageStream)); err != nil {
+			if err := copyHostedMCPFilteredSSE(inspectWriter, io.TeeReader(resp.Body, &rawImageStream), h.cfg.maxInMemoryBodyBytes); err != nil {
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] buffering Images SSE error: %v", reqID, err)
 				}
@@ -2489,7 +2510,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				reqID:    reqID,
 			}
 
-			if _, err := io.Copy(bufWriter, resp.Body); err != nil {
+			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] buffering completions SSE error: %v", reqID, err)
 				}
@@ -2541,7 +2562,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				reqID:    reqID,
 			}
 
-			if _, err := io.Copy(bufWriter, resp.Body); err != nil {
+			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
 				if h.cfg.debug.Load() {
 					log.Printf("[%s] buffering SSE error: %v", reqID, err)
 				}
@@ -2758,6 +2779,12 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				}
 			}
 
+			var hostedMCPFilter *hostedMCPResponseFilterWriter
+			if isSSE && accountType == AccountTypeCodex {
+				hostedMCPFilter = newHostedMCPResponseFilterWriter(writer, h.cfg.maxInMemoryBodyBytes)
+				writer = hostedMCPFilter
+			}
+
 			var idleReader *idleTimeoutReader
 			if isSSE && h.cfg.streamIdleTimeout > 0 {
 				idleReader = newIdleTimeoutReader(resp.Body, h.cfg.streamIdleTimeout, cancel)
@@ -2766,6 +2793,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			_, copyErr := io.Copy(writer, resp.Body)
 			resp.Body.Close()
+			if hostedMCPFilter != nil {
+				if finalizeErr := hostedMCPFilter.Finalize(); copyErr == nil {
+					copyErr = finalizeErr
+				}
+			}
 			if responsesClaudeWriter != nil {
 				if finalizeErr := responsesClaudeWriter.Finalize(); copyErr == nil {
 					copyErr = finalizeErr
@@ -3120,8 +3152,27 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 
 	readLimit := effectiveWebSocketReadLimit(providerType, h.cfg.websocketReadLimit)
 	downstreamHeartbeatInterval := time.Duration(0)
+	var transformUpstream, transformClient func([]byte) ([]byte, error)
 	if providerType == AccountTypeCodex {
 		downstreamHeartbeatInterval = h.cfg.websocketHeartbeatInterval
+		limit := h.cfg.maxInMemoryBodyBytes
+		transformUpstream = func(data []byte) ([]byte, error) {
+			filtered, drop, changed, err := filterHostedMCPResponseJSON(data, limit)
+			if err != nil || drop {
+				return nil, err
+			}
+			if changed {
+				return filtered, nil
+			}
+			return data, nil
+		}
+		transformClient = func(data []byte) ([]byte, error) {
+			if !isCodexResponseCreate(data) {
+				return data, nil
+			}
+			filtered, _, err := filterHostedMCPRequestJSON(data, limit)
+			return filtered, err
+		}
 	}
 	statusCode, err := relayWebSocket(w, r, outURL, upstreamHeaders, webSocketRelayOptions{
 		IdleTimeout:                 h.cfg.websocketIdleTimeout,
@@ -3130,6 +3181,8 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 		CompressionEnabled:          h.cfg.websocketCompression,
 		LogLabel:                    reqID + " passthrough",
 		Debug:                       h.cfg.debug.Load(),
+		TransformUpstream:           transformUpstream,
+		TransformClient:             transformClient,
 	})
 
 	if err != nil {
@@ -3168,16 +3221,13 @@ type webSocketRelayOptions struct {
 	OnUpstreamResponse          func(*http.Response)
 	OnUpstreamMessage           func([]byte) error
 	OnClientMessage             func([]byte) error
+	TransformUpstream           func([]byte) ([]byte, error)
+	TransformClient             func([]byte) ([]byte, error)
 }
 
-const codexWebSocketReadLimit = 512 * 1024 * 1024
-
-func effectiveWebSocketReadLimit(accountType AccountType, configured int64) int64 {
+func effectiveWebSocketReadLimit(_ AccountType, configured int64) int64 {
 	if configured <= 0 {
-		configured = 64 * 1024 * 1024
-	}
-	if accountType == AccountTypeCodex && configured < codexWebSocketReadLimit {
-		return codexWebSocketReadLimit
+		return 64 * 1024 * 1024
 	}
 	return configured
 }
@@ -3237,10 +3287,10 @@ func relayWebSocket(
 	defer stopHeartbeat()
 
 	go func() {
-		errc <- relayMessages(relayCtx, upstreamConn, clientWriter, opts.LogLabel, "upstream->client", opts.IdleTimeout, opts.Debug, opts.OnUpstreamMessage)
+		errc <- relayMessages(relayCtx, upstreamConn, clientWriter, opts.LogLabel, "upstream->client", opts.IdleTimeout, opts.Debug, opts.OnUpstreamMessage, opts.TransformUpstream)
 	}()
 	go func() {
-		errc <- relayMessages(relayCtx, clientConn, upstreamWriter, opts.LogLabel, "client->upstream", opts.IdleTimeout, opts.Debug, opts.OnClientMessage)
+		errc <- relayMessages(relayCtx, clientConn, upstreamWriter, opts.LogLabel, "client->upstream", opts.IdleTimeout, opts.Debug, opts.OnClientMessage, opts.TransformClient)
 	}()
 
 	relayErr := <-errc
@@ -3333,8 +3383,8 @@ func startWebSocketHeartbeat(ctx context.Context, dst *webSocketWriter, interval
 // We use a time.AfterFunc watchdog instead of context.WithTimeout because
 // coder/websocket closes the connection when the read context is cancelled,
 // which would tear the relay down on every successful frame.
-func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWriter, logLabel, label string, idleTimeout time.Duration, debug bool, onMessage func([]byte) error) error {
-	if !debug && onMessage == nil {
+func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWriter, logLabel, label string, idleTimeout time.Duration, debug bool, onMessage func([]byte) error, transform func([]byte) ([]byte, error)) error {
+	if !debug && onMessage == nil && transform == nil {
 		return relayMessagesStreaming(ctx, src, dst, label, idleTimeout)
 	}
 	var idleTimer *time.Timer
@@ -3358,6 +3408,15 @@ func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWrite
 		if onMessage != nil {
 			if err := onMessage(data); err != nil {
 				return err
+			}
+		}
+		if transform != nil {
+			data, err = transform(data)
+			if err != nil {
+				return err
+			}
+			if data == nil {
+				continue
 			}
 		}
 		if err := dst.Write(ctx, msgType, data); err != nil {
@@ -3572,13 +3631,23 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	headerSecondaryPct := acc.Usage.SecondaryUsedPercent
 	acc.mu.Unlock()
 
+	// Filter bounded non-streaming Codex Responses before committing headers.
+	respContentType := resp.Header.Get("Content-Type")
+	isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
+	if accountType == AccountTypeCodex && !isSSE && resp.StatusCode < 400 {
+		if filterErr := filterHostedMCPHTTPResponse(resp, h.cfg.maxInMemoryBodyBytes); filterErr != nil {
+			h.recent.add(filterErr.Error())
+			h.metrics.inc("error", acc.ID)
+			http.Error(w, filterErr.Error(), http.StatusBadGateway)
+			return
+		}
+	}
+
 	// Write response to client.
 	copyHeader(w.Header(), resp.Header)
 	removeHopByHopHeaders(w.Header())
 	h.replaceUsageHeaders(w.Header())
 	flusher, _ := w.(http.Flusher)
-	respContentType := resp.Header.Get("Content-Type")
-	isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
 	if isSSE {
 		applyStreamingResponseHeaders(w.Header())
 	}
@@ -3666,6 +3735,12 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		writer = interceptWriter
 	}
 
+	var hostedMCPFilter *hostedMCPResponseFilterWriter
+	if isSSE && accountType == AccountTypeCodex {
+		hostedMCPFilter = newHostedMCPResponseFilterWriter(writer, h.cfg.maxInMemoryBodyBytes)
+		writer = hostedMCPFilter
+	}
+
 	// Wrap response body with idle timeout to kill zombie SSE connections.
 	var idleReader *idleTimeoutReader
 	if isSSE && h.cfg.streamIdleTimeout > 0 {
@@ -3674,6 +3749,11 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	}
 
 	_, copyErr := io.Copy(writer, resp.Body)
+	if hostedMCPFilter != nil {
+		if finalizeErr := hostedMCPFilter.Finalize(); copyErr == nil {
+			copyErr = finalizeErr
+		}
+	}
 	if hw2 != nil {
 		hw2.Stop()
 	}
@@ -4031,6 +4111,10 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		streamBody = false
 	}
 	if streamBody {
+		if providerType == AccountTypeCodex && isCodexResponsesPath(path) {
+			http.Error(w, fmt.Sprintf("large Codex Responses request requires hosted MCP inspection; reduce the request below %d bytes", h.cfg.maxInMemoryBodyBytes), http.StatusBadRequest)
+			return
+		}
 		if h.cfg.debug.Load() {
 			log.Printf("[%s] passthrough streaming body: method=%s path=%s provider=%s content-length=%d",
 				reqID, r.Method, r.URL.Path, providerType, r.ContentLength)
@@ -4062,6 +4146,12 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		targetBase = provider.UpstreamURL(path)
 		r = r.Clone(r.Context())
 		r.URL.Path = path
+		filtered, _, filterErr := filterHostedMCPHTTPRequest(r, bodyBytes, h.cfg.maxInMemoryBodyBytes)
+		if filterErr != nil {
+			http.Error(w, "hosted MCP request filtering error: "+filterErr.Error(), http.StatusBadRequest)
+			return
+		}
+		bodyBytes = filtered
 	}
 
 	if h.cfg.debug.Load() {
@@ -4153,6 +4243,13 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	if isSSE && resp.StatusCode >= 400 && !strings.Contains(strings.ToLower(respContentType), "text/event-stream") {
 		isSSE = false
 	}
+	if providerType == AccountTypeCodex && !isSSE && resp.StatusCode < 400 {
+		if filterErr := filterHostedMCPHTTPResponse(resp, h.cfg.maxInMemoryBodyBytes); filterErr != nil {
+			h.recent.add(filterErr.Error())
+			http.Error(w, filterErr.Error(), http.StatusBadGateway)
+			return
+		}
+	}
 	clientWantsNonStreaming := true
 	if len(bodyBytes) > 0 {
 		var obj map[string]any
@@ -4167,14 +4264,30 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		w.Header().Del("Content-Length")
 		if passthroughTranslateDir == TranslateCompletionsToResponses {
 			bufWriter := &responsesToCompletionsBufferingWriter{debug: h.cfg.debug.Load(), reqID: reqID}
-			_, _ = io.Copy(bufWriter, resp.Body)
+			filter := newHostedMCPResponseFilterWriter(bufWriter, h.cfg.maxInMemoryBodyBytes)
+			_, copyErr := io.Copy(filter, resp.Body)
+			if finalizeErr := filter.Finalize(); copyErr == nil {
+				copyErr = finalizeErr
+			}
+			if copyErr != nil {
+				http.Error(w, copyErr.Error(), http.StatusBadGateway)
+				return
+			}
 			w.WriteHeader(resp.StatusCode)
 			w.Write(bufWriter.Result())
 			return
 		}
 		if passthroughTranslateDir == TranslateChatToResponses {
 			bufWriter := &responsesToChatCompletionsBufferingWriter{debug: h.cfg.debug.Load(), reqID: reqID}
-			_, _ = io.Copy(bufWriter, resp.Body)
+			filter := newHostedMCPResponseFilterWriter(bufWriter, h.cfg.maxInMemoryBodyBytes)
+			_, copyErr := io.Copy(filter, resp.Body)
+			if finalizeErr := filter.Finalize(); copyErr == nil {
+				copyErr = finalizeErr
+			}
+			if copyErr != nil {
+				http.Error(w, copyErr.Error(), http.StatusBadGateway)
+				return
+			}
 			w.WriteHeader(resp.StatusCode)
 			w.Write(bufWriter.Result())
 			return
@@ -4227,6 +4340,11 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	} else if isSSE && passthroughTranslateDir == TranslateChatToResponses {
 		writer = &responsesToChatCompletionsWriter{w: writer, debug: h.cfg.debug.Load(), reqID: reqID}
 	}
+	var hostedMCPFilter *hostedMCPResponseFilterWriter
+	if isSSE && providerType == AccountTypeCodex {
+		hostedMCPFilter = newHostedMCPResponseFilterWriter(writer, h.cfg.maxInMemoryBodyBytes)
+		writer = hostedMCPFilter
+	}
 
 	// Wrap response body with idle timeout to kill zombie SSE connections.
 	var idleReader *idleTimeoutReader
@@ -4239,7 +4357,13 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	if idleReader != nil {
 		source = idleReader
 	}
-	if _, copyErr := io.Copy(writer, source); copyErr != nil {
+	_, copyErr := io.Copy(writer, source)
+	if hostedMCPFilter != nil {
+		if finalizeErr := hostedMCPFilter.Finalize(); copyErr == nil {
+			copyErr = finalizeErr
+		}
+	}
+	if copyErr != nil {
 		if r.Context().Err() == nil {
 			h.recent.add(copyErr.Error())
 			h.metrics.inc("error", "passthrough")

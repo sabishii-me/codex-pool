@@ -335,7 +335,7 @@ Reviewed `darvell/codex-pool` through upstream commit `2aa8320` on 2026-07-22:
 - No port needed for `5fec71b`: current declarative Kimi Platform catalog already includes Kimi K3, its 1M alias, richer metadata, docs, and tests.
 - Do not port `79f5f3b`: its additive cyber bonus is superseded upstream by weighted fairness in `2aa8320`.
 - Adapted `2aa8320` behind `ConnectionSelector`: ordinary Codex routing uses deterministic 2x cyber / 1x non-cyber weighting only among quota-competitive connections, while materially drained connections remain excluded and explicit cyber-policy retries remain cyber-only.
-- Adapt `1b7bc67` with bounded-memory protocol rules: strip hosted MCP definitions/transcript items consistently across HTTP, SSE, and WebSocket while preserving local tools; reject oversized whole-document transformations rather than accepting upstream's 512 MiB event buffer.
+- Adapted `1b7bc67` with bounded-memory protocol rules: exact hosted MCP tools, transcript items, choices, SSE events, JSON outputs, and WebSocket frames are removed while local function/namespace tools, web search, and tool search remain intact. HTTP transformations and each SSE/WebSocket unit are capped by configured memory limits; oversized native Codex Responses requests are rejected before upstream transmission, oversized responses fail closed, and the upstream 512 MiB event/frame allowances were explicitly removed.
 - Adapt `a1049d8` in Phase 7: preserve WebSocket close status, classify/measure terminations, report heartbeat failures, and drain active sessions during graceful shutdown without bypassing centralized model-route enforcement.
 
 ### Phase 7 — Operational hardening

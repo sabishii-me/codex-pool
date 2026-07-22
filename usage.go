@@ -393,43 +393,7 @@ func (h *proxyHandler) recordUsage(a *ProviderConnection, ru RequestUsage) {
 }
 
 func parseRequestUsage(obj map[string]any) *RequestUsage {
-	usageMap, ok := obj["usage"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	ru := &RequestUsage{Timestamp: time.Now()}
-	ru.InputTokens = readInt64(usageMap, "input_tokens")
-	ru.CachedInputTokens = readInt64(usageMap, "cached_input_tokens")
-	if ru.CachedInputTokens == 0 {
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-	}
-	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && ru.CachedInputTokens == 0 {
-		ru.CachedInputTokens = readInt64(details, "cached_tokens")
-	}
-	ru.CacheCreationTokens = readInt64(usageMap, "cache_creation_input_tokens")
-	ru.OutputTokens = readInt64(usageMap, "output_tokens")
-	ru.ReasoningTokens = readInt64(usageMap, "reasoning_output_tokens")
-	if ru.ReasoningTokens == 0 {
-		ru.ReasoningTokens = readInt64(usageMap, "reasoning_tokens")
-	}
-	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok && ru.ReasoningTokens == 0 {
-		ru.ReasoningTokens = readInt64(details, "reasoning_tokens")
-	}
-	ru.BillableTokens = readInt64(usageMap, "billable_tokens")
-	if ru.BillableTokens == 0 {
-		ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens - ru.CacheCreationTokens + ru.OutputTokens)
-	}
-	if ru.InputTokens == 0 && ru.OutputTokens == 0 && ru.BillableTokens == 0 {
-		return nil
-	}
-	if v, ok := obj["prompt_cache_key"].(string); ok {
-		ru.PromptCacheKey = v
-	}
-	// Extract model from response object or top-level
-	if m, ok := obj["model"].(string); ok && m != "" {
-		ru.Model = m
-	}
-	return ru
+	return sampledResponsesEngine.ParseUsage(obj)
 }
 
 func readInt64(m map[string]any, key string) int64 {

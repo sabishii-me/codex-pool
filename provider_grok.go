@@ -259,45 +259,7 @@ func (p *GrokProvider) RefreshToken(ctx context.Context, acc *ProviderConnection
 }
 
 func (p *GrokProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	if usageMap, ok := obj["usage"].(map[string]any); ok {
-		return grokUsageFromMap(obj, usageMap)
-	}
-	if resp, ok := obj["response"].(map[string]any); ok {
-		if usageMap, ok := resp["usage"].(map[string]any); ok {
-			return grokUsageFromMap(resp, usageMap)
-		}
-	}
-	return nil
-}
-
-func grokUsageFromMap(obj map[string]any, usageMap map[string]any) *RequestUsage {
-	ru := &RequestUsage{Timestamp: time.Now()}
-	ru.InputTokens = readInt64(usageMap, "input_tokens")
-	if ru.InputTokens == 0 {
-		ru.InputTokens = readInt64(usageMap, "prompt_tokens")
-	}
-	ru.OutputTokens = readInt64(usageMap, "output_tokens")
-	if ru.OutputTokens == 0 {
-		ru.OutputTokens = readInt64(usageMap, "completion_tokens")
-	}
-	ru.CachedInputTokens = readInt64(usageMap, "cached_tokens")
-	if ru.CachedInputTokens == 0 {
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-	}
-	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && ru.CachedInputTokens == 0 {
-		ru.CachedInputTokens = readInt64(details, "cached_tokens")
-	}
-	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok {
-		ru.ReasoningTokens = readInt64(details, "reasoning_tokens")
-	}
-	if ru.InputTokens == 0 && ru.OutputTokens == 0 {
-		return nil
-	}
-	ru.BillableTokens = clampNonNegative(ru.InputTokens - ru.CachedInputTokens + ru.OutputTokens)
-	if model, ok := obj["model"].(string); ok {
-		ru.Model = model
-	}
-	return ru
+	return grokResponsesEngine.ParseUsage(obj)
 }
 
 func (p *GrokProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

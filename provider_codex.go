@@ -205,55 +205,9 @@ func (p *CodexProvider) parseTokenCountEvent(obj map[string]any) *RequestUsage {
 	return parseTokenCountEvent(obj)
 }
 
-// parseResponseUsage extracts usage from Codex SSE response events.
+// parseResponseUsage delegates Responses usage normalization to the shared engine.
 func (p *CodexProvider) parseResponseUsage(obj map[string]any) *RequestUsage {
-	usageMap, ok := obj["usage"].(map[string]any)
-	if !ok || usageMap == nil {
-		if resp, ok := obj["response"].(map[string]any); ok {
-			usageMap, ok = resp["usage"].(map[string]any)
-			if !ok || usageMap == nil {
-				return nil
-			}
-		} else {
-			return nil
-		}
-	}
-
-	ru := &RequestUsage{Timestamp: time.Now()}
-	ru.InputTokens = readInt64(usageMap, "input_tokens")
-	ru.OutputTokens = readInt64(usageMap, "output_tokens")
-
-	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok {
-		ru.CachedInputTokens = readInt64(details, "cached_tokens")
-	}
-	if ru.CachedInputTokens == 0 {
-		ru.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
-	}
-
-	if details, ok := usageMap["output_tokens_details"].(map[string]any); ok {
-		ru.ReasoningTokens = readInt64(details, "reasoning_tokens")
-	}
-
-	ru.BillableTokens = ru.InputTokens - ru.CachedInputTokens + ru.OutputTokens
-
-	if ru.InputTokens == 0 && ru.OutputTokens == 0 {
-		return nil
-	}
-
-	if v, ok := obj["prompt_cache_key"].(string); ok {
-		ru.PromptCacheKey = v
-	}
-
-	// Extract model from response object or top-level
-	if m, ok := obj["model"].(string); ok && m != "" {
-		ru.Model = m
-	} else if resp, ok := obj["response"].(map[string]any); ok {
-		if m, ok := resp["model"].(string); ok && m != "" {
-			ru.Model = m
-		}
-	}
-
-	return ru
+	return openAIResponsesEngine.ParseUsage(obj)
 }
 
 func (p *CodexProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {

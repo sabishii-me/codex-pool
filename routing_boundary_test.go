@@ -70,6 +70,21 @@ func TestReadOnlyDataRoutesStayOutOfProxyRouter(t *testing.T) {
 	}
 }
 
+func TestProviderOperationRoutesStayOutOfProxyRouter(t *testing.T) {
+	data, err := os.ReadFile("router.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{"/admin/claude", "/admin/codex", "/admin/antigravity", "/admin/kimi", "/admin/deepseek", "serveCodexAdmin(", "handleAntigravityModelSync("} {
+		if strings.Contains(string(data), fragment) {
+			t.Errorf("router.go directly owns provider operation fragment %q; use ProviderOperationsAPI", fragment)
+		}
+	}
+	if !strings.Contains(string(data), "h.providerOperationsAPIService().TryServe(w, r)") {
+		t.Fatal("proxy router does not delegate to ProviderOperationsAPI")
+	}
+}
+
 func TestProviderContributionRoutesStayOutOfProxyRouter(t *testing.T) {
 	data, err := os.ReadFile("router.go")
 	if err != nil {

@@ -213,6 +213,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.providerContributionAPIService().TryServe(w, r) {
 		return
 	}
+	if h.providerOperationsAPIService().TryServe(w, r) {
+		return
+	}
 
 	// Static routes
 	switch r.URL.Path {
@@ -376,129 +379,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.servePoolUsersAdmin(w, r)
-		return
-	}
-
-	// Provider mutations require an explicit operator unlock. The Claude OAuth
-	// callback remains public because it is invoked by the upstream redirect;
-	// exchanging that callback for credentials still requires admin auth.
-	if strings.HasPrefix(r.URL.Path, "/admin/claude") {
-		if r.URL.Path != "/admin/claude/callback" && !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveClaudeAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/codex") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveCodexAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/antigravity") {
-		if r.URL.Path == "/admin/antigravity/callback" {
-			if r.Method != http.MethodGet {
-				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-				return
-			}
-			h.handleAntigravityCallback(w, r)
-			return
-		}
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		if r.URL.Path == "/admin/antigravity/models/sync" && r.Method == http.MethodPost {
-			h.handleAntigravityModelSync(w, r)
-			return
-		}
-		if r.URL.Path == "/admin/antigravity/models/verify" && r.Method == http.MethodPost {
-			h.handleAntigravityModelVerify(w, r)
-			return
-		}
-		http.NotFound(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/kimi-platform") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveKimiPlatformAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/kimi") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveKimiAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/minimax") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveMinimaxAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/zai") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveZAIAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/xiaomi") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveXiaomiAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/grok") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveGrokAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/deepseek") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveDeepSeekAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/qwen") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveQwenAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/openrouter") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveOpenRouterAdmin(w, r)
-		return
-	}
-
-	if strings.HasPrefix(r.URL.Path, "/admin/nvidia") {
-		if !h.checkAdminAuth(w, r) {
-			return
-		}
-		h.serveNvidiaAdmin(w, r)
 		return
 	}
 

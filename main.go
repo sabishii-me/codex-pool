@@ -606,6 +606,7 @@ type proxyHandler struct {
 	dataAPI                 *DataAPI
 	providerAdminAPI        *ProviderAdminAPI
 	providerContributionAPI *ProviderContributionAPI
+	providerOperationsAPI   *ProviderOperationsAPI
 	access                  *AccessPolicy
 	store                   *usageStore
 	analyticsStore          *AnalyticsStore

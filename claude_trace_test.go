@@ -73,7 +73,7 @@ func TestClaudeTraceWritesFileForPooledRequest(t *testing.T) {
 	registry := NewProviderRegistry(codex, claude, gemini)
 
 	acc := &Account{Type: AccountTypeClaude, ID: "claude_test", AccessToken: "sk-ant-api-test", PlanType: "pro"}
-	pool := newPoolState([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc}, false)
 
 	h := &proxyHandler{
 		cfg: &config{
@@ -167,7 +167,7 @@ func TestClaudeTraceWritesFileForPooledRoundTripError(t *testing.T) {
 	registry := NewProviderRegistry(codex, claude, gemini)
 
 	acc := &Account{Type: AccountTypeClaude, ID: "claude_test", AccessToken: "sk-ant-api-test", PlanType: "pro"}
-	pool := newPoolState([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc}, false)
 	transportErr := errors.New("synthetic upstream failure")
 
 	h := &proxyHandler{

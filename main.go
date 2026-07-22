@@ -292,7 +292,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load pool: %v", err)
 	}
-	pool := newPoolState(accounts, cfg.debug.Load())
+	pool := newProviderPool(accounts, cfg.debug.Load())
 	pool.tierThreshold = cfg.tierThreshold
 	codexCount := pool.countByType(AccountTypeCodex)
 	claudeCount := pool.countByType(AccountTypeClaude)
@@ -410,12 +410,12 @@ func main() {
 	}
 
 	// Initialize pool users store if configured
-	var poolUsers *PoolUserStore
+	var poolUsers *GatewayUserStore
 	// Pool users require a JWT secret and the Google OAuth gate for access control.
 	if cfg.oauthGoogleClientID != "" && getPoolJWTSecret() != "" {
 		poolUsersPath := getPoolUsersPath()
 		var err error
-		poolUsers, err = newPoolUserStore(poolUsersPath)
+		poolUsers, err = newGatewayUserStore(poolUsersPath)
 		if err != nil {
 			log.Printf("warning: failed to load pool users: %v", err)
 		} else {
@@ -574,8 +574,8 @@ type proxyHandler struct {
 	transport            http.RoundTripper
 	antigravityTransport http.RoundTripper
 	refreshTransport     http.RoundTripper // Separate transport for refresh ops (may use proxy)
-	pool                 *poolState
-	poolUsers            *PoolUserStore
+	pool                 *ProviderPool
+	poolUsers            *GatewayUserStore
 	adminTOTP            *AdminTOTPStore
 	registry             *ProviderRegistry
 	store                *usageStore

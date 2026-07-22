@@ -29,8 +29,8 @@ type poolModelDescriptor struct {
 	Stale              bool            `json:"stale,omitempty"`
 }
 
-func poolModelDescriptors(pools ...*poolState) []poolModelDescriptor {
-	var pool *poolState
+func poolModelDescriptors(pools ...*ProviderPool) []poolModelDescriptor {
+	var pool *ProviderPool
 	if len(pools) > 0 {
 		pool = pools[0]
 	}
@@ -123,7 +123,7 @@ func optionalModelReset(reset time.Time) *time.Time {
 	return &reset
 }
 
-func poolModelAvailability(pool *poolState, accountType AccountType) (int, int, bool) {
+func poolModelAvailability(pool *ProviderPool, accountType AccountType) (int, int, bool) {
 	if pool == nil {
 		return 0, 0, true
 	}
@@ -158,11 +158,11 @@ func poolModelIDExists(id string) bool {
 	return false
 }
 
-func servePoolModels(w http.ResponseWriter, pools ...*poolState) {
+func servePoolModels(w http.ResponseWriter, pools ...*ProviderPool) {
 	respondJSON(w, map[string]any{"models": poolModelDescriptors(pools...)})
 }
 
-func serveUnifiedOpenAIModels(w http.ResponseWriter, pools ...*poolState) {
+func serveUnifiedOpenAIModels(w http.ResponseWriter, pools ...*ProviderPool) {
 	descriptors := poolModelDescriptors(pools...)
 	data := make([]map[string]any, 0, len(descriptors))
 	seen := make(map[string]bool)
@@ -176,7 +176,7 @@ func serveUnifiedOpenAIModels(w http.ResponseWriter, pools ...*poolState) {
 	respondJSON(w, map[string]any{"object": "list", "data": data})
 }
 
-func serveUnifiedGeminiModels(w http.ResponseWriter, pool *poolState) {
+func serveUnifiedGeminiModels(w http.ResponseWriter, pool *ProviderPool) {
 	models := make([]map[string]any, 0)
 	for _, model := range antigravityModels.Models(pool) {
 		methods := []string{"generateContent", "streamGenerateContent", "countTokens"}

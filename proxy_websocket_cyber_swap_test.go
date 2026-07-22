@@ -96,7 +96,7 @@ func newCodexProxyFixture(t *testing.T, base *url.URL, accounts []*Account) *cod
 			disableRefresh:             true,
 		},
 		transport: http.DefaultTransport,
-		pool:      newPoolState(accounts, false),
+		pool:      newProviderPool(accounts, false),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(8),

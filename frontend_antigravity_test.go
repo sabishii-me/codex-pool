@@ -8,7 +8,7 @@ import (
 )
 
 func TestPoolStatsUsesEmptyAccountArrayForFirstAccountSignIn(t *testing.T) {
-	handler := &proxyHandler{pool: newPoolState(nil, false)}
+	handler := &proxyHandler{pool: newProviderPool(nil, false)}
 	recorder := httptest.NewRecorder()
 	handler.handlePoolStats(recorder, httptest.NewRequest("GET", "/api/pool/stats", nil))
 	var payload map[string]json.RawMessage
@@ -29,7 +29,7 @@ func TestPoolStatsExposesBankedResetExpirationsToFriends(t *testing.T) {
 		ResetCreditsRetrievedAt: time.Now(),
 		RateLimitResetCredits:   []RateLimitResetCredit{{ID: "credit-1", ExpiresAt: expiresAt}},
 	}
-	handler := &proxyHandler{pool: newPoolState([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
 	recorder := httptest.NewRecorder()
 	handler.handlePoolStats(recorder, httptest.NewRequest("GET", "/api/pool/stats", nil))
 

@@ -66,7 +66,7 @@ func TestPenaltyDecay(t *testing.T) {
 func TestCandidateUsesPinUnlessExcluded(t *testing.T) {
 	a1 := &Account{ID: "a1", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	a2 := &Account{ID: "a2", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{a1, a2}, true)
+	p := newProviderPool([]*Account{a1, a2}, true)
 	p.pin("c1", "a1")
 
 	if got := p.candidate("c1", nil, "", "", ""); got == nil || got.ID != "a1" {
@@ -81,7 +81,7 @@ func TestCandidateSkipsDeadOrDisabled(t *testing.T) {
 	dead := &Account{ID: "dead", Type: AccountTypeCodex, Dead: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.0}}
 	disabled := &Account{ID: "disabled", Type: AccountTypeCodex, Disabled: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.0}}
 	ok := &Account{ID: "ok", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.5}}
-	p := newPoolState([]*Account{dead, disabled, ok}, false)
+	p := newProviderPool([]*Account{dead, disabled, ok}, false)
 
 	got := p.candidate("", nil, "", "", "")
 	if got == nil || got.ID != "ok" {
@@ -97,7 +97,7 @@ func TestCandidateSkipsRateLimitedCodexAccount(t *testing.T) {
 		RateLimitUntil: time.Now().Add(time.Hour),
 	}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro"}
-	pool := newPoolState([]*Account{rateLimited, healthy}, false)
+	pool := newProviderPool([]*Account{rateLimited, healthy}, false)
 
 	if got := pool.candidate("", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate = %v, want healthy account", got)
@@ -112,7 +112,7 @@ func TestCandidateUnpinsRateLimitedCodexAccount(t *testing.T) {
 		RateLimitUntil: time.Now().Add(time.Hour),
 	}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro"}
-	pool := newPoolState([]*Account{rateLimited, healthy}, false)
+	pool := newProviderPool([]*Account{rateLimited, healthy}, false)
 	pool.pin("conversation", rateLimited.ID)
 
 	if got := pool.candidate("conversation", nil, AccountTypeCodex, "", ""); got != healthy {
@@ -123,7 +123,7 @@ func TestCandidateUnpinsRateLimitedCodexAccount(t *testing.T) {
 func TestCandidateRequiredPlanFiltersAccounts(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "pro" {
@@ -148,7 +148,7 @@ func TestCodexProLiteHasProAccessAndTier(t *testing.T) {
 func TestCandidateUsesCodexProLiteAlongsidePro(t *testing.T) {
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.7, SecondaryUsedPercent: 0.7}}
 	proLite := &Account{ID: "prolite", Type: AccountTypeCodex, PlanType: "prolite", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1}}
-	p := newPoolState([]*Account{pro, proLite}, false)
+	p := newProviderPool([]*Account{pro, proLite}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "prolite" {
@@ -159,7 +159,7 @@ func TestCandidateUsesCodexProLiteAlongsidePro(t *testing.T) {
 func TestCandidateKeepsPinnedCodexProLite(t *testing.T) {
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1}}
 	proLite := &Account{ID: "prolite", Type: AccountTypeCodex, PlanType: "prolite", Usage: UsageSnapshot{PrimaryUsedPercent: 0.5, SecondaryUsedPercent: 0.5}}
-	p := newPoolState([]*Account{pro, proLite}, false)
+	p := newProviderPool([]*Account{pro, proLite}, false)
 	p.pin("conversation", proLite.ID)
 
 	got := p.candidate("conversation", nil, AccountTypeCodex, "pro", "")
@@ -176,7 +176,7 @@ func TestCandidatePrefersClaudeMaxOverPro(t *testing.T) {
 	proAcc := &Account{ID: "pro1", Type: AccountTypeClaude, PlanType: "pro", Usage: UsageSnapshot{
 		PrimaryUsedPercent: 0.0, SecondaryUsedPercent: 0.1,
 	}}
-	p := newPoolState([]*Account{proAcc, maxAcc}, false)
+	p := newProviderPool([]*Account{proAcc, maxAcc}, false)
 
 	got := p.candidate("", nil, AccountTypeClaude, "", "")
 	if got == nil || got.ID != "max1" {
@@ -192,7 +192,7 @@ func TestCandidateFallsBackToClaudeProWhenMaxExhausted(t *testing.T) {
 	proAcc := &Account{ID: "pro1", Type: AccountTypeClaude, PlanType: "pro", Usage: UsageSnapshot{
 		PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1,
 	}}
-	p := newPoolState([]*Account{proAcc, maxAcc}, false)
+	p := newProviderPool([]*Account{proAcc, maxAcc}, false)
 
 	got := p.candidate("", nil, AccountTypeClaude, "", "")
 	if got == nil || got.ID != "pro1" {
@@ -203,7 +203,7 @@ func TestCandidateFallsBackToClaudeProWhenMaxExhausted(t *testing.T) {
 func TestCandidateRequiredPlanOverridesPinnedConversation(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro}, false)
 	p.pin("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "pro", "")
@@ -215,7 +215,7 @@ func TestCandidateRequiredPlanOverridesPinnedConversation(t *testing.T) {
 func TestCandidateBypassesPinnedNonProCodex(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.6, SecondaryUsedPercent: 0.6}}
-	p := newPoolState([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro}, false)
 	p.pin("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "", "")
@@ -227,7 +227,7 @@ func TestCandidateBypassesPinnedNonProCodex(t *testing.T) {
 func TestCandidatePrefersCodexProEvenWhenTierTwoScoresBetter(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.8, SecondaryUsedPercent: 0.8}}
-	p := newPoolState([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "pro" {
@@ -238,7 +238,7 @@ func TestCandidatePrefersCodexProEvenWhenTierTwoScoresBetter(t *testing.T) {
 func TestCandidateWithCyberAccessOnlyReturnsMarkedAccounts(t *testing.T) {
 	ordinary := &Account{ID: "ordinary", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	cyber := &Account{ID: "cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.2, SecondaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{ordinary, cyber}, false)
+	p := newProviderPool([]*Account{ordinary, cyber}, false)
 
 	got := p.candidateWithCyberAccess(nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "cyber" {
@@ -261,7 +261,7 @@ func TestCandidateWithCyberAccessReturnsExpiredAccount(t *testing.T) {
 		ExpiresAt:   time.Now().Add(-5 * time.Minute),
 		Usage:       UsageSnapshot{PrimaryUsedPercent: 0.05, SecondaryUsedPercent: 0.05},
 	}
-	p := newPoolState([]*Account{expired}, false)
+	p := newProviderPool([]*Account{expired}, false)
 	got := p.candidateWithCyberAccess(nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "cyber-expired" {
 		t.Fatalf("expected expired cyber account to still be picked, got %+v", got)
@@ -290,7 +290,7 @@ func TestCandidateDoesNotPileTrafficOntoHighWeeklyProLiteAccount(t *testing.T) {
 			SecondaryResetAt:       now.Add(6 * 24 * time.Hour),
 		},
 	}
-	pool := newPoolState([]*Account{proLite, pro}, false)
+	pool := newProviderPool([]*Account{proLite, pro}, false)
 
 	got := pool.candidate("", nil, AccountTypeCodex, "", "")
 	if got == nil {
@@ -304,7 +304,7 @@ func TestCandidateDoesNotPileTrafficOntoHighWeeklyProLiteAccount(t *testing.T) {
 func TestCandidateSkipsAccountWhenClientIPNotAllowed(t *testing.T) {
 	restricted := &Account{ID: "restricted", Type: AccountTypeCodex, PlanType: "pro", AllowedSourceIPs: []string{"199.45.144.95"}, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{restricted, fallback}, false)
+	p := newProviderPool([]*Account{restricted, fallback}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "203.0.113.10")
 	if got == nil || got.ID != "fallback" {
@@ -315,7 +315,7 @@ func TestCandidateSkipsAccountWhenClientIPNotAllowed(t *testing.T) {
 func TestCandidateAllowsRestrictedAccountWhenClientIPMatches(t *testing.T) {
 	restricted := &Account{ID: "restricted", Type: AccountTypeCodex, PlanType: "pro", AllowedSourceIPs: []string{"199.45.144.95"}, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newPoolState([]*Account{restricted, fallback}, false)
+	p := newProviderPool([]*Account{restricted, fallback}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "199.45.144.95")
 	if got == nil || got.ID != "restricted" {

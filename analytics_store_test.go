@@ -67,7 +67,7 @@ func TestPoolStatsROIUsesCumulativeSubscriptionSpendForCurrentAccounts(t *testin
 
 	h := &proxyHandler{
 		cfg:            &config{},
-		pool:           newPoolState([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro"}}, false),
+		pool:           newProviderPool([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro"}}, false),
 		analyticsStore: store,
 	}
 	recorder := httptest.NewRecorder()
@@ -130,7 +130,7 @@ func TestPoolStatsROIUsesAccountAdmissionDate(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:            &config{},
-		pool:           newPoolState([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro", AddedAt: time.Now().UTC().AddDate(0, 0, -45)}}, false),
+		pool:           newProviderPool([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro", AddedAt: time.Now().UTC().AddDate(0, 0, -45)}}, false),
 		analyticsStore: store,
 	}
 	recorder := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:   &config{},
-		pool:  newPoolState([]*Account{{ID: "codex", Type: AccountTypeCodex}, {ID: "claude", Type: AccountTypeClaude}}, false),
+		pool:  newProviderPool([]*Account{{ID: "codex", Type: AccountTypeCodex}, {ID: "claude", Type: AccountTypeClaude}}, false),
 		store: usage,
 	}
 	recorder := httptest.NewRecorder()

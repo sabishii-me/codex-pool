@@ -39,7 +39,7 @@ func TestAntigravityProxyNonStreamingResponsesCanonicalUsage(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer analytics.db.Close()
-	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, maxAttempts: 1, disableRefresh: true}, transport: http.DefaultTransport, antigravityTransport: http.DefaultTransport, pool: newPoolState([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, maxAttempts: 1, disableRefresh: true}, transport: http.DefaultTransport, antigravityTransport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	requestBody := []byte(`{"model":"antigravity/gemini-3-flash","input":"hello","stream":false}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(requestBody))
 	request.Header.Set("Content-Type", "application/json")
@@ -79,7 +79,7 @@ func TestAntigravityLargeBodyIsRejectedBeforeUpstream(t *testing.T) {
 	antigravity := NewAntigravityProvider(base, base)
 	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), antigravity)
 	account := &Account{Type: AccountTypeAntigravity, ID: "antigravity_large", AccessToken: "contract", ProjectID: "project", ModelRateLimits: make(map[string]time.Time)}
-	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024, maxAttempts: 1}, transport: http.DefaultTransport, pool: newPoolState([]*Account{account}, false), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024, maxAttempts: 1}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	body := []byte(`{"model":"antigravity/gemini-3-flash","input":` + mustJSONContractString(t, strings.Repeat("x", streamedModelRoutePeekBytes+1024)) + `,"stream":false}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
 	request.ContentLength = int64(len(body))

@@ -322,7 +322,7 @@ func TestGrokUsagePollerDoesNotDeadMarkAccount(t *testing.T) {
 	calls := 0
 	h := &proxyHandler{
 		cfg:  &config{usageRefresh: time.Minute},
-		pool: newPoolState([]*Account{acc}, false),
+		pool: newProviderPool([]*Account{acc}, false),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			calls++
 			t.Fatalf("Grok usage poller should not call transport, got %s %s", req.Method, req.URL.String())

@@ -162,7 +162,7 @@ func (r *antigravityModelRegistry) Canonical(model string) (string, bool) {
 	return model, false
 }
 
-func (r *antigravityModelRegistry) Models(pool *poolState) []AntigravityCatalogModel {
+func (r *antigravityModelRegistry) Models(pool *ProviderPool) []AntigravityCatalogModel {
 	r.mu.RLock()
 	snapshots := make(map[string]AntigravityAccountSnapshot, len(r.accounts))
 	for id, snapshot := range r.accounts {
@@ -240,7 +240,7 @@ func (r *antigravityModelRegistry) Models(pool *poolState) []AntigravityCatalogM
 	return result
 }
 
-func antigravityAccountModelAvailable(pool *poolState, accountID, model string) (bool, time.Time) {
+func antigravityAccountModelAvailable(pool *ProviderPool, accountID, model string) (bool, time.Time) {
 	if pool == nil {
 		return false, time.Time{}
 	}
@@ -458,7 +458,7 @@ func antigravityCanonicalModel(model string) string {
 	return canonical
 }
 
-func (p *poolState) candidateForAntigravityModel(conversationID string, exclude map[string]bool, model, clientIP string) *Account {
+func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclude map[string]bool, model, clientIP string) *Account {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	model = antigravityCanonicalModel(model)

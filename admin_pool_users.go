@@ -101,7 +101,7 @@ func (h *proxyHandler) handlePoolUsersCreate(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	user := &PoolUser{
+	user := &GatewayUser{
 		ID:        randomHex(16),
 		Token:     randomHex(32),
 		Email:     email,

@@ -189,12 +189,12 @@ func TestServeGeminiSetupScript_PowerShell(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	usersPath := filepath.Join(tmpDir, "pool_users.json")
-	store, err := newPoolUserStore(usersPath)
+	store, err := newGatewayUserStore(usersPath)
 	if err != nil {
-		t.Fatalf("newPoolUserStore: %v", err)
+		t.Fatalf("newGatewayUserStore: %v", err)
 	}
 
-	user := &PoolUser{
+	user := &GatewayUser{
 		ID:        "user123",
 		Token:     "tok123",
 		Email:     "test@example.com",
@@ -226,15 +226,15 @@ func TestServeGeminiSetupScript_PowerShell(t *testing.T) {
 	}
 }
 
-func newTestPoolUserStoreWithUser(t *testing.T, token string) *PoolUserStore {
+func newTestPoolUserStoreWithUser(t *testing.T, token string) *GatewayUserStore {
 	t.Helper()
 	tmpDir := t.TempDir()
 	usersPath := filepath.Join(tmpDir, "pool_users.json")
-	store, err := newPoolUserStore(usersPath)
+	store, err := newGatewayUserStore(usersPath)
 	if err != nil {
-		t.Fatalf("newPoolUserStore: %v", err)
+		t.Fatalf("newGatewayUserStore: %v", err)
 	}
-	user := &PoolUser{ID: "user-" + token, Token: token, Email: token + "@example.com", PlanType: "pro", CreatedAt: time.Now()}
+	user := &GatewayUser{ID: "user-" + token, Token: token, Email: token + "@example.com", PlanType: "pro", CreatedAt: time.Now()}
 	if err := store.Create(user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -457,12 +457,12 @@ func TestServeClaudeSetupScript_BashClearsConflictingClaudeAuth(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	usersPath := filepath.Join(tmpDir, "pool_users.json")
-	store, err := newPoolUserStore(usersPath)
+	store, err := newGatewayUserStore(usersPath)
 	if err != nil {
-		t.Fatalf("newPoolUserStore: %v", err)
+		t.Fatalf("newGatewayUserStore: %v", err)
 	}
 
-	user := &PoolUser{ID: "user789", Token: "tok789", Email: "test3@example.com", PlanType: "pro", CreatedAt: time.Now()}
+	user := &GatewayUser{ID: "user789", Token: "tok789", Email: "test3@example.com", PlanType: "pro", CreatedAt: time.Now()}
 	if err := store.Create(user); err != nil {
 		t.Fatalf("create user: %v", err)
 	}
@@ -499,12 +499,12 @@ func TestServeClaudeSetupScript_PowerShell(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	usersPath := filepath.Join(tmpDir, "pool_users.json")
-	store, err := newPoolUserStore(usersPath)
+	store, err := newGatewayUserStore(usersPath)
 	if err != nil {
-		t.Fatalf("newPoolUserStore: %v", err)
+		t.Fatalf("newGatewayUserStore: %v", err)
 	}
 
-	user := &PoolUser{
+	user := &GatewayUser{
 		ID:        "user456",
 		Token:     "tok456",
 		Email:     "test2@example.com",

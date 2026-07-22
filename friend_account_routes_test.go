@@ -10,20 +10,20 @@ import (
 )
 
 // newTestHandlerWithSession builds a proxyHandler wired for the Google
-// OAuth-gated session flow: a real PoolUserStore, a JWT secret via
+// OAuth-gated session flow: a real GatewayUserStore, a JWT secret via
 // POOL_JWT_SECRET, and one pre-created allowlisted user. The Google client id
 // is set (non-empty) so checkAdminOrSessionAuth exercises real auth instead
 // of the "nothing configured -> open deployment" fallback.
-func newTestHandlerWithSession(t *testing.T) (h *proxyHandler, user *PoolUser, secret string) {
+func newTestHandlerWithSession(t *testing.T) (h *proxyHandler, user *GatewayUser, secret string) {
 	t.Helper()
 	secret = "test-secret-key-12345678901234567890"
 	t.Setenv("POOL_JWT_SECRET", secret)
 
-	store, err := newPoolUserStore(filepath.Join(t.TempDir(), "pool_users.json"))
+	store, err := newGatewayUserStore(filepath.Join(t.TempDir(), "pool_users.json"))
 	if err != nil {
-		t.Fatalf("newPoolUserStore failed: %v", err)
+		t.Fatalf("newGatewayUserStore failed: %v", err)
 	}
-	user = &PoolUser{ID: "user123", Token: "dl-token", Email: "friend@example.com", PlanType: "pro", CreatedAt: time.Now()}
+	user = &GatewayUser{ID: "user123", Token: "dl-token", Email: "friend@example.com", PlanType: "pro", CreatedAt: time.Now()}
 	if err := store.Create(user); err != nil {
 		t.Fatalf("failed to create pool user: %v", err)
 	}
@@ -35,7 +35,7 @@ func newTestHandlerWithSession(t *testing.T) (h *proxyHandler, user *PoolUser, s
 	return h, user, secret
 }
 
-func newTestSessionCookie(t *testing.T, secret string, user *PoolUser) *http.Cookie {
+func newTestSessionCookie(t *testing.T, secret string, user *GatewayUser) *http.Cookie {
 	t.Helper()
 	token, err := signJWT(secret, map[string]any{
 		"typ":   "session",

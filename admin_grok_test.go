@@ -16,7 +16,7 @@ func TestGrokAdminImportAddsAccount(t *testing.T) {
 	poolDir := t.TempDir()
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, grokBase: base},
-		pool:     newPoolState(nil, false),
+		pool:     newProviderPool(nil, false),
 		registry: NewProviderRegistry(NewCodexProvider(base, base, nil), NewClaudeProvider(base), NewGeminiProvider(base, base), NewGrokProvider(base)),
 	}
 

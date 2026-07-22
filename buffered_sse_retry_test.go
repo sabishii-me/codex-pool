@@ -106,7 +106,7 @@ func TestResponsesNonStreamingBufferedRetriesOnCyberPolicy(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newPoolState([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
@@ -226,7 +226,7 @@ func TestClaudeSDKBufferedTranslationRetriesOnCyberPolicy(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newPoolState([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),

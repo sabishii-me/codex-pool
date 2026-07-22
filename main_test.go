@@ -385,7 +385,7 @@ func TestCodexClientClaudeModelStaysOnCodexAccount(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newPoolState([]*Account{codex, claude}, false),
+		pool:    newProviderPool([]*Account{codex, claude}, false),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -437,7 +437,7 @@ func TestClaudePoolTranslatesResponsesClientFormat(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newPoolState([]*Account{claude}, false),
+		pool:    newProviderPool([]*Account{claude}, false),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -534,7 +534,7 @@ func TestClaudePoolTokenAcceptedViaXAPIKeyPreservesNativeClaudeRequest(t *testin
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newPoolState([]*Account{acc}, false),
+		pool:    newProviderPool([]*Account{acc}, false),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -636,7 +636,7 @@ func TestClaudeSDKRequestToGPTMapsReasoningEffort(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newPoolState([]*Account{acc}, false),
+		pool:    newProviderPool([]*Account{acc}, false),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -724,7 +724,7 @@ func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newPoolState([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
@@ -779,7 +779,7 @@ func TestCyberPolicyErrorRetriesOnCyberAccessAccount(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newPoolState([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
@@ -1007,7 +1007,7 @@ func TestReplaceUsageHeadersEmitsWeeklyOnlyPoolInPrimarySlot(t *testing.T) {
 			SecondaryWindowMinutes: 10080,
 		},
 	}
-	h := &proxyHandler{pool: newPoolState([]*Account{account}, false)}
+	h := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
 	headers := mapToHeader(map[string]string{
 		"X-Codex-Primary-Used-Percent":     "82",
 		"X-Codex-Primary-Window-Minutes":   "10080",
@@ -1041,7 +1041,7 @@ func TestHandleAggregatedUsageMatchesWeeklyOnlyUpstreamShape(t *testing.T) {
 	}
 	h := &proxyHandler{
 		cfg:  &config{},
-		pool: newPoolState([]*Account{account}, false),
+		pool: newProviderPool([]*Account{account}, false),
 	}
 	recorder := httptest.NewRecorder()
 
@@ -1141,7 +1141,7 @@ func TestClaudePremiumRequestSkipsPinnedProAccount(t *testing.T) {
 
 	pro := &Account{Type: AccountTypeClaude, ID: "pro", PlanType: "pro"}
 	team := &Account{Type: AccountTypeClaude, ID: "team", PlanType: "team"}
-	pool := newPoolState([]*Account{pro, team}, false)
+	pool := newProviderPool([]*Account{pro, team}, false)
 	pool.pin("conv", pro.ID)
 
 	got := pool.candidate("conv", nil, AccountTypeClaude, "claude_premium", "")

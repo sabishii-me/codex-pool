@@ -11,7 +11,7 @@ func TestPoolStatsExposesProviderNeutralConnectionIdentity(t *testing.T) {
 		Type: AccountTypeCodex, ID: "stable-connection", AccountID: "upstream-subject", Email: "person@example.com",
 		Identity: ConnectionIdentity{DisplayName: "Production Codex", Attributes: map[string]string{"region": "us-east"}},
 	}
-	handler := &proxyHandler{pool: newPoolState([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
 	recorder := httptest.NewRecorder()
 	handler.handlePoolStats(recorder, httptest.NewRequest("GET", "/api/pool/stats", nil))
 	var payload struct {
@@ -40,7 +40,7 @@ func TestOperatorAccountsExposesProviderNeutralConnectionIdentity(t *testing.T) 
 		Type: AccountTypeAntigravity, ID: "connection", Email: "operator@example.com", ProjectID: "project-1",
 		Identity: ConnectionIdentity{DisplayName: "Antigravity Workspace", ExternalSubject: "workspace-1"},
 	}
-	handler := &proxyHandler{pool: newPoolState([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
 	recorder := httptest.NewRecorder()
 	handler.serveAccounts(recorder)
 	var rows []struct {

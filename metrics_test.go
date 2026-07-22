@@ -140,7 +140,7 @@ func TestComputeCyberPolicyStatsHealthSignals(t *testing.T) {
 			h := &proxyHandler{
 				cfg:     &config{},
 				metrics: newMetrics(),
-				pool:    newPoolState(tc.accounts, false),
+				pool:    newProviderPool(tc.accounts, false),
 			}
 			for action, byAcc := range tc.bumps {
 				for acc, n := range byAcc {

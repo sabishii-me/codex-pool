@@ -79,7 +79,7 @@ func TestPoolModelsEndpointRequiresPoolToken(t *testing.T) {
 		t.Fatalf("unauthenticated status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 
-	auth, err := generateClaudeAuth("test-secret", &PoolUser{
+	auth, err := generateClaudeAuth("test-secret", &GatewayUser{
 		ID:        "model-user",
 		Token:     "download-token",
 		CreatedAt: time.Now(),
@@ -98,7 +98,7 @@ func TestPoolModelsEndpointRequiresPoolToken(t *testing.T) {
 
 func TestPoolCatalogEndpointAcceptsSessionAuthentication(t *testing.T) {
 	handler, user, secret := newTestHandlerWithSession(t)
-	handler.pool = newPoolState(nil, false)
+	handler.pool = newProviderPool(nil, false)
 
 	request := httptest.NewRequest(http.MethodGet, "http://pool.example/api/pool/catalog", nil)
 	recorder := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func TestPoolCatalogEndpointAcceptsSessionAuthentication(t *testing.T) {
 
 func TestPoolModelDescriptorsReportAliasesAndAccountAvailability(t *testing.T) {
 	account := &Account{Type: AccountTypeCodex, ID: "codex-account"}
-	descriptors := poolModelDescriptors(newPoolState([]*Account{account}, false))
+	descriptors := poolModelDescriptors(newProviderPool([]*Account{account}, false))
 	var found bool
 	for _, descriptor := range descriptors {
 		if descriptor.ID != "gpt-5.6-sol" {
@@ -147,7 +147,7 @@ func TestPoolModelDescriptorsUseOneCanonicalAntigravityRow(t *testing.T) {
 		},
 	})
 
-	descriptors := poolModelDescriptors(newPoolState([]*Account{{Type: AccountTypeAntigravity, ID: "antigravity-test"}}, false))
+	descriptors := poolModelDescriptors(newProviderPool([]*Account{{Type: AccountTypeAntigravity, ID: "antigravity-test"}}, false))
 	count := 0
 	for _, descriptor := range descriptors {
 		if descriptor.Provider != string(AccountTypeAntigravity) || descriptor.UpstreamID != "gemini-test" {

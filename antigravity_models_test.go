@@ -134,7 +134,7 @@ func TestAntigravityCanonicalModelUsesForcedPrefixAndDeprecatedAlias(t *testing.
 
 func TestAntigravityModelCooldownDoesNotBlockAnotherModel(t *testing.T) {
 	account := &Account{Type: AccountTypeAntigravity, ID: "ag", ModelRateLimits: map[string]time.Time{"gemini-a": time.Now().Add(time.Hour)}}
-	pool := newPoolState([]*Account{account}, false)
+	pool := newProviderPool([]*Account{account}, false)
 	antigravityModels.ReplaceAccount(account.ID, AntigravityAccountSnapshot{FetchedAt: time.Now(), Models: map[string]AntigravityModelInfo{"gemini-a": {ID: "gemini-a"}, "gemini-b": {ID: "gemini-b"}}})
 	if got := pool.candidateForAntigravityModel("", nil, "gemini-a", ""); got != nil {
 		t.Fatalf("cooling model selected account %#v", got)

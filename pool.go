@@ -478,16 +478,22 @@ type ProviderPool struct {
 	tierThreshold float64 // secondary usage % at which we stop preferring a tier (default 0.50)
 }
 
-// poolState is retained while internal call sites migrate to ProviderPool.
+// poolState is retained for source compatibility.
 // Deprecated: use ProviderPool.
 type poolState = ProviderPool
 
-func newPoolState(accs []*Account, debug bool) *poolState {
-	return &poolState{accounts: accs, convPin: map[string]string{}, debug: debug, tierThreshold: 0.50}
+func newProviderPool(connections []*ProviderConnection, debug bool) *ProviderPool {
+	return &ProviderPool{accounts: connections, convPin: map[string]string{}, debug: debug, tierThreshold: 0.50}
+}
+
+// newPoolState is retained for source compatibility.
+// Deprecated: use newProviderPool.
+func newPoolState(connections []*ProviderConnection, debug bool) *ProviderPool {
+	return newProviderPool(connections, debug)
 }
 
 // replace swaps the pool accounts (used on reload).
-func (p *poolState) replace(accs []*Account) {
+func (p *ProviderPool) replace(accs []*Account) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.accounts = accs
@@ -495,7 +501,7 @@ func (p *poolState) replace(accs []*Account) {
 	p.rr = 0
 }
 
-func (p *poolState) count() int {
+func (p *ProviderPool) count() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return len(p.accounts)
@@ -560,7 +566,7 @@ func accountAllowsClientIPLocked(a *Account, clientIP string) bool {
 // nearestCooldown returns how long until the next rate-limited account of the
 // given type becomes available. Returns 0 if no accounts are cooling down.
 // This lets the retry loop wait briefly instead of returning 503 immediately.
-func (p *poolState) nearestCooldown(accountType AccountType, exclude map[string]bool) time.Duration {
+func (p *ProviderPool) nearestCooldown(accountType AccountType, exclude map[string]bool) time.Duration {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -599,7 +605,7 @@ func (p *poolState) nearestCooldown(accountType AccountType, exclude map[string]
 //  6. Within a tier, use score as tiebreaker (headroom, drain urgency, recency, inflight)
 //  7. If all non-codex candidates are rate-limited, pick the best rate-limited account as fallback
 //     to avoid hard 503 failures during transient exhaustion.
-func (p *poolState) candidateByID(id string, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidateByID(id string, accountType AccountType, requiredPlan string, clientIP string) *Account {
 	if id == "" {
 		return nil
 	}
@@ -625,7 +631,7 @@ func (p *poolState) candidateByID(id string, accountType AccountType, requiredPl
 	return a
 }
 
-func (p *poolState) candidateWithCyberAccess(exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidateWithCyberAccess(exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -668,7 +674,7 @@ func (p *poolState) candidateWithCyberAccess(exclude map[string]bool, accountTyp
 	return best
 }
 
-func (p *poolState) candidate(conversationID string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *Account {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -905,7 +911,7 @@ func (p *poolState) candidate(conversationID string, exclude map[string]bool, ac
 	return selectCandidate(eligible)
 }
 
-func (p *poolState) excludeInflightWhenIdleAvailable(accountType AccountType, exclude map[string]bool) {
+func (p *ProviderPool) excludeInflightWhenIdleAvailable(accountType AccountType, exclude map[string]bool) {
 	if p == nil || exclude == nil {
 		return
 	}
@@ -929,7 +935,7 @@ func (p *poolState) excludeInflightWhenIdleAvailable(accountType AccountType, ex
 	}
 }
 
-func (p *poolState) excludeImageIncapable(exclude map[string]bool) {
+func (p *ProviderPool) excludeImageIncapable(exclude map[string]bool) {
 	if p == nil || exclude == nil {
 		return
 	}
@@ -965,7 +971,7 @@ func recordImageGenerationResult(account *Account, success bool) {
 	atomic.StoreInt64(&account.ImageGenerationRetryAt, time.Now().Add(10*time.Minute).Unix())
 }
 
-func (p *poolState) imageFanoutCandidate(index int, exclude map[string]bool, requiredPlan string, clientIP string) *Account {
+func (p *ProviderPool) imageFanoutCandidate(index int, exclude map[string]bool, requiredPlan string, clientIP string) *Account {
 	if p == nil {
 		return nil
 	}
@@ -1010,7 +1016,7 @@ func planMatchesRequired(planType, requiredPlan string) bool {
 }
 
 // countByType returns the number of accounts of a given type (or all if empty).
-func (p *poolState) countByType(accountType AccountType) int {
+func (p *ProviderPool) countByType(accountType AccountType) int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	if accountType == "" {
@@ -1255,7 +1261,7 @@ func scoreTooltipLocked(a *Account, now time.Time) string {
 	return scoreTooltipFromBreakdownLocked(a, now, scoreAccountBreakdownLocked(a, now))
 }
 
-func (p *poolState) pin(conversationID, accountID string) {
+func (p *ProviderPool) pin(conversationID, accountID string) {
 	if conversationID == "" || accountID == "" {
 		return
 	}
@@ -1265,7 +1271,7 @@ func (p *poolState) pin(conversationID, accountID string) {
 }
 
 // allAccounts returns a copy of all accounts for stats/reporting.
-func (p *poolState) allAccounts() []*Account {
+func (p *ProviderPool) allAccounts() []*Account {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	out := make([]*Account, len(p.accounts))
@@ -1622,7 +1628,7 @@ func mergeUsage(prev, next UsageSnapshot) UsageSnapshot {
 	return res
 }
 
-func (p *poolState) getLocked(id string) *Account {
+func (p *ProviderPool) getLocked(id string) *Account {
 	for _, a := range p.accounts {
 		if a.ID == id {
 			return a
@@ -1632,13 +1638,13 @@ func (p *poolState) getLocked(id string) *Account {
 }
 
 // averageUsage produces a synthetic usage payload across all alive accounts.
-func (p *poolState) averageUsage() UsageSnapshot {
+func (p *ProviderPool) averageUsage() UsageSnapshot {
 	return p.averageUsageByType("")
 }
 
 // averageUsageByType produces a synthetic usage payload for accounts of a specific type.
 // If accountType is empty, averages across all accounts.
-func (p *poolState) averageUsageByType(accountType AccountType) UsageSnapshot {
+func (p *ProviderPool) averageUsageByType(accountType AccountType) UsageSnapshot {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	var totalP, totalS float64
@@ -1728,7 +1734,7 @@ const (
 )
 
 // timeWeightedUsage produces a time-weighted usage snapshot across all alive accounts.
-func (p *poolState) timeWeightedUsage() UsageSnapshot {
+func (p *ProviderPool) timeWeightedUsage() UsageSnapshot {
 	return p.timeWeightedUsageByType("")
 }
 
@@ -1738,7 +1744,7 @@ func (p *poolState) timeWeightedUsage() UsageSnapshot {
 // while one at 80% that resets in 6 days contributes heavily.
 //
 // Formula: effective_util = used_pct × min(time_to_reset, window_length) / window_length
-func (p *poolState) timeWeightedUsageByType(accountType AccountType) UsageSnapshot {
+func (p *ProviderPool) timeWeightedUsageByType(accountType AccountType) UsageSnapshot {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -1837,7 +1843,7 @@ func (p *poolState) timeWeightedUsageByType(accountType AccountType) UsageSnapsh
 }
 
 // getPoolUtilization computes per-provider time-weighted utilization stats.
-func (p *poolState) getPoolUtilization() []PoolUtilization {
+func (p *ProviderPool) getPoolUtilization() []PoolUtilization {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -2038,7 +2044,7 @@ type AccountBrief struct {
 }
 
 // getPoolStats returns aggregate stats about the pool.
-func (p *poolState) getPoolStats() UsagePoolStats {
+func (p *ProviderPool) getPoolStats() UsagePoolStats {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -2315,7 +2321,7 @@ func decayPenaltyLocked(a *Account, now time.Time) {
 	a.LastPenalty = now
 }
 
-func (p *poolState) debugf(format string, args ...any) {
+func (p *ProviderPool) debugf(format string, args ...any) {
 	if p == nil || !p.debug {
 		return
 	}

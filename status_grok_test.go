@@ -10,7 +10,7 @@ import (
 
 func TestStatusJSONCountsGrokAccounts(t *testing.T) {
 	h := &proxyHandler{
-		pool:      newPoolState([]*Account{{ID: "grok", Type: AccountTypeGrok, AccessToken: "token"}}, false),
+		pool:      newProviderPool([]*Account{{ID: "grok", Type: AccountTypeGrok, AccessToken: "token"}}, false),
 		startTime: time.Now(),
 	}
 	req := httptest.NewRequest(http.MethodGet, "/status", nil)

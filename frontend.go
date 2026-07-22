@@ -130,7 +130,7 @@ type friendSessionResponse struct {
 // GET /api/pool/session returns once the Google OAuth gate has established a
 // session (see oauth_login.go) - the identity check happens before this is
 // called, not inside it.
-func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Request, user *PoolUser) {
+func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Request, user *GatewayUser) {
 	secret := getPoolJWTSecret()
 	authData, err := generateCodexAuth(secret, user)
 	if err != nil {

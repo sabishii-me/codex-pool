@@ -103,7 +103,7 @@ func TestIsPoolUserTokenWrongIssuer(t *testing.T) {
 
 func TestGenerateCodexAuth(t *testing.T) {
 	secret := "test-secret-key-12345678901234567890"
-	user := &PoolUser{
+	user := &GatewayUser{
 		ID:        "abcdef1234567890abcdef1234567890",
 		Email:     "test@example.com",
 		PlanType:  "pro",
@@ -150,7 +150,7 @@ func TestGenerateCodexAuth(t *testing.T) {
 
 func TestGenerateGeminiAuth(t *testing.T) {
 	secret := "test-secret-key-12345678901234567890"
-	user := &PoolUser{
+	user := &GatewayUser{
 		ID:        "abcdef1234567890abcdef1234567890",
 		Email:     "test@example.com",
 		PlanType:  "pro",

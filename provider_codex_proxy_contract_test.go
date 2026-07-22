@@ -32,7 +32,7 @@ func TestCodexProxyStreamingCanonicalUsageAndResponseIntegrity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer analytics.db.Close()
-	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newPoolState([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	requestBody := []byte(`{"model":"gpt-5.5","input":"hello","stream":true}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(requestBody))
 	request.Header.Set("Content-Type", "application/json")
@@ -69,7 +69,7 @@ func TestCodexProxyLargeNativeResponsesBodyIntegrity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer analytics.db.Close()
-	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newPoolState([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	padding := strings.Repeat("x", streamedModelRoutePeekBytes+1024)
 	requestBody := []byte(`{"model":"gpt-5.5","input":` + mustJSONContractString(t, padding) + `,"stream":false}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(requestBody))

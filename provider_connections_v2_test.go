@@ -13,7 +13,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 		Identity: ConnectionIdentity{DisplayName: "Production Codex", ExternalSubject: "subject-1", Attributes: map[string]string{"region": "us-east"}},
 		PlanType: "pro", Totals: AccountUsage{RequestCount: 2},
 	}
-	handler := &proxyHandler{pool: newPoolState([]*Account{connection}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{connection}, false)}
 	recorder := httptest.NewRecorder()
 	handler.serveProviderConnectionsV2(recorder)
 	if recorder.Code != 200 {
@@ -40,7 +40,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 
 func TestProviderConnectionsV2ReturnsEmptyArray(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	(&proxyHandler{pool: newPoolState(nil, false)}).serveProviderConnectionsV2(recorder)
+	(&proxyHandler{pool: newProviderPool(nil, false)}).serveProviderConnectionsV2(recorder)
 	if strings.TrimSpace(recorder.Body.String()) != "[]" {
 		t.Fatalf("body=%s, want []", recorder.Body.String())
 	}

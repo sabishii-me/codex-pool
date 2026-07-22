@@ -9,7 +9,7 @@ func TestImageFanoutExcludesBusyAccountsWhenIdleCapacityExists(t *testing.T) {
 	busy := &Account{ID: "busy", Type: AccountTypeCodex}
 	idle := &Account{ID: "idle", Type: AccountTypeCodex}
 	atomic.StoreInt64(&busy.Inflight, 1)
-	pool := newPoolState([]*Account{busy, idle}, false)
+	pool := newProviderPool([]*Account{busy, idle}, false)
 
 	exclude := map[string]bool{}
 	pool.excludeInflightWhenIdleAvailable(AccountTypeCodex, exclude)
@@ -25,7 +25,7 @@ func TestImageFanoutCandidateRotatesAcrossAccounts(t *testing.T) {
 	first := &Account{ID: "a", Type: AccountTypeCodex}
 	second := &Account{ID: "b", Type: AccountTypeCodex}
 	third := &Account{ID: "c", Type: AccountTypeCodex}
-	pool := newPoolState([]*Account{third, first, second}, false)
+	pool := newProviderPool([]*Account{third, first, second}, false)
 
 	for index, want := range []string{"a", "b", "c", "a"} {
 		got := pool.imageFanoutCandidate(index, map[string]bool{}, "", "")
@@ -40,7 +40,7 @@ func TestImageFanoutAllowsBusyAccountsWhenAllCapacityIsBusy(t *testing.T) {
 	second := &Account{ID: "second", Type: AccountTypeCodex}
 	atomic.StoreInt64(&first.Inflight, 1)
 	atomic.StoreInt64(&second.Inflight, 1)
-	pool := newPoolState([]*Account{first, second}, false)
+	pool := newProviderPool([]*Account{first, second}, false)
 
 	exclude := map[string]bool{}
 	pool.excludeInflightWhenIdleAvailable(AccountTypeCodex, exclude)
@@ -56,7 +56,7 @@ func TestImageCapabilityLearnsAfterRepeatedFailures(t *testing.T) {
 		t.Fatalf("support after one failure = %d", got)
 	}
 
-	pool := newPoolState([]*Account{account}, false)
+	pool := newProviderPool([]*Account{account}, false)
 	exclude := map[string]bool{}
 	pool.excludeImageIncapable(exclude)
 	if !exclude[account.ID] {

@@ -151,7 +151,7 @@ func (h *proxyHandler) handleGoogleLoginCallback(w http.ResponseWriter, r *http.
 
 	user := h.poolUsers.GetByEmail(email)
 	if user == nil {
-		user = &PoolUser{
+		user = &GatewayUser{
 			ID:        randomHex(8),
 			Token:     randomHex(16),
 			Email:     email,
@@ -223,9 +223,9 @@ func (h *proxyHandler) handlePoolSession(w http.ResponseWriter, r *http.Request)
 	h.writeFriendSessionJSON(w, r, user)
 }
 
-// sessionUser resolves the pool_session cookie to a live, enabled PoolUser.
+// sessionUser resolves the pool_session cookie to a live, enabled GatewayUser.
 // Used both by handlePoolSession and by checkAdminOrSessionAuth in router.go.
-func (h *proxyHandler) sessionUser(r *http.Request) (*PoolUser, bool) {
+func (h *proxyHandler) sessionUser(r *http.Request) (*GatewayUser, bool) {
 	if h.poolUsers == nil {
 		return nil, false
 	}

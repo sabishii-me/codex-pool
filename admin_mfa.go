@@ -166,7 +166,7 @@ type AdminTOTPSecret struct {
 }
 
 // AdminTOTPStore persists admin MFA secrets to a JSON file, mirroring
-// PoolUserStore's load/save pattern in pool_users.go.
+// GatewayUserStore's load/save pattern in pool_users.go.
 type AdminTOTPStore struct {
 	mu      sync.RWMutex
 	path    string
@@ -303,7 +303,7 @@ func adminElevated(r *http.Request, userID string) bool {
 // email is admin-listed. Used by the MFA endpoints themselves, which can't
 // go through checkAdminAuth (that requires elevation, which doesn't exist
 // yet during enrollment/verification).
-func (h *proxyHandler) requireAdminIdentity(w http.ResponseWriter, r *http.Request) (*PoolUser, bool) {
+func (h *proxyHandler) requireAdminIdentity(w http.ResponseWriter, r *http.Request) (*GatewayUser, bool) {
 	user, ok := h.sessionUser(r)
 	if !ok {
 		respondJSONError(w, http.StatusUnauthorized, "not signed in")

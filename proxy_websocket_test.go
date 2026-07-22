@@ -80,7 +80,7 @@ func TestProxyWebSocketPoolRewritesAuthAndPinsSession(t *testing.T) {
 		AccountID:   "acct_pool_1",
 		PlanType:    "pro",
 	}
-	pool := newPoolState([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc}, false)
 
 	h := &proxyHandler{
 		cfg: &config{
@@ -159,7 +159,7 @@ func TestProxyWebSocketUsesPinnedAccountBeforeCyberPolicy(t *testing.T) {
 
 	ordinary := &Account{Type: AccountTypeCodex, ID: "ordinary", AccessToken: "ordinary-token", AccountID: "acct_ordinary", PlanType: "pro"}
 	cyber := &Account{Type: AccountTypeCodex, ID: "cyber", AccessToken: "cyber-token", AccountID: "acct_cyber", PlanType: "pro", CyberAccess: true}
-	pool := newPoolState([]*Account{ordinary, cyber}, false)
+	pool := newProviderPool([]*Account{ordinary, cyber}, false)
 	pool.pin("thread-ws-cyber", "ordinary")
 
 	h := &proxyHandler{
@@ -215,7 +215,7 @@ func TestProxyWebSocketPassthroughPreservesAuthorization(t *testing.T) {
 			maxInMemoryBodyBytes: 1024,
 		},
 		transport: http.DefaultTransport,
-		pool:      newPoolState(nil, false),
+		pool:      newProviderPool(nil, false),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(5),
@@ -269,7 +269,7 @@ func TestProxyWebSocketPinsMaxPlanWhen1MHeaderPresent(t *testing.T) {
 
 	pro := &Account{Type: AccountTypeClaude, ID: "claude_pro", AccessToken: "pro-token", PlanType: "pro"}
 	max := &Account{Type: AccountTypeClaude, ID: "claude_max", AccessToken: "max-token", PlanType: "max"}
-	pool := newPoolState([]*Account{pro, max}, false)
+	pool := newProviderPool([]*Account{pro, max}, false)
 
 	h := &proxyHandler{
 		cfg:       &config{requestTimeout: 5 * time.Second, maxInMemoryBodyBytes: 1024},
@@ -330,7 +330,7 @@ func TestProxyWebSocketForwardsTurnStateBothWays(t *testing.T) {
 	h := &proxyHandler{
 		cfg:       &config{requestTimeout: 5 * time.Second, maxInMemoryBodyBytes: 1024, websocketReadLimit: 128 * 1024 * 1024},
 		transport: http.DefaultTransport,
-		pool:      newPoolState([]*Account{acc}, false),
+		pool:      newProviderPool([]*Account{acc}, false),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(5),
@@ -404,7 +404,7 @@ func TestProxyWebSocketRelaysFrameLargerThanOld64MiBLimit(t *testing.T) {
 			websocketReadLimit:         128 * 1024 * 1024,
 		},
 		transport: http.DefaultTransport,
-		pool:      newPoolState(nil, false),
+		pool:      newProviderPool(nil, false),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(5),
@@ -481,7 +481,7 @@ func TestProxyWebSocketKeepsCodexConnectionAliveDuringSilentUpstream(t *testing.
 			websocketReadLimit:         128 * 1024 * 1024,
 		},
 		transport: http.DefaultTransport,
-		pool:      newPoolState(nil, false),
+		pool:      newProviderPool(nil, false),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(5),

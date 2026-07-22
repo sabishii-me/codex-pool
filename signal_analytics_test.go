@@ -51,7 +51,7 @@ func TestSignalAnalyticsLinksWeeklyOriginDrainAndCurrentAccountEconomics(t *test
 	}
 
 	h := &proxyHandler{
-		pool:           newPoolState([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro"}}, false),
+		pool:           newProviderPool([]*Account{{ID: "current", Type: AccountTypeCodex, PlanType: "pro"}}, false),
 		store:          usage,
 		analyticsStore: analytics,
 	}

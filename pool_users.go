@@ -25,23 +25,27 @@ type GatewayUser struct {
 	Disabled  bool      `json:"disabled"`
 }
 
-// PoolUser is retained for persisted/API compatibility during migration.
+// PoolUser is retained for persisted/API source compatibility.
 // Deprecated: use GatewayUser.
 type PoolUser = GatewayUser
 
-// PoolUserStore manages pool user persistence.
-type PoolUserStore struct {
+// GatewayUserStore manages gateway user persistence.
+type GatewayUserStore struct {
 	mu    sync.RWMutex
 	path  string
-	users map[string]*PoolUser // keyed by ID
-	byTok map[string]*PoolUser // keyed by download token
+	users map[string]*GatewayUser // keyed by ID
+	byTok map[string]*GatewayUser // keyed by download token
 }
 
-func newPoolUserStore(path string) (*PoolUserStore, error) {
-	s := &PoolUserStore{
+// PoolUserStore is retained for source compatibility.
+// Deprecated: use GatewayUserStore.
+type PoolUserStore = GatewayUserStore
+
+func newGatewayUserStore(path string) (*GatewayUserStore, error) {
+	s := &GatewayUserStore{
 		path:  path,
-		users: make(map[string]*PoolUser),
-		byTok: make(map[string]*PoolUser),
+		users: make(map[string]*GatewayUser),
+		byTok: make(map[string]*GatewayUser),
 	}
 	if err := s.load(); err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -49,19 +53,25 @@ func newPoolUserStore(path string) (*PoolUserStore, error) {
 	return s, nil
 }
 
-func (s *PoolUserStore) load() error {
+// newPoolUserStore is retained for source compatibility.
+// Deprecated: use newGatewayUserStore.
+func newPoolUserStore(path string) (*GatewayUserStore, error) {
+	return newGatewayUserStore(path)
+}
+
+func (s *GatewayUserStore) load() error {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return err
 	}
-	var users []*PoolUser
+	var users []*GatewayUser
 	if err := json.Unmarshal(data, &users); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.users = make(map[string]*PoolUser, len(users))
-	s.byTok = make(map[string]*PoolUser, len(users))
+	s.users = make(map[string]*GatewayUser, len(users))
+	s.byTok = make(map[string]*GatewayUser, len(users))
 	for _, u := range users {
 		s.users[u.ID] = u
 		s.byTok[u.Token] = u
@@ -69,8 +79,8 @@ func (s *PoolUserStore) load() error {
 	return nil
 }
 
-func (s *PoolUserStore) save() error {
-	users := make([]*PoolUser, 0, len(s.users))
+func (s *GatewayUserStore) save() error {
+	users := make([]*GatewayUser, 0, len(s.users))
 	for _, u := range s.users {
 		users = append(users, u)
 	}
@@ -81,7 +91,7 @@ func (s *PoolUserStore) save() error {
 	return os.WriteFile(s.path, data, 0o600)
 }
 
-func (s *PoolUserStore) Create(u *PoolUser) error {
+func (s *GatewayUserStore) Create(u *GatewayUser) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.users[u.ID] = u
@@ -89,29 +99,29 @@ func (s *PoolUserStore) Create(u *PoolUser) error {
 	return s.save()
 }
 
-func (s *PoolUserStore) Get(id string) *PoolUser {
+func (s *GatewayUserStore) Get(id string) *GatewayUser {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.users[id]
 }
 
-func (s *PoolUserStore) GetByToken(token string) *PoolUser {
+func (s *GatewayUserStore) GetByToken(token string) *GatewayUser {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.byTok[token]
 }
 
-func (s *PoolUserStore) List() []*PoolUser {
+func (s *GatewayUserStore) List() []*GatewayUser {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]*PoolUser, 0, len(s.users))
+	out := make([]*GatewayUser, 0, len(s.users))
 	for _, u := range s.users {
 		out = append(out, u)
 	}
 	return out
 }
 
-func (s *PoolUserStore) GetByEmail(email string) *PoolUser {
+func (s *GatewayUserStore) GetByEmail(email string) *GatewayUser {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, u := range s.users {
@@ -122,7 +132,7 @@ func (s *PoolUserStore) GetByEmail(email string) *PoolUser {
 	return nil
 }
 
-func (s *PoolUserStore) Disable(id string) error {
+func (s *GatewayUserStore) Disable(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if u, ok := s.users[id]; ok {
@@ -260,7 +270,7 @@ type PoolUserGeminiAuth struct {
 }
 
 // generateCodexAuth creates the auth.json content for a pool user.
-func generateCodexAuth(secret string, user *PoolUser) (*CodexAuthJSON, error) {
+func generateCodexAuth(secret string, user *GatewayUser) (*CodexAuthJSON, error) {
 	now := time.Now()
 	exp := now.Add(10 * 365 * 24 * time.Hour).Unix() // 10 years
 
@@ -366,7 +376,7 @@ func generateCodexAuth(secret string, user *PoolUser) (*CodexAuthJSON, error) {
 // generateGeminiAuth creates the oauth_creds.json content for a pool user.
 // Note: We use Google-like token formats (ya29.* and 1//*) so the Gemini CLI
 // doesn't reject them during local validation. The pool validates these tokens.
-func generateGeminiAuth(secret string, user *PoolUser) (*PoolUserGeminiAuth, error) {
+func generateGeminiAuth(secret string, user *GatewayUser) (*PoolUserGeminiAuth, error) {
 	now := time.Now()
 	exp := now.Add(365 * 24 * time.Hour).Unix() // 1 year
 	expiryDateMs := now.Add(365 * 24 * time.Hour).UnixMilli()
@@ -412,7 +422,7 @@ func generateGeminiAuth(secret string, user *PoolUser) (*PoolUserGeminiAuth, err
 // generateGeminiAPIKey creates a pool API key for Gemini CLI in API key mode.
 // Format: AIzaSy-pool-<user_id>.<timestamp>.<signature>
 // This bypasses OAuth completely and lets Gemini CLI work with our proxy.
-func generateGeminiAPIKey(secret string, user *PoolUser) string {
+func generateGeminiAPIKey(secret string, user *GatewayUser) string {
 	timestamp := time.Now().Unix()
 	payload := fmt.Sprintf("%s.%d", user.ID, timestamp)
 	sig := hmacSign(secret, []byte(payload))
@@ -565,7 +575,7 @@ type PoolUserClaudeAuth struct {
 // Uses a fake sk-ant-oat01-pool-* format that looks like a real Claude OAuth token
 // (CLAUDE_CODE_OAUTH_TOKEN) but contains an embedded user ID and signature for pool
 // authentication.
-func generateClaudeAuth(secret string, user *PoolUser) (*PoolUserClaudeAuth, error) {
+func generateClaudeAuth(secret string, user *GatewayUser) (*PoolUserClaudeAuth, error) {
 	// Generate a fake sk-ant-oat01 token with embedded pool user info.
 	// Format: sk-ant-oat01-pool-<base64url(userID.timestamp.signature)>
 	accessToken := generateClaudePoolToken(secret, user.ID)

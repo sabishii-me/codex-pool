@@ -1,94 +1,39 @@
 package main
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"net/url"
-	"path/filepath"
-	"strings"
-)
+import "net/url"
 
-// ZAIProvider handles Z.ai GLM Coding Plan accounts through the Anthropic-compatible API.
-type ZAIProvider struct {
-	zaiBase *url.URL
+var zaiProviderSpec = ProviderSpec{
+	ID: AccountTypeZAI, Protocol: ProtocolAnthropicMessages,
+	BaseURL: "https://api.z.ai/api/anthropic", PlanType: "zai", CredentialField: "api_key",
+	Auth: ProviderAuthSpec{Type: AuthHeader, Header: "X-Api-Key"},
+	Models: []ModelRouteSpec{
+		{ID: "glm-5.2", ContextWindow: 1000000, MaxOutputTokens: 65536},
+	},
 }
 
-// NewZAIProvider creates a new Z.ai provider.
-func NewZAIProvider(zaiBase *url.URL) *ZAIProvider {
-	return &ZAIProvider{
-		zaiBase: zaiBase,
+// ZAIProvider is retained as a source-compatible name for the first
+// declarative provider conversion.
+type ZAIProvider = DeclarativeProvider
+
+func NewZAIProvider(base *url.URL) *ZAIProvider {
+	spec := zaiProviderSpec
+	if base != nil {
+		spec.BaseURL = base.String()
 	}
-}
-
-func (p *ZAIProvider) Type() AccountType {
-	return AccountTypeZAI
-}
-
-type ZAIAuthJSON struct {
-	APIKey string `json:"api_key"`
-}
-
-func (p *ZAIProvider) LoadAccount(name, path string, data []byte) (*ProviderConnection, error) {
-	var zj ZAIAuthJSON
-	if err := json.Unmarshal(data, &zj); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", path, err)
+	provider, err := NewDeclarativeProvider(spec)
+	if err != nil {
+		panic(err)
 	}
-	if zj.APIKey == "" {
-		return nil, nil
-	}
-
-	acc := &ProviderConnection{
-		Type:        AccountTypeZAI,
-		ID:          strings.TrimSuffix(name, filepath.Ext(name)),
-		File:        path,
-		AccessToken: zj.APIKey,
-		PlanType:    "zai",
-	}
-	return acc, nil
-}
-
-func (p *ZAIProvider) SetAuthHeaders(req *http.Request, acc *ProviderConnection) {
-	req.Header.Set("X-Api-Key", acc.AccessToken)
-}
-
-func (p *ZAIProvider) RefreshToken(ctx context.Context, acc *ProviderConnection, transport http.RoundTripper) error {
-	return nil
-}
-
-func (p *ZAIProvider) ParseUsage(obj map[string]any) *RequestUsage {
-	return anthropicMessagesEngine.ParseUsage(obj)
-}
-
-func (p *ZAIProvider) ParseUsageHeaders(acc *ProviderConnection, headers http.Header) {
-	// Z.ai's Anthropic-compatible endpoint does not currently expose quota headers.
-}
-
-func (p *ZAIProvider) UpstreamURL(path string) *url.URL {
-	return p.zaiBase
-}
-
-func (p *ZAIProvider) MatchesPath(path string) bool {
-	// Z.ai is model-routed.
-	return false
-}
-
-func (p *ZAIProvider) NormalizePath(path string) string {
-	return path
-}
-
-func (p *ZAIProvider) DetectsSSE(path string, contentType string) bool {
-	return eventStreamDetector.Detect(path, contentType)
+	return provider
 }
 
 func isZAIModel(model string) bool {
-	_, ok := modelForProvider(AccountTypeZAI, model)
+	_, ok := NewZAIProvider(nil).MatchModel(model)
 	return ok
 }
 
 func zaiCanonicalModel(model string) string {
-	if found, ok := modelForProvider(AccountTypeZAI, model); ok {
+	if found, ok := NewZAIProvider(nil).MatchModel(model); ok {
 		return found.ID
 	}
 	return model

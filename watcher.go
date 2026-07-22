@@ -13,29 +13,32 @@ import (
 // poolWatcher watches the pool directory and config file for changes,
 // triggering automatic reloads without requiring a server restart.
 type poolWatcher struct {
-	watcher    *fsnotify.Watcher
-	poolDir    string
-	configPath string
-	handler    *proxyHandler
+	watcher          *fsnotify.Watcher
+	poolDir          string
+	configPath       string
+	providerSpecsDir string
+	handler          *proxyHandler
 
-	mu           sync.Mutex
-	debouncePool *time.Timer
-	debounceCfg  *time.Timer
+	mu            sync.Mutex
+	debouncePool  *time.Timer
+	debounceCfg   *time.Timer
+	debounceSpecs *time.Timer
 }
 
 const watcherDebounce = 500 * time.Millisecond
 
-func newPoolWatcher(poolDir, configPath string, handler *proxyHandler) (*poolWatcher, error) {
+func newPoolWatcher(poolDir, configPath, providerSpecsDir string, handler *proxyHandler) (*poolWatcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 
 	pw := &poolWatcher{
-		watcher:    w,
-		poolDir:    poolDir,
-		configPath: configPath,
-		handler:    handler,
+		watcher:          w,
+		poolDir:          poolDir,
+		configPath:       configPath,
+		providerSpecsDir: providerSpecsDir,
+		handler:          handler,
 	}
 
 	// Watch pool directory for credential file changes.
@@ -67,6 +70,20 @@ func newPoolWatcher(poolDir, configPath string, handler *proxyHandler) (*poolWat
 		} else {
 			log.Printf("watching config file: %s", configPath)
 		}
+	}
+
+	// Watch declarative provider specifications independently. Invalid changes
+	// leave the previous registry and connection pool active.
+	if providerSpecsDir != "" {
+		if err := os.MkdirAll(providerSpecsDir, 0o700); err != nil {
+			w.Close()
+			return nil, err
+		}
+		if err := w.Add(providerSpecsDir); err != nil {
+			w.Close()
+			return nil, err
+		}
+		log.Printf("watching provider specs directory: %s", providerSpecsDir)
 	}
 
 	go pw.loop()
@@ -108,6 +125,15 @@ func (pw *poolWatcher) handleEvent(event fsnotify.Event) {
 		return
 	}
 
+	// Is this a declarative provider spec change?
+	if pw.providerSpecsDir != "" && filepath.Clean(filepath.Dir(event.Name)) == filepath.Clean(pw.providerSpecsDir) {
+		if pw.debounceSpecs != nil {
+			pw.debounceSpecs.Stop()
+		}
+		pw.debounceSpecs = time.AfterFunc(watcherDebounce, pw.reloadProviderSpecs)
+		return
+	}
+
 	// Otherwise it's a pool directory change.
 	if pw.debouncePool != nil {
 		pw.debouncePool.Stop()
@@ -129,6 +155,16 @@ func (pw *poolWatcher) reloadPool() {
 		counts[AccountTypeAntigravity],
 		counts[AccountTypeKimi], counts[AccountTypeMinimax], counts[AccountTypeZAI], counts[AccountTypeXiaomi], counts[AccountTypeGrok],
 		counts[AccountTypeDeepSeek], counts[AccountTypeQwen], counts[AccountTypeOpenRouter], counts[AccountTypeNvidia])
+}
+
+func (pw *poolWatcher) reloadProviderSpecs() {
+	log.Printf("provider specs changed, validating replacement snapshot")
+	if err := ReloadProviderSpecs(pw.handler.registry, pw.providerSpecsDir); err != nil {
+		log.Printf("provider specs reload failed; keeping previous snapshot: %v", err)
+		return
+	}
+	pw.handler.reloadAccounts()
+	log.Printf("provider specs hot-reload complete")
 }
 
 func (pw *poolWatcher) reloadConfig() {

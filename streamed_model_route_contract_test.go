@@ -12,10 +12,9 @@ import (
 func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 	base, _ := url.Parse("https://streamed-route.test")
 	registry := anthropicContractRegistry(base)
-	registry.providers = append(registry.providers, NewGrokProvider(base), NewNvidiaProvider(base), NewAntigravityProvider(base, base))
-	registry.byType[AccountTypeGrok] = registry.providers[len(registry.providers)-3]
-	registry.byType[AccountTypeNvidia] = registry.providers[len(registry.providers)-2]
-	registry.byType[AccountTypeAntigravity] = registry.providers[len(registry.providers)-1]
+	if err := registry.AddProviders(NewGrokProvider(base), NewNvidiaProvider(base), NewAntigravityProvider(base, base)); err != nil {
+		t.Fatal(err)
+	}
 	handler := &proxyHandler{cfg: &config{}, registry: registry, aliases: newModelAliases(nil)}
 	fallback := registry.ForType(AccountTypeClaude)
 

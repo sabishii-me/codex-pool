@@ -365,7 +365,7 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*ProviderConnection, er
 	antigravityModels.Reset()
 
 	// Load accounts from provider subdirectories: pool/codex/, pool/claude/, pool/gemini/
-	providerDirs := map[string]AccountType{
+	providerDirs := map[string]ProviderID{
 		"codex":         AccountTypeCodex,
 		"claude":        AccountTypeClaude,
 		"gemini":        AccountTypeGemini,
@@ -380,6 +380,11 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*ProviderConnection, er
 		"qwen":          AccountTypeQwen,
 		"openrouter":    AccountTypeOpenRouter,
 		"nvidia":        AccountTypeNvidia,
+	}
+	for _, provider := range registry.All() {
+		if _, ok := provider.(*DeclarativeProvider); ok {
+			providerDirs[string(provider.Type())] = provider.Type()
+		}
 	}
 
 	for subdir, accountType := range providerDirs {

@@ -49,6 +49,7 @@ type config struct {
 	openrouterBase         *url.URL // OpenRouter Anthropic-compatible endpoint
 	nvidiaBase             *url.URL // NVIDIA NIM OpenAI Chat Completions endpoint
 	poolDir                string
+	providerSpecsDir       string
 
 	disableRefresh  bool
 	refreshProxyURL string // HTTP proxy URL for refresh operations
@@ -153,6 +154,7 @@ func buildConfig() *config {
 	cfg.nvidiaBase = mustParse(getenv("UPSTREAM_NVIDIA_BASE", "https://integrate.api.nvidia.com/v1"))
 	cfg.grokBase = mustParse(getConfigString("UPSTREAM_GROK_BASE", fileCfg.GrokBase, "https://cli-chat-proxy.grok.com/v1"))
 	cfg.poolDir = getConfigString("POOL_DIR", fileCfg.PoolDir, "pool")
+	cfg.providerSpecsDir = strings.TrimSpace(getenv("PROVIDER_SPECS_DIR", ""))
 
 	// Refresh often fails for some auth.json fixtures; allow opting out.
 	cfg.disableRefresh = getConfigBool("PROXY_DISABLE_REFRESH", fileCfg.DisableRefresh, false)
@@ -286,6 +288,12 @@ func main() {
 	openrouterProvider := NewOpenRouterProvider(cfg.openrouterBase)
 	nvidiaProvider := NewNvidiaProvider(cfg.nvidiaBase)
 	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider)
+	if cfg.providerSpecsDir != "" {
+		if err := ReloadProviderSpecs(registry, cfg.providerSpecsDir); err != nil {
+			log.Fatalf("load provider specs: %v", err)
+		}
+		log.Printf("loaded declarative provider specs from %s", cfg.providerSpecsDir)
+	}
 
 	log.Printf("loading pool from %s", cfg.poolDir)
 	accounts, err := loadPool(cfg.poolDir, registry)
@@ -529,7 +537,7 @@ func main() {
 	if v := os.Getenv("CONFIG_PATH"); v != "" {
 		configPath = v
 	}
-	if watcher, err := newPoolWatcher(cfg.poolDir, configPath, h); err != nil {
+	if watcher, err := newPoolWatcher(cfg.poolDir, configPath, cfg.providerSpecsDir, h); err != nil {
 		log.Printf("warning: failed to start file watcher: %v (hot-reload disabled)", err)
 	} else {
 		defer watcher.close()
@@ -1237,6 +1245,9 @@ func isCodexToClaudeModelOverridePath(path string) bool {
 // provider (Kimi, MiniMax, etc.) instead of the path-detected provider.
 // Returns (provider, baseURL, rewrittenBody) or (nil, nil, nil) if no override.
 func (h *proxyHandler) modelRouteOverride(path, model string, body []byte) (Provider, *url.URL, []byte) {
+	if provider, canonical, ok := h.registry.MatchDeclarativeModel(model); ok {
+		return provider, provider.UpstreamURL(path), rewriteModelInBody(body, canonical)
+	}
 	if isKimiModel(model) {
 		p := h.registry.ForType(AccountTypeKimi)
 		if p == nil {
@@ -1431,6 +1442,9 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 }
 
 func (h *proxyHandler) resolveStreamedModelRoute(path, model string) (Provider, *url.URL, string) {
+	if provider, canonical, ok := h.registry.MatchDeclarativeModel(model); ok {
+		return provider, provider.UpstreamURL(path), canonical
+	}
 	type route struct {
 		accountType AccountType
 		matches     func(string) bool
@@ -1825,11 +1839,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		return
 	}
 	if r.Method == http.MethodGet && normalizeNoopPath(r.URL.Path) == "/api/pool/models" {
-		servePoolModels(w, h.pool)
+		servePoolModelsWithRegistry(w, h.pool, h.registry)
 		return
 	}
 	if r.Method == http.MethodGet && normalizeNoopPath(r.URL.Path) == "/v1/models" {
-		serveUnifiedOpenAIModels(w, h.pool)
+		serveUnifiedOpenAIModelsWithRegistry(w, h.pool, h.registry)
 		return
 	}
 	if r.Method == http.MethodGet && normalizeNoopPath(r.URL.Path) == "/v1beta/models" {

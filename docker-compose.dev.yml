@@ -13,8 +13,10 @@ services:
       # all mutable development state must remain independent from production.
       - ./dev/pool:/app/pool
       - ./dev/data:/app/data
+      - ./dev/provider-specs:/app/provider-specs
     environment:
       POOL_DIR: /app/pool
+      PROVIDER_SPECS_DIR: /app/provider-specs
       PROXY_DB_PATH: /app/data/proxy.db
       POOL_USERS_PATH: /app/data/pool_users.json
       ADMIN_MFA_PATH: /app/data/admin_mfa.json

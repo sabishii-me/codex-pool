@@ -1,0 +1,21 @@
+{
+  "id": "zai",
+  "protocol": "anthropic-messages",
+  "base_url": "https://api.z.ai/api/anthropic",
+  "plan_type": "zai",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "header",
+    "header": "X-Api-Key"
+  },
+  "models": [
+    {
+      "id": "glm-5.2",
+      "display_name": "GLM-5.2",
+      "context_window": 1000000,
+      "max_output_tokens": 65536,
+      "reasoning": true,
+      "input": ["text"]
+    }
+  ]
+}

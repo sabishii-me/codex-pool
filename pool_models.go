@@ -158,12 +158,65 @@ func poolModelIDExists(id string) bool {
 	return false
 }
 
+func poolModelDescriptorsWithRegistry(pool *ProviderPool, registry *ProviderRegistry) []poolModelDescriptor {
+	models := poolModelDescriptors(pool)
+	if registry == nil {
+		return models
+	}
+	seen := make(map[string]bool, len(models))
+	for _, model := range models {
+		seen[strings.ToLower(model.ID)] = true
+	}
+	for _, provider := range registry.DeclarativeProviders() {
+		spec := provider.Spec()
+		for _, model := range spec.Models {
+			if seen[strings.ToLower(model.ID)] {
+				continue
+			}
+			seen[strings.ToLower(model.ID)] = true
+			supporting, available, availableNow := poolModelAvailability(pool, spec.ID)
+			name := model.DisplayName
+			if name == "" {
+				name = model.ID
+			}
+			modalities := append([]string(nil), model.Input...)
+			if len(modalities) == 0 {
+				modalities = []string{"text"}
+			}
+			models = append(models, poolModelDescriptor{
+				ID: model.ID, Name: name, Description: model.Description,
+				Protocol: "anthropic", Protocols: []string{"anthropic"}, Provider: string(spec.ID), UpstreamID: model.ID,
+				ContextWindow: model.ContextWindow, MaxOutputTokens: model.MaxOutputTokens,
+				Modalities: modalities, Capabilities: map[string]bool{"reasoning": model.Reasoning, "tools": true},
+				Aliases: append([]string(nil), model.Aliases...), SupportingAccounts: supporting, AvailableAccounts: available, AvailableNow: availableNow,
+			})
+		}
+	}
+	return models
+}
+
 func servePoolModels(w http.ResponseWriter, pools ...*ProviderPool) {
-	respondJSON(w, map[string]any{"models": poolModelDescriptors(pools...)})
+	var pool *ProviderPool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
+	servePoolModelsWithRegistry(w, pool, nil)
+}
+
+func servePoolModelsWithRegistry(w http.ResponseWriter, pool *ProviderPool, registry *ProviderRegistry) {
+	respondJSON(w, map[string]any{"models": poolModelDescriptorsWithRegistry(pool, registry)})
 }
 
 func serveUnifiedOpenAIModels(w http.ResponseWriter, pools ...*ProviderPool) {
-	descriptors := poolModelDescriptors(pools...)
+	var pool *ProviderPool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
+	serveUnifiedOpenAIModelsWithRegistry(w, pool, nil)
+}
+
+func serveUnifiedOpenAIModelsWithRegistry(w http.ResponseWriter, pool *ProviderPool, registry *ProviderRegistry) {
+	descriptors := poolModelDescriptorsWithRegistry(pool, registry)
 	data := make([]map[string]any, 0, len(descriptors))
 	seen := make(map[string]bool)
 	for _, model := range descriptors {

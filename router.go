@@ -369,7 +369,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		servePoolModels(w, h.pool)
+		servePoolModelsWithRegistry(w, h.pool, h.registry)
 		return
 	case "/favicon.ico":
 		http.NotFound(w, r)

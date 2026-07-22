@@ -286,6 +286,8 @@ Exit criterion: provider implementations no longer duplicate protocol usage pars
 
 ### Phase 4 — Add declarative provider specifications
 
+Status: in progress. A strict JSON `ProviderSpec` schema, immutable declarative providers, atomic registry snapshots, deterministic directory loading, and watched all-or-nothing hot reload are implemented. Runtime specifications can add an Anthropic Messages provider, credential directory, endpoint, auth strategy, model aliases, routing, canonical rewriting, and catalog entries without recompiling Go or editing React. Invalid reloads retain both the previous provider snapshot and connection pool. DeepSeek and Z.ai are converted to thin compatibility aliases over the generic implementation; examples and operator documentation are in `provider-specs.example/` and `docs/provider-specifications.md`.
+
 - Define the provider schema and loader.
 - Convert DeepSeek and Z.ai first.
 - Convert Qwen, MiniMax, Xiaomi, Kimi Platform, OpenRouter, and NVIDIA.

@@ -10,6 +10,7 @@ Use a second Docker Compose project for development. Do not rebuild, restart, or
 | Image | `codex-pool:latest` | `codex-pool:dev` |
 | Host endpoint | `localhost:8989` | `127.0.0.1:18990` |
 | Provider state | `./pool` | `./dev/pool` |
+| Provider specifications | operator-defined | `./dev/provider-specs` |
 | Database/state | `./data` | `./dev/data` |
 | Environment | `.env`/host | `.env.dev` |
 
@@ -149,4 +150,4 @@ OAuth callbacks currently return to the backend endpoint configured in `.env.dev
 docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml config
 ```
 
-The resolved mounts must end in `./dev/pool` and `./dev/data`, never `./pool` or `./data`. Development interpolation variables are deliberately `DEV_`-prefixed, so omitting `--env-file` cannot silently import equivalent production values from the root `.env`.
+The resolved mounts must end in `./dev/pool`, `./dev/data`, and `./dev/provider-specs`, never `./pool`, `./data`, or a production specifications directory. Development interpolation variables are deliberately `DEV_`-prefixed, so omitting `--env-file` cannot silently import equivalent production values from the root `.env`.

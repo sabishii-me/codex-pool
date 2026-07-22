@@ -81,14 +81,13 @@ func providerContractMatrix() []providerContract {
 }
 
 func registryForContracts(matrix []providerContract) *ProviderRegistry {
-	byType := make(map[AccountType]Provider, len(matrix))
 	providers := make([]Provider, 0, len(matrix))
 	for _, contract := range matrix {
-		provider := contract.Provider
-		providers = append(providers, provider)
-		byType[provider.Type()] = provider
+		providers = append(providers, contract.Provider)
 	}
-	return &ProviderRegistry{providers: providers, byType: byType}
+	registry := &ProviderRegistry{}
+	registry.publish(providers)
+	return registry
 }
 
 func TestProviderContractMatrixCoversRegistry(t *testing.T) {

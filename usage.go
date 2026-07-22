@@ -358,8 +358,16 @@ func (h *proxyHandler) recordUsage(a *ProviderConnection, ru RequestUsage) {
 			return
 		}
 		if !recorded {
+			if h.cfg != nil && h.cfg.debug.Load() {
+				log.Printf("canonical usage deduplicated request=%s connection=%s provider=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID)
+			}
 			return
 		}
+		if h.cfg != nil && h.cfg.debug.Load() {
+			log.Printf("canonical usage committed request=%s connection=%s provider=%s model=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID, ru.Model)
+		}
+	} else if h.cfg != nil && h.cfg.debug.Load() {
+		log.Printf("canonical usage store unavailable request=%s connection=%s provider=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID)
 	}
 
 	// BoltDB remains a compatibility projection during migration. If SQLite is

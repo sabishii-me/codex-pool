@@ -90,7 +90,7 @@ func (p *KimiPlatformProvider) NormalizePath(path string) string {
 }
 
 func (p *KimiPlatformProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 const kimiPlatformModelPrefix = "kimi-platform/"

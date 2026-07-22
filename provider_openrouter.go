@@ -84,7 +84,7 @@ func (p *OpenRouterProvider) NormalizePath(path string) string {
 }
 
 func (p *OpenRouterProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 const openrouterModelPrefix = "openrouter/"

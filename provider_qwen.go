@@ -80,7 +80,7 @@ func (p *QwenProvider) NormalizePath(path string) string {
 }
 
 func (p *QwenProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 func isQwenModel(model string) bool {

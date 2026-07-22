@@ -90,7 +90,7 @@ func (p *NvidiaProvider) NormalizePath(path string) string {
 }
 
 func (p *NvidiaProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 const nvidiaModelPrefix = "nvidia/"

@@ -141,8 +141,7 @@ func (p *ClaudeProvider) NormalizePath(path string) string {
 }
 
 func (p *ClaudeProvider) DetectsSSE(path string, contentType string) bool {
-	// Claude uses text/event-stream content type for SSE
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 func parseClaudeResponseRateLimits(headers http.Header) (UsageSnapshot, bool) {

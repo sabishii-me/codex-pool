@@ -295,14 +295,7 @@ func (p *CodexProvider) NormalizePath(path string) string {
 }
 
 func (p *CodexProvider) DetectsSSE(path string, contentType string) bool {
-	ct := strings.ToLower(contentType)
-	if strings.Contains(ct, "text/event-stream") {
-		return true
-	}
-	if strings.Contains(ct, "application/json") || strings.Contains(ct, "text/plain") {
-		return false
-	}
-	return path == "/responses" || path == "/v1/responses" || strings.HasPrefix(path, "/responses/compact") || strings.HasPrefix(path, "/v1/responses/compact")
+	return responsesStreamDetector.Detect(path, contentType)
 }
 
 // parseCodexClaims extracts claims from a Codex JWT ID token.

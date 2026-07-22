@@ -106,7 +106,7 @@ func (p *XiaomiProvider) NormalizePath(path string) string {
 }
 
 func (p *XiaomiProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 func isXiaomiModel(model string) bool {

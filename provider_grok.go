@@ -379,7 +379,7 @@ func (p *GrokProvider) NormalizePath(path string) string {
 }
 
 func (p *GrokProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 type grokModelInfo struct {

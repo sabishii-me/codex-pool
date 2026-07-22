@@ -2740,7 +2740,22 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				writer = hw
 			}
 
-			var usageAccum splitUsageAccumulator
+			usageObserver := newProtocolUsageObserver(provider, requestedModel, func(ru *RequestUsage, pending bool) {
+				ru.ConnectionID = acc.ID
+				ru.UserID = userID
+				ru.OriginID = originID
+				ru.ProviderID = acc.Type
+				acc.mu.Lock()
+				ru.PlanType = acc.PlanType
+				acc.mu.Unlock()
+				if pending && ru.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
+					ru.PrimaryUsedPct = headerPrimaryPct
+				}
+				if pending && ru.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
+					ru.SecondaryUsedPct = headerSecondaryPct
+				}
+				h.recordUsageForRequest(acc, *ru, reqID)
+			})
 
 			usageCallback := func(data []byte) {
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
@@ -2750,38 +2765,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					}
 					return
 				}
-				var obj map[string]any
-				if err := json.Unmarshal(data, &obj); err != nil {
-					var arr []map[string]any
-					if err2 := json.Unmarshal(data, &arr); err2 != nil || len(arr) == 0 {
-						if h.cfg.debug.Load() {
-							log.Printf("[%s] SSE callback: failed to parse JSON: %v", reqID, err)
-						}
-						return
-					}
-					obj = arr[0]
+				if err := usageObserver.Observe(data); err != nil && h.cfg.debug.Load() {
+					log.Printf("[%s] SSE callback: failed to parse JSON: %v", reqID, err)
 				}
-				ru := provider.ParseUsage(obj)
-				if ru == nil {
-					return
-				}
-
-				eventType, _ := obj["type"].(string)
-				ru = usageAccum.add(eventType, ru)
-				if ru == nil {
-					return
-				}
-				ru.ConnectionID = acc.ID
-				ru.UserID = userID
-				ru.OriginID = originID
-				ru.ProviderID = acc.Type
-				acc.mu.Lock()
-				ru.PlanType = acc.PlanType
-				acc.mu.Unlock()
-				if ru.Model == "" {
-					ru.Model = requestedModel
-				}
-				h.recordUsageForRequest(acc, *ru, reqID)
 			}
 
 			if isSSE {
@@ -2872,25 +2858,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				fw.stop()
 			}
 
-			if pendingUsage := usageAccum.flush(); pendingUsage != nil {
-				pendingUsage.ConnectionID = acc.ID
-				pendingUsage.UserID = userID
-				pendingUsage.OriginID = originID
-				pendingUsage.ProviderID = acc.Type
-				acc.mu.Lock()
-				pendingUsage.PlanType = acc.PlanType
-				acc.mu.Unlock()
-				if pendingUsage.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-					pendingUsage.PrimaryUsedPct = headerPrimaryPct
-				}
-				if pendingUsage.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-					pendingUsage.SecondaryUsedPct = headerSecondaryPct
-				}
-				if pendingUsage.Model == "" {
-					pendingUsage.Model = requestedModel
-				}
-				h.recordUsageForRequest(acc, *pendingUsage, reqID)
-			}
+			usageObserver.Flush()
 
 			if copyErr != nil {
 				if ctx.Err() == nil {
@@ -3719,10 +3687,22 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		Closer: resp.Body,
 	}
 
-	// Anthropic SSE splits usage across message_start (input) and message_delta (output).
-	// Accumulate them into a single RequestUsage before recording.
-	// Declared outside the if-block so it can be flushed after io.Copy completes.
-	var streamedUsageAccum splitUsageAccumulator
+	usageObserver := newProtocolUsageObserver(provider, "", func(ru *RequestUsage, pending bool) {
+		ru.ConnectionID = acc.ID
+		ru.UserID = userID
+		ru.OriginID = originID
+		ru.ProviderID = acc.Type
+		acc.mu.Lock()
+		ru.PlanType = acc.PlanType
+		acc.mu.Unlock()
+		if pending && ru.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
+			ru.PrimaryUsedPct = headerPrimaryPct
+		}
+		if pending && ru.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
+			ru.SecondaryUsedPct = headerSecondaryPct
+		}
+		h.recordUsageForRequest(acc, *ru, reqID)
+	})
 	cyberPinned := false
 	conversationID := extractConversationIDFromHeaders(r.Header)
 	// Use Claude Code session ID as fallback for conversation stickiness
@@ -3746,32 +3726,9 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 					}
 					return
 				}
-				var obj map[string]any
-				if err := json.Unmarshal(data, &obj); err != nil {
-					var arr []map[string]any
-					if err2 := json.Unmarshal(data, &arr); err2 != nil || len(arr) == 0 {
-						return
-					}
-					obj = arr[0]
+				if err := usageObserver.Observe(data); err != nil && h.cfg.debug.Load() {
+					log.Printf("[%s] streamed SSE callback: failed to parse JSON: %v", reqID, err)
 				}
-				ru := provider.ParseUsage(obj)
-				if ru == nil {
-					return
-				}
-
-				eventType, _ := obj["type"].(string)
-				ru = streamedUsageAccum.add(eventType, ru)
-				if ru == nil {
-					return
-				}
-				ru.ConnectionID = acc.ID
-				ru.UserID = userID
-				ru.OriginID = originID
-				ru.ProviderID = acc.Type
-				acc.mu.Lock()
-				ru.PlanType = acc.PlanType
-				acc.mu.Unlock()
-				h.recordUsageForRequest(acc, *ru, reqID)
 			},
 		}
 		if accountType == AccountTypeCodex && !acc.CyberAccess {
@@ -3804,24 +3761,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		fw.stop()
 	}
 
-	// Flush any accumulated Anthropic usage that wasn't emitted (e.g., stream ended
-	// without message_delta, or only got message_start before error/disconnect).
-	if pendingUsage := streamedUsageAccum.flush(); pendingUsage != nil {
-		pendingUsage.ConnectionID = acc.ID
-		pendingUsage.UserID = userID
-		pendingUsage.OriginID = originID
-		pendingUsage.ProviderID = acc.Type
-		acc.mu.Lock()
-		pendingUsage.PlanType = acc.PlanType
-		acc.mu.Unlock()
-		if pendingUsage.PrimaryUsedPct == 0 && headerPrimaryPct > 0 {
-			pendingUsage.PrimaryUsedPct = headerPrimaryPct
-		}
-		if pendingUsage.SecondaryUsedPct == 0 && headerSecondaryPct > 0 {
-			pendingUsage.SecondaryUsedPct = headerSecondaryPct
-		}
-		h.recordUsageForRequest(acc, *pendingUsage, reqID)
-	}
+	usageObserver.Flush()
 
 	if copyErr != nil {
 		if ctx.Err() == nil {

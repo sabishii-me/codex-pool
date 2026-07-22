@@ -201,6 +201,5 @@ func (p *GeminiProvider) NormalizePath(path string) string {
 }
 
 func (p *GeminiProvider) DetectsSSE(path string, contentType string) bool {
-	// Gemini streaming uses streamGenerateContent
-	return strings.Contains(path, "stream")
+	return geminiStreamDetector.Detect(path, contentType)
 }

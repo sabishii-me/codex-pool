@@ -94,7 +94,7 @@ func (p *KimiProvider) NormalizePath(path string) string {
 }
 
 func (p *KimiProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 // kimiModels lists model names that should be routed to the Kimi provider.

@@ -81,7 +81,7 @@ func (p *MinimaxProvider) NormalizePath(path string) string {
 }
 
 func (p *MinimaxProvider) DetectsSSE(path string, contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return eventStreamDetector.Detect(path, contentType)
 }
 
 // minimaxModels maps request model names to the canonical model name sent upstream.

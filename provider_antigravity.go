@@ -210,7 +210,7 @@ func (p *AntigravityProvider) NormalizePath(path string) string {
 	return path
 }
 func (p *AntigravityProvider) DetectsSSE(path, contentType string) bool {
-	return strings.Contains(path, "streamGenerateContent") || strings.Contains(strings.ToLower(contentType), "text/event-stream")
+	return antigravityStreamDetector.Detect(path, contentType)
 }
 
 func saveAntigravityAccount(acc *ProviderConnection) error {

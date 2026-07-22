@@ -148,11 +148,35 @@ export async function contributeGrok(authJSON: string) {
   }));
 }
 
-export async function startAccountOAuth(provider: "codex" | "claude") {
+export interface CodexBrokerLease {
+  lease_id: string;
+  port: 1455 | 1457;
+  expires_at: string;
+}
+
+export async function prepareCodexOAuthBroker(gatewayOrigin: string): Promise<CodexBrokerLease> {
+  let response: Response;
+  try {
+    response = await fetch("http://127.0.0.1:1460/v1/leases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gateway_origin: gatewayOrigin }),
+    });
+  } catch {
+    throw new Error("Codex OAuth broker is not running. Install or start the local broker before connecting Codex.");
+  }
+  return decode<CodexBrokerLease>(response);
+}
+
+export async function cancelCodexOAuthBrokerLease(): Promise<void> {
+  await fetch("http://127.0.0.1:1460/v1/leases", { method: "DELETE" }).catch(() => undefined);
+}
+
+export async function startAccountOAuth(provider: "codex" | "claude", redirectPort?: number) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: "{}",
+    body: JSON.stringify(provider === "codex" ? { redirect_port: redirectPort } : {}),
   }));
 }
 

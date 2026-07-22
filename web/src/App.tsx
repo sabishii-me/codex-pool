@@ -18,6 +18,7 @@ import {
 } from "./components/dither-kit";
 import {
 	  antigravityOAuthStatus,
+  cancelCodexOAuthBrokerLease,
   checkMFAStatus,
   codexOAuthStatus,
   confirmMFA,
@@ -35,6 +36,7 @@ import {
   loadSignalAnalytics,
   logout,
   mutateAccount,
+  prepareCodexOAuthBroker,
   regenerateMFA,
   regenerateRecoveryCodes,
   reloadAccounts,
@@ -1459,6 +1461,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
 	  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; relayRequired?: boolean } | null>(null);
 	  const oauthCompleted = useRef(false);
   const [busy, setBusy] = useState(false);
+  const [oauthPhase, setOAuthPhase] = useState<"idle" | "preparing" | "authorizing" | "exchanging">("idle");
   const [error, setError] = useState("");
   const selected = CONTRIBUTION_PROVIDERS.find((candidate) => candidate.id === provider)!;
 
@@ -1480,8 +1483,9 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
 	    const timer = window.setInterval(async () => {
 	      try {
 	        const status = provider === "codex" ? await codexOAuthStatus(oauth.sessionID!) : await antigravityOAuthStatus(oauth.sessionID!);
+	        if (status.status === "exchanging") setOAuthPhase("exchanging");
 	        if (status.status === "complete") { window.clearInterval(timer); await complete(); }
-	        if (status.status === "error") { window.clearInterval(timer); setError(status.error || `${provider === "codex" ? "Codex" : "Google"} sign-in failed`); }
+	        if (status.status === "error") { window.clearInterval(timer); setOAuthPhase("idle"); setError(status.error || `${provider === "codex" ? "Codex" : "Google"} sign-in failed`); }
 	      } catch { /* polling is only a fallback for a missed popup message */ }
 	    }, 1200);
 	    return () => { stopped = true; window.clearInterval(timer); window.removeEventListener("message", onMessage); };
@@ -1492,6 +1496,7 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
     setProvider(next);
     setCredential("");
     setOAuth(null);
+    setOAuthPhase("idle");
     setError("");
   };
 
@@ -1502,14 +1507,21 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
 	    if (authorizationWindow && provider !== "antigravity") authorizationWindow.opener = null;
     setBusy(true);
     setError("");
+    setOAuthPhase("preparing");
+    let brokerPrepared = false;
     try {
-	      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude");
+        const brokerLease = provider === "codex" ? await prepareCodexOAuthBroker(window.location.origin) : null;
+        brokerPrepared = brokerLease !== null;
+	      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude", brokerLease?.port);
 	      if (!result.oauth_url || (provider === "antigravity" ? !result.session_id : !result.verifier)) throw new Error("Provider did not return an OAuth session");
 	      oauthCompleted.current = false;
 	      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url, relayRequired: result.relay_required });
+      setOAuthPhase("authorizing");
       authorizationWindow?.location.replace(result.oauth_url);
     } catch (cause) {
       authorizationWindow?.close();
+      if (brokerPrepared) await cancelCodexOAuthBrokerLease();
+      setOAuthPhase("idle");
       setError(cause instanceof Error ? cause.message : "Could not start OAuth");
     } finally {
       setBusy(false);
@@ -1571,13 +1583,13 @@ function AccountContribution({ onClose, onAdded }: { onClose: () => void; onAdde
           <div className="contribution-oauth">
             {!oauth ? (
               <>
-                {provider === "codex" && <small>Start the single-use callback relay first: <code>docker compose --profile oauth run --rm --service-ports codex-oauth-relay</code></small>}
-                <button type="button" className="oauth-launch" disabled={busy} onClick={startOAuth}>{busy ? "TUNING…" : `OPEN ${selected.label.toUpperCase()} AUTHORIZATION ↗`}</button>
+                {provider === "codex" && <small>The local OAuth broker automatically prepares and releases an OpenAI callback port for every account.</small>}
+                <button type="button" className="oauth-launch" disabled={busy} onClick={startOAuth}>{busy ? oauthPhase === "preparing" ? "PREPARING CALLBACK…" : "TUNING…" : `OPEN ${selected.label.toUpperCase()} AUTHORIZATION ↗`}</button>
               </>
             ) : (
               <>
                 <a href={oauth.url} target="_blank" rel="noreferrer">Authorization opened. Reopen it here ↗</a>
-                {provider === "codex" && oauth.relayRequired && <small>Waiting for the temporary Codex callback relay. It exits and releases the callback port immediately after authorization.</small>}
+                {provider === "codex" && oauth.relayRequired && <small>{oauthPhase === "exchanging" ? "Exchanging Codex credentials…" : "Waiting for OpenAI authorization. The callback port will be released automatically."}</small>}
                 <label className="contribution-field"><span>{provider === "codex" ? "Callback URL (fallback if the relay is not running)" : "Authorization code or callback URL"}</span><input value={credential} onChange={(event) => setCredential(event.target.value)} autoFocus={provider !== "codex"} autoComplete="off" /></label>
               </>
             )}

@@ -125,13 +125,13 @@ export ANTHROPIC_API_KEY="pool"
 export CODE_ASSIST_ENDPOINT="http://127.0.0.1:8989"
 ```
 
-**Codex account**: OpenAI only allowlists Codex OAuth callbacks on loopback ports `1455` and `1457`. Start the single-use callback relay, then choose "Contribute an account" and "Codex" in the dashboard:
+**Codex account**: OpenAI only allowlists Codex OAuth callbacks on loopback ports `1455` and `1457`. Install the per-user local broker once on Windows:
 
-```bash
-docker compose --profile oauth run --rm --service-ports codex-oauth-relay
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install-codex-oauth-broker.ps1
 ```
 
-The relay forwards one callback to the gateway, exits, and releases the port immediately. It never reserves the port for the lifetime of the gateway. Set `CODEX_OAUTH_PORT=1457` on both services if `1455` is already in use. Pasting the failed callback URL remains available as a fallback.
+The dashboard then prepares every Codex login automatically. The broker selects a free allowlisted port, forwards one callback, and releases it immediately; no Docker or relay command is required between accounts. Check or remove it with `-Status` or `-Uninstall`.
 
 **Google Antigravity account**: open the dashboard, choose "Contribute an account", then press "Google Antigravity". The popup completes the callback automatically. Pasting the callback URL remains available when popups are blocked.
 

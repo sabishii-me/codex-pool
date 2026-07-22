@@ -19,11 +19,14 @@ func resetCodexOAuthSessions(t *testing.T) {
 	t.Helper()
 	codexOAuthSessions.Lock()
 	previous := codexOAuthSessions.sessions
+	previousPath := codexOAuthSessions.path
 	codexOAuthSessions.sessions = make(map[string]*CodexOAuthSession)
+	codexOAuthSessions.path = ""
 	codexOAuthSessions.Unlock()
 	t.Cleanup(func() {
 		codexOAuthSessions.Lock()
 		codexOAuthSessions.sessions = previous
+		codexOAuthSessions.path = previousPath
 		codexOAuthSessions.Unlock()
 	})
 }
@@ -101,26 +104,29 @@ func TestSaveNewCodexAccountUpsertsStableFileAndPreservesMetadata(t *testing.T) 
 	}
 }
 
-func TestCodexOAuthRedirectUsesAllowlistedTemporaryRelayPort(t *testing.T) {
-	t.Setenv("CODEX_OAUTH_PORT", "")
-	if got := codexOAuthRedirectURI(); got != "http://localhost:1455/auth/callback" {
-		t.Fatalf("default redirect URI = %q", got)
+func TestCodexOAuthRedirectUsesBrokerSelectedPort(t *testing.T) {
+	if got := codexOAuthRedirectURI(1455); got != "http://localhost:1455/auth/callback" {
+		t.Fatalf("1455 redirect URI = %q", got)
 	}
-	t.Setenv("CODEX_OAUTH_PORT", "1457")
-	if got := codexOAuthRedirectURI(); got != "http://localhost:1457/auth/callback" {
-		t.Fatalf("fallback redirect URI = %q", got)
+	if got := codexOAuthRedirectURI(1457); got != "http://localhost:1457/auth/callback" {
+		t.Fatalf("1457 redirect URI = %q", got)
 	}
-	t.Setenv("CODEX_OAUTH_PORT", "9999")
-	if got := codexOAuthRedirectURI(); got != "http://localhost:1455/auth/callback" {
-		t.Fatalf("invalid-port redirect URI = %q", got)
+}
+
+func TestHandleCodexAddRejectsUnapprovedRedirectPort(t *testing.T) {
+	resetCodexOAuthSessions(t)
+	request := httptest.NewRequest(http.MethodPost, "/api/pool/accounts/codex/add", strings.NewReader(`{"redirect_port":8999}`))
+	response := httptest.NewRecorder()
+	(&proxyHandler{}).handleCodexAdd(response, request)
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "1455 or 1457") {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
 	}
 }
 
 func TestHandleCodexAddReturnsPollableRelaySession(t *testing.T) {
 	resetCodexOAuthSessions(t)
-	t.Setenv("CODEX_OAUTH_PORT", "1457")
 	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodPost, "http://localhost:8989/api/pool/accounts/codex/add", strings.NewReader("{}"))
+	req := httptest.NewRequest(http.MethodPost, "http://localhost:8989/api/pool/accounts/codex/add", strings.NewReader(`{"redirect_port":1457}`))
 	req.Header.Set("Origin", "http://localhost:8989")
 	response := httptest.NewRecorder()
 	h.handleCodexAdd(response, req)
@@ -150,6 +156,48 @@ func TestHandleCodexAddReturnsPollableRelaySession(t *testing.T) {
 	}
 	if got := authorize.Query().Get("redirect_uri"); got != result.RedirectURI {
 		t.Fatalf("authorize redirect = %q", got)
+	}
+}
+
+func TestCodexOAuthSessionSurvivesStoreReload(t *testing.T) {
+	resetCodexOAuthSessions(t)
+	path := filepath.Join(t.TempDir(), "codex_oauth_sessions.json")
+	if err := configureCodexOAuthSessions(path); err != nil {
+		t.Fatal(err)
+	}
+	h := &proxyHandler{}
+	request := httptest.NewRequest(http.MethodPost, "/api/pool/accounts/codex/add", strings.NewReader(`{"redirect_port":1455}`))
+	request.Header.Set("Origin", "http://localhost:8989")
+	response := httptest.NewRecorder()
+	h.handleCodexAdd(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("start status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var started struct {
+		SessionID string `json:"session_id"`
+		State     string `json:"state"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	codexOAuthSessions.Lock()
+	codexOAuthSessions.sessions = map[string]*CodexOAuthSession{}
+	codexOAuthSessions.Unlock()
+	if err := configureCodexOAuthSessions(path); err != nil {
+		t.Fatal(err)
+	}
+	codexOAuthSessions.RLock()
+	restored := codexOAuthSessions.sessions[started.SessionID]
+	codexOAuthSessions.RUnlock()
+	if restored == nil || restored.State != started.State || restored.Verifier == "" || restored.RedirectURI != "http://localhost:1455/auth/callback" {
+		t.Fatalf("restored session = %#v", restored)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "authorization_code") || strings.Contains(string(data), `"code"`) {
+		t.Fatalf("session store persisted an authorization code: %s", data)
 	}
 }
 

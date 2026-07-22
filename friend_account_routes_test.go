@@ -83,7 +83,8 @@ func TestSessionAuthAcceptsValidCookie(t *testing.T) {
 func TestSignedInFriendCanStartCodexAccountContributionWithoutAdminAccess(t *testing.T) {
 	h, user, secret := newTestHandlerWithSession(t)
 
-	request := httptest.NewRequest(http.MethodPost, "/api/pool/accounts/codex/add", nil)
+	request := httptest.NewRequest(http.MethodPost, "/api/pool/accounts/codex/add", strings.NewReader(`{"redirect_port":1455}`))
+	request.Header.Set("Content-Type", "application/json")
 	request.AddCookie(newTestSessionCookie(t, secret, user))
 	response := httptest.NewRecorder()
 	h.ServeHTTP(response, request)

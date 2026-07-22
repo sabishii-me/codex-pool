@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,7 +44,64 @@ type CodexOAuthSession struct {
 var codexOAuthSessions = struct {
 	sync.RWMutex
 	sessions map[string]*CodexOAuthSession
+	path     string
 }{sessions: make(map[string]*CodexOAuthSession)}
+
+func configureCodexOAuthSessions(path string) error {
+	codexOAuthSessions.Lock()
+	defer codexOAuthSessions.Unlock()
+	codexOAuthSessions.path = path
+	codexOAuthSessions.sessions = make(map[string]*CodexOAuthSession)
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read Codex OAuth sessions: %w", err)
+	}
+	if err := json.Unmarshal(data, &codexOAuthSessions.sessions); err != nil {
+		return fmt.Errorf("parse Codex OAuth sessions: %w", err)
+	}
+	now := time.Now()
+	for id, session := range codexOAuthSessions.sessions {
+		if now.Sub(session.CreatedAt) > 15*time.Minute || session.Status == "exchanging" {
+			delete(codexOAuthSessions.sessions, id)
+		}
+	}
+	return persistCodexOAuthSessionsLocked()
+}
+
+func persistCodexOAuthSessionsLocked() error {
+	if codexOAuthSessions.path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(codexOAuthSessions.path), 0700); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(codexOAuthSessions.sessions, "", "  ")
+	if err != nil {
+		return err
+	}
+	temporary := codexOAuthSessions.path + ".tmp"
+	if err := os.WriteFile(temporary, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Chmod(temporary, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(temporary, codexOAuthSessions.path); err != nil {
+		// Windows cannot atomically replace an existing file with os.Rename.
+		if removeErr := os.Remove(codexOAuthSessions.path); removeErr != nil && !os.IsNotExist(removeErr) {
+			_ = os.Remove(temporary)
+			return err
+		}
+		if retryErr := os.Rename(temporary, codexOAuthSessions.path); retryErr != nil {
+			_ = os.Remove(temporary)
+			return retryErr
+		}
+	}
+	return nil
+}
 
 // CodexTokenResponse is the response from the token endpoint
 type CodexTokenResponse struct {
@@ -117,6 +175,19 @@ func (h *proxyHandler) handleCodexList(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/codex/add - start OAuth flow
 func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		RedirectPort int `json:"redirect_port"`
+	}
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil && err != io.EOF {
+			respondJSONError(w, http.StatusBadRequest, "invalid json")
+			return
+		}
+	}
+	if input.RedirectPort != 1455 && input.RedirectPort != 1457 {
+		respondJSONError(w, http.StatusBadRequest, "Codex redirect port must be 1455 or 1457")
+		return
+	}
 	// Generate PKCE verifier and challenge
 	verifierBytes := make([]byte, 32)
 	if _, err := rand.Read(verifierBytes); err != nil {
@@ -136,7 +207,7 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	state := base64.RawURLEncoding.EncodeToString(stateBytes)
 
-	redirectURI := codexOAuthRedirectURI()
+	redirectURI := codexOAuthRedirectURI(input.RedirectPort)
 
 	// OpenAI allowlists only Codex's loopback callback ports. A separate relay
 	// binds this address for one authorization and immediately releases it.
@@ -167,7 +238,12 @@ func (h *proxyHandler) handleCodexAdd(w http.ResponseWriter, r *http.Request) {
 
 	codexOAuthSessions.Lock()
 	codexOAuthSessions.sessions[verifier] = session
+	persistErr := persistCodexOAuthSessionsLocked()
 	codexOAuthSessions.Unlock()
+	if persistErr != nil {
+		respondJSONError(w, http.StatusInternalServerError, "failed to persist OAuth session")
+		return
+	}
 
 	// Clean up old sessions
 	go cleanupOldCodexSessions()
@@ -194,7 +270,7 @@ func (h *proxyHandler) handleCodexStatus(w http.ResponseWriter, r *http.Request)
 	}
 	codexOAuthSessions.RLock()
 	session := codexOAuthSessions.sessions[strings.TrimSpace(req.SessionID)]
-	if session == nil || time.Since(session.CreatedAt) > 30*time.Minute {
+	if session == nil || time.Since(session.CreatedAt) > 15*time.Minute {
 		codexOAuthSessions.RUnlock()
 		respondJSONError(w, http.StatusNotFound, "invalid or expired session")
 		return
@@ -209,12 +285,8 @@ func (h *proxyHandler) handleCodexStatus(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func codexOAuthRedirectURI() string {
-	port := strings.TrimSpace(os.Getenv("CODEX_OAUTH_PORT"))
-	if port != "1457" {
-		port = "1455"
-	}
-	return "http://localhost:" + port + "/auth/callback"
+func codexOAuthRedirectURI(port int) string {
+	return "http://localhost:" + strconv.Itoa(port) + "/auth/callback"
 }
 
 func codexOAuthTargetOrigin(r *http.Request, h *proxyHandler) string {
@@ -242,7 +314,7 @@ func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Reques
 			break
 		}
 	}
-	if session == nil || time.Since(session.CreatedAt) > 30*time.Minute {
+	if session == nil || time.Since(session.CreatedAt) > 15*time.Minute {
 		codexOAuthSessions.Unlock()
 		h.renderCodexCallback(w, nil, "error", "", "invalid or expired OAuth state")
 		return
@@ -260,11 +332,13 @@ func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Reques
 	}
 	if upstreamError := strings.TrimSpace(r.URL.Query().Get("error")); upstreamError != "" {
 		session.Status, session.Error = "error", upstreamError
+		_ = persistCodexOAuthSessionsLocked()
 		codexOAuthSessions.Unlock()
 		h.renderCodexCallback(w, session, "error", "", upstreamError)
 		return
 	}
 	session.Status, session.Error = "exchanging", ""
+	_ = persistCodexOAuthSessionsLocked()
 	codexOAuthSessions.Unlock()
 
 	code := strings.TrimSpace(r.URL.Query().Get("code"))
@@ -289,6 +363,7 @@ func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Reques
 	h.reloadAccounts()
 	codexOAuthSessions.Lock()
 	session.Status, session.AccountID, session.Error = "complete", accountID, ""
+	_ = persistCodexOAuthSessionsLocked()
 	codexOAuthSessions.Unlock()
 	h.renderCodexCallback(w, session, "complete", accountID, "")
 }
@@ -296,6 +371,7 @@ func (h *proxyHandler) handleCodexCallback(w http.ResponseWriter, r *http.Reques
 func (h *proxyHandler) setCodexOAuthError(session *CodexOAuthSession, message string) {
 	codexOAuthSessions.Lock()
 	session.Status, session.Error = "error", message
+	_ = persistCodexOAuthSessionsLocked()
 	codexOAuthSessions.Unlock()
 }
 
@@ -373,6 +449,7 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 	session.Status = "complete"
 	session.AccountID = accountID
 	session.Error = ""
+	_ = persistCodexOAuthSessionsLocked()
 	codexOAuthSessions.Unlock()
 
 	// Reload accounts
@@ -386,6 +463,17 @@ func (h *proxyHandler) handleCodexExchange(w http.ResponseWriter, r *http.Reques
 
 // codexExchangeCode exchanges an authorization code for tokens
 func codexExchangeCode(code, verifier, redirectURI string) (*CodexTokenResponse, error) {
+	return codexExchangeCodeAt(http.DefaultClient, codexOAuthTokenEndpoint(), code, verifier, redirectURI)
+}
+
+func codexOAuthTokenEndpoint() string {
+	if endpoint := strings.TrimSpace(os.Getenv("CODEX_OAUTH_TOKEN_URL")); endpoint != "" {
+		return endpoint
+	}
+	return CodexOAuthTokenURL
+}
+
+func codexExchangeCodeAt(client *http.Client, endpoint, code, verifier, redirectURI string) (*CodexTokenResponse, error) {
 	data := url.Values{}
 	data.Set("grant_type", "authorization_code")
 	data.Set("client_id", CodexOAuthClientID)
@@ -393,14 +481,14 @@ func codexExchangeCode(code, verifier, redirectURI string) (*CodexTokenResponse,
 	data.Set("redirect_uri", redirectURI)
 	data.Set("code_verifier", verifier)
 
-	req, err := http.NewRequest(http.MethodPost, CodexOAuthTokenURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequest(http.MethodPost, endpoint, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -510,8 +598,9 @@ func cleanupOldCodexSessions() {
 
 	now := time.Now()
 	for verifier, session := range codexOAuthSessions.sessions {
-		if now.Sub(session.CreatedAt) > 30*time.Minute {
+		if now.Sub(session.CreatedAt) > 15*time.Minute {
 			delete(codexOAuthSessions.sessions, verifier)
 		}
 	}
+	_ = persistCodexOAuthSessionsLocked()
 }

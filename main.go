@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -253,14 +254,20 @@ func buildConfig() *config {
 }
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "codex-oauth-relay" {
-		if err := runCodexOAuthRelay(os.Args[2:]); err != nil {
-			log.Fatalf("Codex OAuth relay: %v", err)
+	if len(os.Args) > 1 && os.Args[1] == "oauth-broker" {
+		if err := runCodexOAuthBroker(os.Args[2:]); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Codex OAuth broker: %v", err)
 		}
 		return
 	}
-
 	cfg := buildConfig()
+	codexOAuthSessionsPath := strings.TrimSpace(os.Getenv("CODEX_OAUTH_SESSIONS_PATH"))
+	if codexOAuthSessionsPath == "" {
+		codexOAuthSessionsPath = filepath.Join(filepath.Dir(cfg.storePath), "codex_oauth_sessions.json")
+	}
+	if err := configureCodexOAuthSessions(codexOAuthSessionsPath); err != nil {
+		log.Fatalf("initialize Codex OAuth sessions: %v", err)
+	}
 	startCodexFingerprintUpdater()
 
 	// Create provider registry

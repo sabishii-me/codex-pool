@@ -592,31 +592,32 @@ func main() {
 }
 
 type proxyHandler struct {
-	cfg                  *config
-	transport            http.RoundTripper
-	antigravityTransport http.RoundTripper
-	refreshTransport     http.RoundTripper // Separate transport for refresh ops (may use proxy)
-	pool                 *ProviderPool
-	poolUsers            *GatewayUserStore
-	adminTOTP            *AdminTOTPStore
-	registry             *ProviderRegistry
-	modelRoutes          *ModelRouteRegistry
-	connections          *ConnectionSelector
-	connectionViews      *ConnectionViewService
-	dataAPI              *DataAPI
-	providerAdminAPI     *ProviderAdminAPI
-	access               *AccessPolicy
-	store                *usageStore
-	analyticsStore       *AnalyticsStore
-	pricing              *PricingData
-	aliases              *modelAliases
-	bruteForce           *bruteForceTracker
-	metrics              *metrics
-	recent               *recentErrors
-	retryPolicy          RetryPolicy
-	inflight             int64
-	startTime            time.Time
-	pacer                *requestPacer // Per-session request pacing
+	cfg                     *config
+	transport               http.RoundTripper
+	antigravityTransport    http.RoundTripper
+	refreshTransport        http.RoundTripper // Separate transport for refresh ops (may use proxy)
+	pool                    *ProviderPool
+	poolUsers               *GatewayUserStore
+	adminTOTP               *AdminTOTPStore
+	registry                *ProviderRegistry
+	modelRoutes             *ModelRouteRegistry
+	connections             *ConnectionSelector
+	connectionViews         *ConnectionViewService
+	dataAPI                 *DataAPI
+	providerAdminAPI        *ProviderAdminAPI
+	providerContributionAPI *ProviderContributionAPI
+	access                  *AccessPolicy
+	store                   *usageStore
+	analyticsStore          *AnalyticsStore
+	pricing                 *PricingData
+	aliases                 *modelAliases
+	bruteForce              *bruteForceTracker
+	metrics                 *metrics
+	recent                  *recentErrors
+	retryPolicy             RetryPolicy
+	inflight                int64
+	startTime               time.Time
+	pacer                   *requestPacer // Per-session request pacing
 
 	// Rate limiting for token refresh operations
 	refreshMu       sync.Mutex

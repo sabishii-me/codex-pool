@@ -210,6 +210,9 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.providerAdminAPIService().TryServe(w, r) {
 		return
 	}
+	if h.providerContributionAPIService().TryServe(w, r) {
+		return
+	}
 
 	// Static routes
 	switch r.URL.Path {
@@ -364,60 +367,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if strings.HasPrefix(r.URL.Path, "/config/cute-code/") {
 		h.serveCuteCodeSettingsConfig(w, r)
-		return
-	}
-
-	// Friends may contribute new provider credentials, but cannot inspect raw
-	// account identities, remove accounts, or mutate existing provider state.
-	if strings.HasPrefix(r.URL.Path, "/api/pool/accounts/") {
-		if !h.checkAdminOrSessionAuth(w, r) {
-			return
-		}
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
-		switch r.URL.Path {
-		case "/api/pool/accounts/codex/add":
-			h.handleCodexAdd(w, r)
-		case "/api/pool/accounts/codex/exchange":
-			h.handleCodexExchange(w, r)
-		case "/api/pool/accounts/codex/status":
-			h.handleCodexStatus(w, r)
-		case "/api/pool/accounts/claude/add":
-			h.handleClaudeAdd(w, r)
-		case "/api/pool/accounts/claude/exchange":
-			h.handleClaudeExchange(w, r)
-		case "/api/pool/accounts/antigravity/add":
-			h.handleAntigravityAdd(w, r)
-		case "/api/pool/accounts/antigravity/status":
-			h.handleAntigravityStatus(w, r)
-		case "/api/pool/accounts/antigravity/exchange":
-			h.handleAntigravityExchange(w, r)
-		case "/api/pool/accounts/kimi/add":
-			h.handleKimiAdd(w, r)
-		case "/api/pool/accounts/kimi-platform/add":
-			h.handleKimiPlatformAdd(w, r)
-		case "/api/pool/accounts/minimax/add":
-			h.handleMinimaxAdd(w, r)
-		case "/api/pool/accounts/zai/add":
-			h.handleZAIAdd(w, r)
-		case "/api/pool/accounts/xiaomi/add":
-			h.handleXiaomiAdd(w, r)
-		case "/api/pool/accounts/grok/add":
-			h.handleGrokImport(w, r)
-		case "/api/pool/accounts/deepseek/add":
-			h.handleDeepSeekAdd(w, r)
-		case "/api/pool/accounts/qwen/add":
-			h.handleQwenAdd(w, r)
-		case "/api/pool/accounts/openrouter/add":
-			h.handleOpenRouterAdd(w, r)
-		case "/api/pool/accounts/nvidia/add":
-			h.handleNvidiaAdd(w, r)
-		default:
-			http.NotFound(w, r)
-		}
 		return
 	}
 

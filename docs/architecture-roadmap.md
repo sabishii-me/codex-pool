@@ -314,7 +314,7 @@ Current route ownership:
 |---|---|
 | Read-only data API | `/api/pool/{stats,whoami,users,origins,daily-breakdown,hourly,signal,catalog}`, `/api/pool/users/:id/{daily,hourly}`, `GET /api/v2/provider-connections`, `GET /admin/accounts` compatibility |
 | Authentication/session | `/auth/*`, `/api/pool/session`, `/api/admin/mfa/*` |
-| Provider administration | `ProviderAdminAPI`: `/api/v2/provider-connections/:id/identity`, `/admin/accounts/:id/{identity,enable,disable,resurrect,refresh}`; remaining contribution/provider OAuth routes: `/api/pool/accounts/*`, `/admin/{codex,claude,...}` |
+| Provider administration | `ProviderAdminAPI`: `/api/v2/provider-connections/:id/identity`, `/admin/accounts/:id/{identity,enable,disable,resurrect,refresh}`; `ProviderContributionAPI`: signed-in member additions under `/api/pool/accounts/*`; remaining elevated provider OAuth/key routes: `/admin/{codex,claude,...}` |
 | Gateway/protocol | `/v1/*`, WebSocket upgrades, Codex compatibility/no-op paths, and upstream fallback |
 
 - Isolate gateway, authentication, provider administration, and read-only data handlers.
@@ -323,6 +323,18 @@ Current route ownership:
 - Generate frontend API types from a schema where practical.
 
 Exit criterion: UI/data handlers do not depend on proxy internals or mutable connection structs.
+
+### Upstream synchronization backlog
+
+Reviewed `darvell/codex-pool` through upstream commit `2aa8320` on 2026-07-22:
+
+- Integrated `43c94c6` as `ecee91e`: reset-credit redemption refreshes both credit inventory and current Codex quota.
+- Adapted `b1100e2` as `a6111c7`: backend pace, aggregate capacity, and per-connection weekly forecasts wait for one percentage point of elapsed budget before extrapolating quantized usage.
+- No port needed for `5fec71b`: current declarative Kimi Platform catalog already includes Kimi K3, its 1M alias, richer metadata, docs, and tests.
+- Do not port `79f5f3b`: its additive cyber bonus is superseded upstream by weighted fairness in `2aa8320`.
+- Adapt `2aa8320` behind `ConnectionSelector`: weighted fair ordinary Codex selection among quota-competitive connections, preserving explicit cyber-only retry selection and preventing non-cyber starvation.
+- Adapt `1b7bc67` with bounded-memory protocol rules: strip hosted MCP definitions/transcript items consistently across HTTP, SSE, and WebSocket while preserving local tools; reject oversized whole-document transformations rather than accepting upstream's 512 MiB event buffer.
+- Adapt `a1049d8` in Phase 7: preserve WebSocket close status, classify/measure terminations, report heartbeat failures, and drain active sessions during graceful shutdown without bypassing centralized model-route enforcement.
 
 ### Phase 7 — Operational hardening
 

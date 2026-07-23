@@ -177,7 +177,6 @@ sidebarToggle.addEventListener("click", () => {
   sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
   sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
   sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
-  showToast(collapsed ? "Sidebar collapsed for this preview session." : "Sidebar expanded.");
 });
 
 document.querySelector("#leaderboard-privacy").addEventListener("click", () => showToast("This preview shows abbreviated fictional names and aggregate weekly usage only."));

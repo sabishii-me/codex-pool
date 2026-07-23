@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 16,
+  "revision": 18,
   "directions": {},
   "rounds": {
     "step-0": {
@@ -82,6 +82,30 @@
             "acknowledgedAt": "2026-07-23T11:51:54.179Z",
             "resolution": "Moved the collapsed-state expand control fully inside the 76px sidebar rail beneath the brand mark. Geometry checks confirm the complete 28px control remains within the rail and retains its accessible Expand sidebar label.",
             "resolvedAt": "2026-07-23T11:55:15.585Z"
+          },
+          {
+            "id": "f621769e-ecbb-4521-9847-918ed887546a",
+            "kind": "element",
+            "comment": "what is this, non fuc now",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "open",
+            "createdAt": "2026-07-23T12:00:15.348Z",
+            "elementRef": "button[data-product-action=\"open-notifications\"]",
+            "elementLabel": "Notifications, one item"
+          },
+          {
+            "id": "2dae91c0-ff86-495b-a0c7-78cc8b2b571c",
+            "kind": "element",
+            "comment": "we have two user icon in this page which is not good",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "open",
+            "createdAt": "2026-07-23T12:00:32.082Z",
+            "elementRef": "button[data-product-action=\"open-profile\"]",
+            "elementLabel": "Open profile for Avery Chen"
           }
         ],
         "note": "still have too many placehoders, ",

@@ -51,23 +51,47 @@ const activity = {
   "30d": [82, 96, 88, 114, 120, 132, 126, 148, 143, 157, 168, 162]
 };
 
+let splineSequence = 0;
+function splinePath(coords) {
+  if (coords.length < 2) return "";
+  let path = `M ${coords[0][0]} ${coords[0][1]}`;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const p0 = coords[i - 1] || coords[i], p1 = coords[i], p2 = coords[i + 1], p3 = coords[i + 2] || p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    path += ` C ${c1x} ${c1y}, ${c2x} ${c2y}, ${p2[0]} ${p2[1]}`;
+  }
+  return path;
+}
+
+function renderSpline(target, primary, secondary, options = {}) {
+  const width = 640, height = 240, left = 38, right = 18, top = 22, bottom = 30;
+  const all = [...primary, ...secondary], min = Math.min(...all) * .86, max = Math.max(...all) * 1.08;
+  const coords = values => values.map((value, index) => [left + index * (width-left-right) / Math.max(1, values.length-1), top + (max-value) / Math.max(1, max-min) * (height-top-bottom)]);
+  const a = coords(primary), b = coords(secondary), primaryPath = splinePath(a), secondaryPath = splinePath(b);
+  const areaPath = `${primaryPath} L ${a.at(-1)[0]} ${height-bottom} L ${a[0][0]} ${height-bottom} Z`;
+  const active = Math.min(primary.length - 1, Math.max(1, Math.round((primary.length - 1) * .66)));
+  const [activeX, activeY] = a[active], [, secondaryY] = b[active];
+  const tooltipX = Math.min(width - 126, Math.max(left + 5, activeX + 12)), tooltipY = Math.max(8, Math.min(activeY, secondaryY) - 14);
+  const gradient = `primary-area-${++splineSequence}`, xLabels = options.xLabels || ["1", "8", "16", "24", "31"], yLabels = [max, (max+min)/2, min];
+  target.innerHTML = `<svg class="spline-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="${gradient}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c084fc" stop-opacity=".28"/><stop offset="1" stop-color="#c084fc" stop-opacity="0"/></linearGradient></defs><path d="${areaPath}" fill="url(#${gradient})"/><path class="spline-secondary" d="${secondaryPath}"/><path class="spline-primary" d="${primaryPath}"/><line class="spline-marker" x1="${activeX}" y1="${top}" x2="${activeX}" y2="${height-bottom}"/><circle class="spline-node-primary" cx="${activeX}" cy="${activeY}" r="4"/><circle class="spline-node-secondary" cx="${activeX}" cy="${secondaryY}" r="3.5"/><g transform="translate(${tooltipX} ${tooltipY})"><rect class="spline-tooltip" width="108" height="42" rx="12"/><circle cx="12" cy="14" r="3" fill="#c084fc"/><text class="spline-tooltip-text" x="20" y="17">${primary[active]} ${options.primaryUnit || "req"}</text><circle cx="12" cy="29" r="3" fill="#fde047"/><text class="spline-tooltip-sub" x="20" y="32">${secondary[active]} benchmark</text></g>${yLabels.map((value,index)=>`<text class="spline-axis" x="2" y="${top+index*(height-top-bottom)/2+3}">${Math.round(value)}</text>`).join("")}${xLabels.map((label,index)=>`<text class="spline-axis" text-anchor="middle" x="${left+index*(width-left-right)/(xLabels.length-1)}" y="${height-8}">${label}</text>`).join("")}</svg>`;
+}
+
 function renderChart(range) {
-  const points = activity[range];
-  const max = Math.max(...points);
-  document.querySelector("#activity-chart").innerHTML = points.map((value, index) =>
-    `<i class="chart-bar" style="height:${Math.max(8, value / max * 92)}%" title="Period ${index + 1}: ${value} requests"></i>`
-  ).join("");
-  document.querySelector("#activity-chart").setAttribute("aria-label", `Request activity over ${range}. Activity is higher than the preceding period with no unusual failure spike.`);
+  const points = activity[range], benchmark = points.map((value,index)=>Math.max(1,Math.round(value*(.66+(index%3)*.035))));
+  const target = document.querySelector("#activity-chart");
+  renderSpline(target, points, benchmark, {xLabels:range === "24h" ? ["00","06","12","18","24"] : range === "7d" ? ["Mon","Tue","Wed","Fri","Sun"] : ["1","8","16","24","30"]});
+  target.setAttribute("aria-label", `Smooth request activity and benchmark trends over ${range}. Activity is higher than the preceding period with no unusual failure spike.`);
 }
 renderChart("24h");
 
 const livePoints = [28,32,30,38,35,42,39,45,48,44,52,49,58,55,61,57,64,60,69,66,72,68,75,73,79,76,82,78,84,81];
-function renderLiveBars(target, points = livePoints) {
-  const max = Math.max(...points);
-  target.innerHTML = points.map((value, index) => `<i style="height:${Math.max(8, value / max * 94)}%;opacity:${.58 + index / points.length * .42}" title="Interval ${index + 1}: ${value}"></i>`).join("");
+function renderLiveSpline(target, points = livePoints) {
+  const comparison = points.map((value,index)=>Math.round(value*(.68+(index%5)*.018)));
+  renderSpline(target, points, comparison, {xLabels:["-30m","-20m","-10m","-5m","Now"],primaryUnit:"/min"});
 }
-renderLiveBars(document.querySelector("#live-monitor-chart"));
-renderLiveBars(document.querySelector("#focus-chart"), runtime === "operator" ? livePoints : livePoints.map((value, index) => Math.round(value * .52 + (index % 4) * 2)));
+renderLiveSpline(document.querySelector("#live-monitor-chart"));
+renderLiveSpline(document.querySelector("#focus-chart"), runtime === "operator" ? livePoints : livePoints.map((value,index)=>Math.round(value*.52+(index%4)*2)));
 
 const focus = runtime === "operator" ? {
   title: "Live pool health", description: "Requests, latency, errors, and capacity · rolling 30 minutes", summary: "Routing is stable with one reduced-capacity provider.",

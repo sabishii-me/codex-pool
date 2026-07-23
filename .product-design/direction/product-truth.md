@@ -122,18 +122,9 @@ In the real product:
 
 Step 0 uses the supplied Fitonist analysis as its default visual direction. The remote reference is design input only and is never loaded by the artifact.
 
-### Outer presentation backdrop
+### Supporting reference swatches
 
-The supplied swatches establish the ambient presentation around the application rather than replacing all application semantics:
-
-| Role | Name | Value |
-|---|---|---|
-| Lavender/blue ambient field | Pale Phthalo Blue | `#cad2fd` |
-| Warm ambient field | Morning Tea | `#c7bc92` |
-| Supporting neutral | Granite Canyon | `#6c6e79` |
-| Deep support layers | Avocado Peel / Gluon Grey / Black Hole | `#39373d`, `#1a191c`, `#020203` |
-
-On desktop and tablet, the dark application floats over a restrained lavender-to-warm gradient. Compact devices use the application full-bleed so decorative framing never consumes working space.
+The supplied Pale Phthalo Blue, Morning Tea, Granite Canyon, Avocado Peel, Gluon Grey, and Black Hole swatches remain reference inputs for neutral balance and future theme work. They do **not** create a page background behind the application. The product uses a full-viewport dark canvas on every device.
 
 ### Application palette
 
@@ -151,11 +142,12 @@ On desktop and tablet, the dark application floats over a restrained lavender-to
 
 Visual rules:
 
-- compose desktop analytics as a rounded bento grid inside a floating dark application frame;
+- compose desktop analytics as a rounded bento grid on a full-viewport dark product canvas;
 - use pill navigation, segmented controls, rounded cards, inner highlights, soft shadows, and restrained glow;
 - establish hierarchy through large white metrics, muted labels, and compact support copy;
-- use purple as the primary graph series, yellow for comparison/warnings, green for positive health/trends, and cyan for information;
-- use dotted chart fields and soft glow only where they improve data scanning;
+- render continuous time-series as smooth dual-spline charts: purple primary line and area glow, thin yellow comparison line, dot-matrix field, minimal axes, dashed active marker, glowing nodes, and a dark pill tooltip;
+- reserve textured pill/capsule bars for discrete category or day comparisons, with selective solid color on the active peak;
+- use proportional bubble clusters only for demographic composition and halftone maps only for genuine geographic data—never as decoration;
 - preserve focused mobile/tablet compositions instead of shrinking the complete bento dashboard;
 - do not use decorative remote imagery or reproduce the reference asset in the product;
 - retain labels, icons, and shape differences so status never depends on color alone.

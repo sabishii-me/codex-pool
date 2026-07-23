@@ -10,7 +10,12 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:baseline": "playwright test tests/e2e/legacy-baseline.spec.ts",
-    "test:e2e:baseline:soak": "node scripts/run-baseline-soak.mjs"
+    "test:e2e:baseline:soak": "node scripts/run-baseline-soak.mjs",
+    "design:serve": "product-design-harness serve --root ../.product-design",
+    "design:doctor": "product-design-harness doctor --root ../.product-design",
+    "design:validate": "product-design-harness validate --root ../.product-design",
+    "design:validate:browser": "product-design-harness validate --root ../.product-design --browser",
+    "design:capture": "product-design-harness capture --root ../.product-design"
   },
   "dependencies": {
     "clsx": "2.1.1",
@@ -24,6 +29,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@sabishii/product-design-harness": "git+https://github.com/sabishii-me/product-design-harness.git#9c85b076f7cece3d910919403abf23764f4038df",
     "@tailwindcss/vite": "^4.3.2",
     "@types/d3-scale": "4.0.9",
     "@types/d3-shape": "3.1.7",

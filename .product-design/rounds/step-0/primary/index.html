@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Codex Pool — Step 0</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="preview-notice" role="note">
+    <span>Design preview</span>
+    <span>Fictional data · no live operations</span>
+  </div>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#dashboard" data-product-action="navigate-dashboard" aria-label="Codex Pool dashboard">
+        <span class="brand-mark" aria-hidden="true">CP</span>
+        <span><strong>Codex Pool</strong><small>Model gateway</small></span>
+      </a>
+
+      <nav class="desktop-navigation" aria-label="Workspace navigation">
+        <div class="nav-group">
+          <span class="nav-label">Workspace</span>
+          <a class="nav-link active" href="#dashboard" data-page="dashboard"><span aria-hidden="true">⌂</span>Dashboard</a>
+          <a class="nav-link" href="#models" data-page="models"><span aria-hidden="true">◇</span>Models</a>
+          <a class="nav-link" href="#setup" data-page="setup"><span aria-hidden="true">↗</span>Setup</a>
+          <a class="nav-link" href="#usage" data-page="usage"><span aria-hidden="true">▥</span>My usage</a>
+        </div>
+        <div class="nav-group operator-only">
+          <span class="nav-label">Operations</span>
+          <a class="nav-link" href="#monitor" data-page="monitor"><span aria-hidden="true">⌁</span>Monitor <span class="nav-count">1</span></a>
+          <a class="nav-link" href="#connections" data-page="connections"><span aria-hidden="true">⇄</span>Provider connections</a>
+          <a class="nav-link" href="#routes" data-page="routes"><span aria-hidden="true">⑂</span>Model routes</a>
+          <a class="nav-link" href="#system" data-page="system"><span aria-hidden="true">⚙</span>System</a>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="user-button" type="button" data-product-action="open-profile">
+          <span class="avatar">AC</span>
+          <span><strong>Avery Chen</strong><small id="runtime-label">Member workspace</small></span>
+          <span aria-hidden="true">···</span>
+        </button>
+      </div>
+    </aside>
+
+    <header class="topbar">
+      <button class="icon-button mobile-menu-button" id="menu-button" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="mobile-drawer">☰</button>
+      <div class="topbar-context">
+        <span class="environment-dot" aria-hidden="true"></span>
+        <span>Design preview</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="refresh-state"><span class="status-dot healthy" aria-hidden="true"></span>Updated 18s ago</span>
+        <button class="icon-button" type="button" data-product-action="open-notifications" aria-label="Notifications, one item">♢<span class="notification-dot" aria-hidden="true"></span></button>
+        <button class="avatar compact" type="button" data-product-action="open-profile" aria-label="Open profile for Avery Chen">AC</button>
+      </div>
+    </header>
+
+    <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+    <aside class="mobile-drawer" id="mobile-drawer" aria-label="All navigation" hidden>
+      <div class="drawer-header"><strong>Navigation</strong><button class="icon-button" id="close-menu" type="button" aria-label="Close navigation">×</button></div>
+      <nav aria-label="Mobile workspace navigation">
+        <span class="nav-label">Workspace</span>
+        <a class="drawer-link" href="#dashboard" data-page="dashboard">Dashboard</a>
+        <a class="drawer-link" href="#models" data-page="models">Models</a>
+        <a class="drawer-link" href="#setup" data-page="setup">Setup</a>
+        <a class="drawer-link" href="#usage" data-page="usage">My usage</a>
+        <div class="operator-only drawer-operations">
+          <span class="nav-label">Operations</span>
+          <a class="drawer-link" href="#monitor" data-page="monitor">Monitor <span class="nav-count">1</span></a>
+          <a class="drawer-link" href="#connections" data-page="connections">Provider connections</a>
+          <a class="drawer-link" href="#routes" data-page="routes">Model routes</a>
+          <a class="drawer-link" href="#system" data-page="system">System</a>
+        </div>
+      </nav>
+    </aside>
+
+    <main id="main-content" tabindex="-1">
+      <section class="page active" data-product-page="dashboard" id="page-dashboard" aria-labelledby="dashboard-title">
+        <header class="page-header">
+          <div><p class="eyebrow" id="greeting">Wednesday, July 22</p><h1 id="dashboard-title">Good afternoon, Avery</h1><p>Here’s what matters across your gateway right now.</p></div>
+          <div class="page-actions">
+            <button class="button secondary operator-only" type="button" data-navigate="monitor">Open monitor</button>
+            <button class="button primary" type="button" data-navigate="setup">Configure a client</button>
+          </div>
+        </header>
+
+        <section class="hero-status" data-product-region="gateway-status" aria-labelledby="gateway-status-title">
+          <div class="status-icon success" aria-hidden="true">✓</div>
+          <div class="hero-copy"><div><h2 id="gateway-status-title">Gateway operational</h2><span class="status-badge success">Healthy</span></div><p>Requests are routing normally across available providers.</p></div>
+          <dl class="hero-facts"><div><dt>Models available</dt><dd>12 of 14</dd></div><div><dt>Provider health</dt><dd>4 of 5 healthy</dd></div></dl>
+        </section>
+
+        <section class="degraded-banner operator-only" data-product-region="active-incident" aria-labelledby="incident-banner-title">
+          <div class="status-icon warning" aria-hidden="true">!</div>
+          <div><h2 id="incident-banner-title">DeepSeek capacity is limited</h2><p>Requests remain available. Routing is using the remaining healthy connection.</p></div>
+          <button class="button quiet" type="button" data-navigate="monitor">Review impact <span aria-hidden="true">→</span></button>
+        </section>
+
+        <section class="metric-grid" aria-label="Key metrics" id="metric-grid"></section>
+
+        <div class="dashboard-grid">
+          <section class="panel activity-panel" data-product-region="activity" aria-labelledby="activity-title">
+            <header class="panel-header">
+              <div><h2 id="activity-title">Request activity</h2><p id="activity-scope">Your processed requests</p></div>
+              <div class="segmented" aria-label="Activity timeframe">
+                <button type="button" class="active" aria-pressed="true" data-range="24h">24h</button>
+                <button type="button" aria-pressed="false" data-range="7d">7d</button>
+                <button type="button" aria-pressed="false" data-range="30d">30d</button>
+              </div>
+            </header>
+            <div class="chart-wrap">
+              <div class="chart-y" aria-hidden="true"><span>60</span><span>40</span><span>20</span><span>0</span></div>
+              <div class="chart" id="activity-chart" role="img" aria-label="Request activity over 24 hours. Activity is 12 percent higher with no unusual failure spike."></div>
+            </div>
+            <footer class="chart-summary"><span class="trend positive">↗ 12%</span><span>higher than the preceding period</span><span class="evidence">Measured</span></footer>
+          </section>
+
+          <section class="panel attention-panel" data-product-region="attention-required" aria-labelledby="attention-title">
+            <header class="panel-header"><div><h2 id="attention-title">Attention required</h2><p>Items that may need action</p></div><span class="count-badge operator-only">1</span></header>
+            <div class="member-only no-action"><span class="status-icon success" aria-hidden="true">✓</span><h3>No action required</h3><p>Your gateway access and setup are working normally.</p></div>
+            <article class="incident-card operator-only">
+              <div class="incident-heading"><span class="status-dot warning" aria-hidden="true"></span><div><h3>DeepSeek capacity is limited</h3><p>Provider capacity · Warning</p></div></div>
+              <p>One connection is cooling down. Traffic is being routed through the remaining eligible connection.</p>
+              <dl><div><dt>Impact</dt><dd>Reduced headroom</dd></div><div><dt>Recovery</dt><dd>About 42 min</dd></div></dl>
+              <button class="text-button" type="button" data-navigate="monitor">Open in monitor <span aria-hidden="true">→</span></button>
+            </article>
+          </section>
+
+          <section class="panel provider-panel" data-product-region="provider-health" aria-labelledby="providers-title">
+            <header class="panel-header"><div><h2 id="providers-title">Provider health</h2><p>Availability by provider</p></div><button class="text-button operator-only" type="button" data-navigate="connections">View connections <span aria-hidden="true">→</span></button></header>
+            <div class="provider-table" role="table" aria-label="Provider health summary">
+              <div class="provider-row provider-head" role="row"><span role="columnheader">Provider</span><span role="columnheader">State</span><span role="columnheader">Connections</span><span role="columnheader">Capacity</span><span role="columnheader">Recovery</span></div>
+              <div id="provider-rows"></div>
+            </div>
+          </section>
+
+          <section class="panel quick-panel" aria-labelledby="quick-title">
+            <header class="panel-header"><div><h2 id="quick-title">Quick actions</h2><p>Common next steps</p></div></header>
+            <div class="quick-actions">
+              <button type="button" data-navigate="setup"><span class="quick-icon" aria-hidden="true">↗</span><span><strong>Configure a client</strong><small>Copy a working setup</small></span><span aria-hidden="true">→</span></button>
+              <button type="button" data-navigate="models"><span class="quick-icon" aria-hidden="true">◇</span><span><strong>Browse models</strong><small>Find an available route</small></span><span aria-hidden="true">→</span></button>
+              <button class="operator-only" type="button" data-navigate="connections"><span class="quick-icon" aria-hidden="true">＋</span><span><strong>Add connection</strong><small>Contribute provider capacity</small></span><span aria-hidden="true">→</span></button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="page" data-product-page="models" id="page-models" aria-labelledby="models-title" hidden>
+        <header class="page-header"><div><p class="eyebrow">Model catalog</p><h1 id="models-title">Models</h1><p>Find an available route and copy the public model ID for your client.</p></div><button class="button primary" type="button" data-navigate="setup">Configure a client</button></header>
+        <section class="panel catalog-panel">
+          <div class="model-controls"><label class="search-field"><span class="sr-only">Search models</span><span aria-hidden="true">⌕</span><input id="model-search" type="search" placeholder="Search model or provider"></label><div class="filter-row" aria-label="Filter models by availability"><button type="button" class="active" aria-pressed="true" data-filter="all">All</button><button type="button" aria-pressed="false" data-filter="available">Available</button><button type="button" aria-pressed="false" data-filter="limited">Limited</button></div><span id="model-count">6 routes</span></div>
+          <div class="model-list" id="model-list" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="page" data-product-page="monitor" id="page-monitor" aria-labelledby="monitor-title" hidden>
+        <header class="page-header"><div><p class="eyebrow">Operations</p><h1 id="monitor-title">Monitor</h1><p>Diagnose availability, routing, and persistence without changing configuration.</p></div><button class="button secondary" type="button" data-navigate="connections">Manage connections</button></header>
+        <section class="monitor-summary" aria-label="Monitor summary">
+          <article><span>Request rate</span><strong>21.4/min</strong><small>Pool-wide · measured</small></article><article><span>P95 latency</span><strong>2.8s</strong><small>Last 15 minutes</small></article><article><span>Error rate</span><strong>0.7%</strong><small>Within normal range</small></article><article id="persistence-metric"><span>Usage persistence</span><strong class="healthy-text">Healthy</strong><small>Canonical events current</small></article>
+        </section>
+        <div class="monitor-grid">
+          <section class="panel incident-detail" aria-labelledby="monitor-incident-title"><header class="panel-header"><div><h2 id="monitor-incident-title">Active incident</h2><p>Provider capacity · Warning</p></div><span class="status-badge warning">Degraded</span></header><div class="incident-body"><h3>DeepSeek capacity is limited</h3><p>Connection <code>DS-02</code> entered cooldown after an upstream quota response. The route remains available through <code>DS-01</code>.</p><dl><div><dt>User impact</dt><dd>Reduced request headroom; no current outage</dd></div><div><dt>Routing response</dt><dd>Traffic shifted to one eligible connection</dd></div><div><dt>Expected recovery</dt><dd>About 42 minutes</dd></div><div><dt>Last observed</dt><dd>4 minutes ago</dd></div></dl><button class="button secondary" type="button" data-navigate="connections">Inspect connection</button></div></section>
+          <section class="panel event-panel" aria-labelledby="events-title"><header class="panel-header"><div><h2 id="events-title">Recent operational events</h2><p>Newest first</p></div></header><ol class="event-list"><li><time>14:28</time><span class="event-marker warning" aria-hidden="true"></span><div><strong>Connection entered cooldown</strong><p>DeepSeek · DS-02 · quota response</p></div></li><li><time>14:25</time><span class="event-marker info" aria-hidden="true"></span><div><strong>Routing compensated</strong><p>Traffic shifted to one eligible connection</p></div></li><li><time>14:12</time><span class="event-marker success" aria-hidden="true"></span><div><strong>Provider registry reloaded</strong><p>Five provider definitions active</p></div></li></ol></section>
+          <section class="panel persistence-panel" aria-labelledby="persistence-title"><header class="panel-header"><div><h2 id="persistence-title">Usage persistence</h2><p>Canonical event pipeline</p></div><button class="text-button" id="simulate-error" type="button">Simulate local error</button></header><div id="persistence-ready"><div class="pipeline"><span>Gateway</span><i aria-hidden="true">→</i><span>Usage events</span><i aria-hidden="true">→</i><span>Projections</span></div><p class="resource-note"><span class="status-dot healthy" aria-hidden="true"></span>All canonical events are durable and projections are current.</p></div><div class="resource-error" id="persistence-error" hidden><div class="status-icon danger" aria-hidden="true">!</div><div><h3>Persistence health unavailable</h3><p>The latest health check could not be loaded. Other monitor data remains current.</p><button class="button secondary" id="retry-persistence" type="button">Retry</button></div></div></section>
+        </div>
+      </section>
+
+      <section class="page placeholder-page" data-product-page="placeholder" id="page-placeholder" aria-labelledby="placeholder-title" hidden>
+        <div class="placeholder-card"><span class="placeholder-icon" aria-hidden="true">◇</span><p class="eyebrow" id="placeholder-section">Member workspace</p><h1 id="placeholder-title">Setup</h1><p id="placeholder-copy">This route is represented in Step 0 navigation. Its complete workflow is part of a later tracked phase.</p><button class="button secondary" type="button" data-navigate="dashboard">Return to dashboard</button></div>
+      </section>
+    </main>
+
+    <nav class="bottom-navigation" aria-label="Mobile primary navigation">
+      <a class="active" href="#dashboard" data-page="dashboard"><span aria-hidden="true">⌂</span>Dashboard</a>
+      <a href="#models" data-page="models"><span aria-hidden="true">◇</span>Models</a>
+      <a href="#setup" data-page="setup"><span aria-hidden="true">↗</span>Setup</a>
+      <button id="more-button" type="button" aria-label="Open all navigation" aria-expanded="false" aria-controls="mobile-drawer"><span aria-hidden="true">•••</span>More</button>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

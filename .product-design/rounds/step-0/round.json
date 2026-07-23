@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "step-0",
+  "label": "Step 0 — Interaction architecture",
+  "artifacts": [
+    {
+      "id": "primary",
+      "label": "Baseline dashboard + monitor",
+      "path": "primary",
+      "status": "ready"
+    }
+  ]
+}

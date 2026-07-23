@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "codex-pool",
+    "label": "Codex Pool"
+  },
+  "generatedAt": "2026-07-23T08:37:18.942Z",
+  "browser": true,
+  "summary": {
+    "checks": 25,
+    "failures": 0
+  },
+  "checks": [
+    {
+      "kind": "entry",
+      "target": "step-0/primary",
+      "ok": true,
+      "message": "entry must be a file"
+    },
+    {
+      "kind": "network API",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser persistence",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "parent frame access",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "remote resource",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "harness feature",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "javascript syntax",
+      "target": "step-0/primary/app.js",
+      "ok": true,
+      "message": "node --check failed"
+    },
+    {
+      "kind": "network API",
+      "target": "step-0/primary/index.html",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser persistence",
+      "target": "step-0/primary/index.html",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "parent frame access",
+      "target": "step-0/primary/index.html",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "remote resource",
+      "target": "step-0/primary/index.html",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "harness feature",
+      "target": "step-0/primary/index.html",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "network API",
+      "target": "step-0/primary/styles.css",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser persistence",
+      "target": "step-0/primary/styles.css",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "parent frame access",
+      "target": "step-0/primary/styles.css",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "remote resource",
+      "target": "step-0/primary/styles.css",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "harness feature",
+      "target": "step-0/primary/styles.css",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/desktop/member",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/tablet-portrait/member",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/mobile-portrait/member",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/mobile-landscape/member",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/desktop/operator",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/tablet-portrait/operator",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/mobile-portrait/operator",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/mobile-landscape/operator",
+      "ok": true,
+      "message": ""
+    }
+  ]
+}

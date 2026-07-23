@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "notice": "All identities, usage, health, incidents, and timestamps are fictional and exist only for Step 0 design review.",
+  "clock": "2026-07-22T14:32:00Z",
+  "member": {
+    "displayName": "Avery Chen",
+    "initials": "AC",
+    "workspace": "Member"
+  },
+  "gateway": {
+    "name": "Codex Pool",
+    "environment": "Design preview",
+    "status": "operational",
+    "statusLabel": "Gateway operational",
+    "statusDetail": "Requests are routing normally across available providers.",
+    "lastUpdatedSeconds": 18,
+    "availableModels": 12,
+    "totalModels": 14,
+    "healthyProviders": 4,
+    "totalProviders": 5
+  },
+  "memberMetrics": [
+    { "id": "requests", "label": "Your requests", "value": "184", "change": "+12%", "timeframe": "Last 24 hours", "evidence": "measured" },
+    { "id": "tokens", "label": "Processed tokens", "value": "2.8M", "change": "+8%", "timeframe": "Last 24 hours", "evidence": "measured" },
+    { "id": "models", "label": "Models available", "value": "12 / 14", "change": "2 limited", "timeframe": "Right now", "evidence": "measured" },
+    { "id": "connections", "label": "Provider health", "value": "4 / 5", "change": "1 degraded", "timeframe": "Right now", "evidence": "measured" }
+  ],
+  "operatorMetrics": [
+    { "id": "requests", "label": "Pool requests", "value": "1,842", "change": "+9%", "timeframe": "Last 24 hours", "evidence": "measured" },
+    { "id": "tokens", "label": "Processed tokens", "value": "28.4M", "change": "+6%", "timeframe": "Last 24 hours", "evidence": "measured" },
+    { "id": "models", "label": "Models available", "value": "12 / 14", "change": "2 limited", "timeframe": "Right now", "evidence": "measured" },
+    { "id": "connections", "label": "Healthy connections", "value": "8 / 9", "change": "1 degraded", "timeframe": "Right now", "evidence": "measured" }
+  ],
+  "activity": {
+    "ranges": {
+      "24h": [18, 24, 20, 31, 28, 42, 39, 48, 43, 57, 53, 61],
+      "7d": [118, 132, 125, 164, 153, 177, 184],
+      "30d": [82, 96, 88, 114, 120, 132, 126, 148, 143, 157, 168, 162]
+    },
+    "summary": "Activity is 12% higher than the preceding period, with no unusual failure spike."
+  },
+  "providers": [
+    { "id": "codex", "name": "Codex", "state": "healthy", "stateLabel": "Healthy", "connections": "3 / 3", "capacity": "Available", "recovery": "—", "models": 5 },
+    { "id": "deepseek", "name": "DeepSeek", "state": "degraded", "stateLabel": "Degraded", "connections": "1 / 2", "capacity": "Limited", "recovery": "42 min", "models": 2 },
+    { "id": "gemini", "name": "Gemini", "state": "healthy", "stateLabel": "Healthy", "connections": "2 / 2", "capacity": "Available", "recovery": "—", "models": 3 },
+    { "id": "zai", "name": "Z.ai", "state": "healthy", "stateLabel": "Healthy", "connections": "1 / 1", "capacity": "Available", "recovery": "—", "models": 2 },
+    { "id": "novel-runtime", "name": "Northstar AI", "state": "healthy", "stateLabel": "Healthy", "connections": "1 / 1", "capacity": "Available", "recovery": "—", "models": 2, "unknownRuntimeProvider": true }
+  ],
+  "incidents": [
+    {
+      "id": "incident-deepseek-capacity",
+      "severity": "warning",
+      "title": "DeepSeek capacity is limited",
+      "summary": "One provider connection is cooling down. Routing is using the remaining healthy connection.",
+      "impact": "DeepSeek requests remain available with reduced headroom.",
+      "recovery": "Expected recovery in 42 minutes.",
+      "action": "Open monitor"
+    }
+  ],
+  "models": [
+    { "id": "gpt-5.6", "name": "GPT-5.6", "provider": "Codex", "status": "available", "context": "272K", "output": "128K", "capabilities": ["Text", "Vision", "Tools"] },
+    { "id": "gpt-5.6-codex", "name": "GPT-5.6 Codex", "provider": "Codex", "status": "available", "context": "272K", "output": "128K", "capabilities": ["Text", "Tools"] },
+    { "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "provider": "DeepSeek", "status": "limited", "context": "128K", "output": "32K", "capabilities": ["Text", "Tools"] },
+    { "id": "glm-5.2", "name": "GLM-5.2", "provider": "Z.ai", "status": "available", "context": "128K", "output": "64K", "capabilities": ["Text", "Tools"] },
+    { "id": "gemini-3-pro", "name": "Gemini 3 Pro", "provider": "Gemini", "status": "available", "context": "1M", "output": "64K", "capabilities": ["Text", "Vision", "Tools"] },
+    { "id": "northstar-reasoner", "name": "Northstar Reasoner", "provider": "Northstar AI", "status": "available", "context": "96K", "output": "24K", "capabilities": ["Text", "Tools"], "unknownRuntimeProvider": true }
+  ],
+  "monitor": {
+    "requestRate": "21.4 / min",
+    "p95Latency": "2.8 s",
+    "errorRate": "0.7%",
+    "usagePersistence": "Healthy",
+    "events": [
+      { "time": "14:28", "severity": "warning", "title": "Connection entered cooldown", "detail": "DeepSeek · connection DS-02 · quota response" },
+      { "time": "14:25", "severity": "info", "title": "Routing compensated", "detail": "DeepSeek traffic shifted to one eligible connection" },
+      { "time": "14:12", "severity": "success", "title": "Provider registry reloaded", "detail": "Five provider definitions active" }
+    ]
+  }
+}

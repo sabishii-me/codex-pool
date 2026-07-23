@@ -1,6 +1,6 @@
 # Phase 9 UI Redesign Plan
 
-Status: active — UX Phase 0 complete; implementation not started
+Status: active — Product Design Harness Step 0 is reviewable and awaiting owner acceptance; production implementation has not started
 
 Branch: `feat/ui-ux-redesign`
 
@@ -149,6 +149,7 @@ Runtime theme packaging can be evaluated only after both themes pass the same wo
 | Phase | Status | Deliverable | Exit criterion |
 |---|---|---|---|
 | 0. Discovery and direction | **Complete** | Current-state review, member/operator jobs, dashboard/monitor split, baseline-first and theme-boundary decision | Direction is documented and accepted |
+| Harness Step 0. Runnable interpretation | **Awaiting owner review** | One mounted baseline dashboard + monitor artifact across member/operator and responsive profiles | Owner explicitly accepts the interaction architecture; only then may the prompt be frozen |
 | 1. Information architecture | Not started | Route map, navigation model, role behavior, dashboard/monitor wireframes, standard page patterns | Primary member and operator flows can be reviewed without visual styling |
 | 2. UI data contracts | Not started | Inventory of required v2 projections and fixtures; removal plan for React-owned accounting/provider policy | Every first-wave screen can render from normalized, versioned contracts including unknown/stale states |
 | 3. Foundation | Not started | Router, application shell, resource/query layer, semantic tokens, baseline theme, primitives, component catalog, test harness | A responsive and keyboard-usable shell renders representative fixtures without legacy page CSS |
@@ -158,6 +159,37 @@ Runtime theme packaging can be evaluated only after both themes pass the same wo
 | 7. Parity, soak, and promotion | Not started | Accessibility, responsive, visual, contract, partial-failure, and live soak evidence | Replacement meets the legacy baseline and promotion is an explicit release decision |
 
 Update this table when a phase starts or its exit criterion is met. Detailed implementation work may use child issues linked from the umbrella GitHub tracker.
+
+## Product Design Harness Step 0
+
+The project-owned review kit lives under [`.product-design/`](../.product-design/). It contains one candidate only:
+
+- Round: `step-0`
+- Artifact: `primary` (`Baseline dashboard + monitor`)
+- Direction status: `draft`
+- Owner decision: pending
+- Runtime profiles: `member`, `operator` (presentation fixtures, never authorization)
+- Viewports: 1440×900 desktop, 820×1024 tablet portrait, 390×844 mobile portrait, and 844×390 mobile landscape
+
+The artifact makes Dashboard, Models, and operator Monitor interactive. Setup, My usage, Provider connections, Model routes, and System are explicit information-architecture placeholders rather than falsely complete workflows. It uses fictional in-memory data, performs no network or real product operation, and resets on reload.
+
+Review locally:
+
+```bash
+cd web
+npm run design:serve
+```
+
+Then open the printed loopback URL and record page- or element-level feedback through the harness. Validation commands are:
+
+```bash
+npm run design:doctor
+npm run design:validate
+npm run design:validate:browser
+npm run design:capture
+```
+
+Passing validation makes the artifact reviewable; it does not approve or freeze it. Do not create alternative candidates until explicit owner acceptance is recorded and `.product-design/direction/frozen-design-prompt.md` is deliberately frozen.
 
 ## Phase 1 decisions required
 

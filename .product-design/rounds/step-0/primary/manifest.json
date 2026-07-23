@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "primary",
+  "label": "Baseline dashboard + monitor",
+  "entry": "index.html",
+  "runtimes": ["member", "operator"],
+  "capabilities": {
+    "semanticInspector": true,
+    "inMemorySimulation": true
+  }
+}

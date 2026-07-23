@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "codex-pool",
+    "label": "Codex Pool"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8765
+  },
+  "direction": {
+    "status": "draft",
+    "productTruth": "direction/product-truth.md",
+    "prompt": "direction/frozen-design-prompt.md",
+    "artifactContract": "direction/artifact-contract.md",
+    "stateMatrix": "direction/state-matrix.md",
+    "fixtures": "direction/fixtures.json"
+  },
+  "profiles": {
+    "viewports": [
+      { "id": "desktop", "label": "Desktop", "width": 1440, "height": 900 },
+      { "id": "tablet-portrait", "label": "Tablet portrait", "width": 820, "height": 1024 },
+      { "id": "mobile-portrait", "label": "Mobile portrait", "width": 390, "height": 844 },
+      { "id": "mobile-landscape", "label": "Mobile landscape", "width": 844, "height": 390 }
+    ],
+    "runtimes": ["member", "operator"]
+  },
+  "rounds": ["rounds/step-0/round.json"],
+  "reviews": "reviews/reviews.json",
+  "reports": "reports"
+}

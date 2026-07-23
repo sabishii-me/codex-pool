@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "codex-pool",
+    "label": "Codex Pool"
+  },
+  "generatedAt": "2026-07-23T08:34:02.083Z",
+  "summary": {
+    "captures": 8,
+    "failures": 0
+  },
+  "captures": [
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "desktop",
+      "runtime": "member",
+      "file": "step-0/primary/desktop--member.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "tablet-portrait",
+      "runtime": "member",
+      "file": "step-0/primary/tablet-portrait--member.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "mobile-portrait",
+      "runtime": "member",
+      "file": "step-0/primary/mobile-portrait--member.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "mobile-landscape",
+      "runtime": "member",
+      "file": "step-0/primary/mobile-landscape--member.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "desktop",
+      "runtime": "operator",
+      "file": "step-0/primary/desktop--operator.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "tablet-portrait",
+      "runtime": "operator",
+      "file": "step-0/primary/tablet-portrait--operator.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "mobile-portrait",
+      "runtime": "operator",
+      "file": "step-0/primary/mobile-portrait--operator.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "mobile-landscape",
+      "runtime": "operator",
+      "file": "step-0/primary/mobile-landscape--operator.png",
+      "errors": []
+    }
+  ]
+}

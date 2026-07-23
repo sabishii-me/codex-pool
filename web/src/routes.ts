@@ -6,6 +6,8 @@ export type AppRoute =
   | "/setup"
   | "/usage"
   | "/profile"
+  | "/insights"
+  | "/accounts"
   | "/operator"
   | "/operator/monitor"
   | "/operator/connections"
@@ -26,6 +28,10 @@ export const ROUTES: readonly RouteTarget[] = [
   { path: "/setup", view: "setup" },
   { path: "/usage", view: "usage" },
   { path: "/profile", view: "profile" },
+  // Legacy aliases remain visible during migration so the compatibility
+  // baseline keeps working while new operator URLs are introduced.
+  { path: "/insights", view: "insights" },
+  { path: "/accounts", view: "accounts" },
   { path: "/operator", view: "pulse", operatorOnly: true },
   // These adapters keep the existing feature implementations reachable while
   // the replacement operator pages are migrated incrementally.

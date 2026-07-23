@@ -2,7 +2,8 @@
 FROM node:22-alpine AS web-build
 WORKDIR /workspace/web
 COPY web/package.json web/package-lock.json ./
-RUN npm install
+RUN node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); delete p.devDependencies['@sabishii/product-design-harness']; fs.writeFileSync('package.json', JSON.stringify(p, null, 2)+'\\n')" \
+    && npm install --package-lock=false
 COPY web/ ./
 COPY schemas/ ../schemas/
 RUN npm run build

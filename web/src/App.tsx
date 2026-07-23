@@ -481,8 +481,8 @@ function Navigation({ view, operator, onChange, onSignOut, email }: { view: View
     ["usage", "USAGE", "╱"],
     ["models", "MODELS", "◇"],
     ["setup", "SETUP", "⌘"],
-    ["insights", "MONITOR", "△", true],
-    ["accounts", "CONNECTIONS", "▦", true],
+    ["insights", "INSIGHTS", "△"],
+    ["accounts", "ACCOUNTS", "▦"],
   ];
   return (
     <nav className="signal-nav" aria-label="Signal room">

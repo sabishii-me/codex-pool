@@ -136,7 +136,7 @@ The supplied Pale Phthalo Blue, Morning Tea, Granite Canyon, Avocado Peel, Gluon
 | Primary text / selected pill | `#ffffff` |
 | Secondary text | `#a1a1aa` |
 | Positive health and trend | `#4ade80` |
-| Primary chart/action accent | `#c084fc` |
+| Primary chart/action accent | `#f87171` |
 | Comparison and warning accent | `#fde047` |
 | Information and tertiary series | `#22d3ee` |
 
@@ -145,7 +145,7 @@ Visual rules:
 - compose desktop analytics as a rounded bento grid on a full-viewport dark product canvas;
 - use pill navigation, segmented controls, rounded cards, inner highlights, soft shadows, and restrained glow;
 - establish hierarchy through large white metrics, muted labels, and compact support copy;
-- render continuous time-series as smooth dual-spline charts: purple primary line and area glow, thin yellow comparison line, dot-matrix field, minimal axes, dashed active marker, glowing nodes, and a dark pill tooltip;
+- render continuous time-series as smooth dual-spline charts: red primary line and area glow, thin yellow comparison line, dot-matrix field, minimal axes, dashed active marker, glowing nodes, and a dark pill tooltip;
 - reserve textured pill/capsule bars for discrete category or day comparisons, with selective solid color on the active peak;
 - use proportional bubble clusters only for demographic composition and halftone maps only for genuine geographic data—never as decoration;
 - preserve focused mobile/tablet compositions instead of shrinking the complete bento dashboard;

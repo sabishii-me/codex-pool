@@ -55,14 +55,15 @@ import {
   type AccountFlow,
   type CapacityForecast,
 } from "./insights";
+import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForView, routeIsAllowed, type RouteTarget, type View } from "./routes";
 import type {
   ProviderConnectionStats,
   OperatorProviderConnectionV2,
   FriendSession,
   HourlyUsage,
-	MFAStatus,
-	ModelDailyUsage,
-	ModelDescriptor,
+  MFAStatus,
+  ModelDailyUsage,
+  ModelDescriptor,
   ModelQuotaEfficiency,
   OriginWeeklyUsage,
   PoolStats,
@@ -71,8 +72,6 @@ import type {
   ResetObservation,
   SignalAnalytics,
 } from "./types";
-
-type View = "pulse" | "insights" | "usage" | "accounts" | "models" | "setup" | "profile";
 
 type ProviderPresentation = { label: string; color: string; dither: DitherColor; glyph: string };
 
@@ -225,7 +224,8 @@ function classNames(...values: Array<string | false | null | undefined>) {
 export function App() {
   const [session, setSession] = useState<FriendSession | null>(null);
   const [booting, setBooting] = useState(true);
-  const [view, setView] = useState<View>("pulse");
+  const [view, setView] = useState<View>(() => currentRoute().view);
+  const [route, setRoute] = useState<RouteTarget>(() => currentRoute());
   const [stats, setStats] = useState<PoolStats | null>(null);
   const [signal, setSignal] = useState<SignalAnalytics | null>(null);
 	const [models, setModels] = useState<ModelDescriptor[]>([]);
@@ -298,6 +298,52 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [session, refresh]);
 
+  useEffect(() => {
+    const onPopState = () => {
+      const next = currentRoute();
+      if (next.operatorOnly && !adminElevated) {
+        const fallback = initialRoute(false, isCompactViewport());
+        navigateTo(fallback, true);
+        setRoute(fallback);
+        setView(fallback.view);
+        return;
+      }
+      setRoute(next);
+      setView(next.view);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [adminElevated]);
+
+  const changeView = useCallback((nextView: View) => {
+    const next = routeForView(nextView, adminElevated);
+    if (!routeIsAllowed(next, adminElevated)) return;
+    navigateTo(next);
+    setRoute(next);
+    setView(next.view);
+  }, [adminElevated]);
+
+  useEffect(() => {
+    if (!session) return;
+    const pathRoute = currentRoute();
+    if (!routeIsAllowed(pathRoute, adminElevated)) {
+      const fallback = initialRoute(false, isCompactViewport());
+      navigateTo(fallback, true);
+      setRoute(fallback);
+      setView(fallback.view);
+      return;
+    }
+    const needsRoleDefault = pathRoute.path === "/";
+    if (needsRoleDefault) {
+      const next = initialRoute(adminElevated, isCompactViewport());
+      if (next.path !== pathRoute.path) {
+        navigateTo(next, true);
+        setRoute(next);
+        setView(next.view);
+      }
+    }
+  }, [session, adminElevated]);
+
   if (booting) return <BootScreen />;
   if (!session) {
     return <AccessGate />;
@@ -311,6 +357,7 @@ export function App() {
     setMfaStatus(null);
     setAdminElevated(false);
     setProviderConnections([]);
+    navigateTo(routeForView("pulse"), true);
   };
 
   return (
@@ -323,11 +370,11 @@ export function App() {
         onRefresh={refresh}
       />
       <div className="app-grid">
-        <Navigation view={view} onChange={setView} onSignOut={signOut} email={session.email} />
+        <Navigation view={view} operator={adminElevated} onChange={changeView} onSignOut={signOut} email={session.email} />
         <main className="signal-main" id="main-content">
           {error && <div className="signal-error" role="alert">SIGNAL INTERRUPTED // {error}</div>}
-          {view === "pulse" && <Pulse stats={stats} signal={signal} onAccounts={() => setView("accounts")} />}
-          {view === "insights" && <Insights stats={stats} signal={signal} onAccounts={() => setView("accounts")} />}
+          {view === "pulse" && <Pulse stats={stats} signal={signal} onAccounts={() => changeView("accounts")} />}
+          {view === "insights" && <Insights stats={stats} signal={signal} onAccounts={() => changeView("accounts")} />}
           {view === "usage" && <Usage stats={stats} signal={signal} session={session} />}
           {view === "accounts" && (
             <Accounts
@@ -433,19 +480,19 @@ function Header({ stats, loading, operator, onRefresh }: {
   );
 }
 
-function Navigation({ view, onChange, onSignOut, email }: { view: View; onChange: (view: View) => void; onSignOut: () => void; email: string }) {
-  const items: Array<[View, string, string]> = [
+function Navigation({ view, operator, onChange, onSignOut, email }: { view: View; operator: boolean; onChange: (view: View) => void; onSignOut: () => void; email: string }) {
+  const items: Array<[View, string, string, boolean?]> = [
     ["pulse", "PULSE", "⌁"],
-    ["insights", "INSIGHTS", "△"],
     ["usage", "USAGE", "╱"],
-    ["accounts", "ACCOUNTS", "▦"],
-	["models", "MODELS", "◇"],
+    ["models", "MODELS", "◇"],
     ["setup", "SETUP", "⌘"],
+    ["insights", "MONITOR", "△", true],
+    ["accounts", "CONNECTIONS", "▦", true],
   ];
   return (
     <nav className="signal-nav" aria-label="Signal room">
       <div className="nav-index">A.01</div>
-      {items.map(([id, label, glyph]) => (
+      {items.filter(([, , , operatorOnly]) => !operatorOnly || operator).map(([id, label, glyph]) => (
         <button key={id} className={classNames("nav-item", view === id && "active")} onClick={() => onChange(id)}>
           <span>{glyph}</span>{label}
         </button>

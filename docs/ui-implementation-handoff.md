@@ -318,15 +318,36 @@ A small project-owned resource layer is sufficient initially. Do not add a query
 - [x] Select the Step 0 artifact in harness review state.
 - [x] Freeze the direction prompt and config.
 - [x] Preserve ten responsive/runtime captures and browser validation.
-- [ ] Keep a clean commit boundary before production code.
+- [x] Keep a clean commit boundary before production code.
 
 ### Slice 1 — application foundation
 
-- Add route/history layer and stable route map.
-- Add semantic tokens and accepted default theme.
-- Add `AppShell`, responsive navigation, sidebar divider collapse, page header, panel, button, badge, and resource-state primitives.
-- Add a development-only route or feature boundary so the legacy client remains available during migration.
-- Add shell tests for member/operator visibility, unauthorized operator URLs, desktop collapse, tablet focus, and mobile defaults.
+Status: **in progress — route adapter and legacy shell boundary complete; replacement shell primitives remain**
+
+Implemented in the first bounded production change:
+
+- stable member and operator route adapters in `web/src/routes.ts`;
+- browser history and `popstate` synchronization;
+- compact operator default to `/operator/monitor`;
+- operator-route client navigation guard as a UX safeguard (backend remains authoritative);
+- member/operator navigation separation using existing view implementations;
+- stable URL adapters for existing Models, Setup, Usage, Profile, Monitor, Connections, and operator routes;
+- route contract tests in `web/src/routes.test.ts`;
+- legacy feature internals remain unchanged behind the adapter boundary.
+
+Validation evidence for this increment:
+
+- Vitest: 24/24;
+- TypeScript: pass;
+- Vite production build: pass (existing >500 kB chunk warning remains).
+
+Remaining Slice 1 work:
+
+- extract accepted semantic tokens into production CSS;
+- implement the replacement AppShell/sidebar/mobile navigation primitives;
+- implement real responsive tablet-landscape focus boundary;
+- add shell-level browser tests for authorization, collapse, and compact defaults;
+- preserve the legacy shell as an explicit migration fallback while the replacement shell is introduced.
 
 Exit: shell renders real session/role state and representative resource fixtures without changing legacy workflows.
 

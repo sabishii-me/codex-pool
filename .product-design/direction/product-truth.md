@@ -120,28 +120,45 @@ In the real product:
 
 ## Visual direction
 
-Step 0 uses a dark, data-first default inspired by the supplied dashboard reference. The reference is design input only and is not loaded by the artifact.
+Step 0 uses the supplied Fitonist analysis as its default visual direction. The remote reference is design input only and is never loaded by the artifact.
 
-Default palette:
+### Outer presentation backdrop
 
-| Token role | Name | Value |
+The supplied swatches establish the ambient presentation around the application rather than replacing all application semantics:
+
+| Role | Name | Value |
 |---|---|---|
-| Canvas/deepest background | Black Hole | `#020203` |
-| Primary surface/sidebar layer | Gluon Grey | `#1a191c` |
-| Elevated surface/strong border | Avocado Peel | `#39373d` |
-| Muted structural information | Granite Canyon | `#6c6e79` |
-| Secondary emphasis/comparison/warning | Morning Tea | `#c7bc92` |
-| Primary text/action/data series | Pale Phthalo Blue | `#cad2fd` |
+| Lavender/blue ambient field | Pale Phthalo Blue | `#cad2fd` |
+| Warm ambient field | Morning Tea | `#c7bc92` |
+| Supporting neutral | Granite Canyon | `#6c6e79` |
+| Deep support layers | Avocado Peel / Gluon Grey / Black Hole | `#39373d`, `#1a191c`, `#020203` |
+
+On desktop and tablet, the dark application floats over a restrained lavender-to-warm gradient. Compact devices use the application full-bleed so decorative framing never consumes working space.
+
+### Application palette
+
+| Semantic role | Value |
+|---|---|
+| Main dark canvas | `#0e0e10` |
+| Card and control surface | `#18181b` |
+| Subtle border | `#27272a` |
+| Primary text / selected pill | `#ffffff` |
+| Secondary text | `#a1a1aa` |
+| Positive health and trend | `#4ade80` |
+| Primary chart/action accent | `#c084fc` |
+| Comparison and warning accent | `#fde047` |
+| Information and tertiary series | `#22d3ee` |
 
 Visual rules:
 
-- preserve large near-black negative space instead of filling every region with cards;
-- use charcoal elevation and low-contrast borders for structure;
-- reserve pale blue for primary data, text, active navigation, and primary actions;
-- reserve tea for warnings, comparison series, and secondary emphasis;
-- keep charts sparse and high contrast, especially in mobile/tablet focus modes;
+- compose desktop analytics as a rounded bento grid inside a floating dark application frame;
+- use pill navigation, segmented controls, rounded cards, inner highlights, soft shadows, and restrained glow;
+- establish hierarchy through large white metrics, muted labels, and compact support copy;
+- use purple as the primary graph series, yellow for comparison/warnings, green for positive health/trends, and cyan for information;
+- use dotted chart fields and soft glow only where they improve data scanning;
+- preserve focused mobile/tablet compositions instead of shrinking the complete bento dashboard;
 - do not use decorative remote imagery or reproduce the reference asset in the product;
-- retain text labels and shapes for semantic state so palette does not become the only status signal.
+- retain labels, icons, and shape differences so status never depends on color alone.
 
 The accepted interaction architecture may later support additional themes, including a more explicitly heraldic Signal Room variant. Every theme must retain the same routes, components, semantics, contrast obligations, and tests.
 

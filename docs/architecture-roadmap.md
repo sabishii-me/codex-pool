@@ -364,7 +364,7 @@ Keep this baseline available in parallel with Phase 9 until the replacement UI m
 
 ### Phase 9 — UI/UX redesign
 
-Status: active — discovery and direction are complete; implementation has not started. See the durable [`Phase 9 UI redesign plan`](ui-redesign-plan.md), the detailed [`UI/UX review`](ui-ux-review.md), and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1) for progress and exit criteria.
+Status: active — Product Design Harness Step 0 is selected and frozen at `f0d30d5`; production implementation is prepared in [`ui-implementation-handoff.md`](ui-implementation-handoff.md) but has not started. See the durable [`Phase 9 UI redesign plan`](ui-redesign-plan.md), the detailed [`UI/UX review`](ui-ux-review.md), and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1) for broader progress and exit criteria.
 
 Phase 9 will first establish a conventional, maintainable dashboard-and-monitor baseline with stable routes, member/operator separation, normalized backend view models, reusable components, responsive behavior, and accessibility foundations. The existing Signal Room identity will be retained as a theme over the shared UX structure rather than defining navigation and workflow behavior.
 

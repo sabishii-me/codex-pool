@@ -1,6 +1,6 @@
 # Phase 9 UI Redesign Plan
 
-Status: active — Product Design Harness Step 0 is reviewable and awaiting owner acceptance; production implementation has not started
+Status: accepted and frozen — production implementation is prepared but has not started
 
 Branch: `feat/ui-ux-redesign`
 
@@ -8,6 +8,7 @@ GitHub tracker: [sabishii-me/codex-pool#1](https://github.com/sabishii-me/codex-
 
 Related documents:
 
+- [Production UI implementation handoff](ui-implementation-handoff.md)
 - [UI/UX review and redesign direction](ui-ux-review.md)
 - [Legacy UI compatibility baseline](legacy-ui-baseline.md)
 - [Architecture roadmap](architecture-roadmap.md)
@@ -149,7 +150,7 @@ Runtime theme packaging can be evaluated only after both themes pass the same wo
 | Phase | Status | Deliverable | Exit criterion |
 |---|---|---|---|
 | 0. Discovery and direction | **Complete** | Current-state review, member/operator jobs, dashboard/monitor split, baseline-first and theme-boundary decision | Direction is documented and accepted |
-| Harness Step 0. Runnable interpretation | **Awaiting owner review** | One mounted baseline dashboard + monitor artifact across member/operator and responsive profiles | Owner explicitly accepts the interaction architecture; only then may the prompt be frozen |
+| Harness Step 0. Runnable interpretation | **Complete — selected and frozen** | One mounted baseline dashboard + monitor artifact across member/operator and responsive profiles | Owner selected the artifact; harness decision and frozen prompt are recorded |
 | 1. Information architecture | Not started | Route map, navigation model, role behavior, dashboard/monitor wireframes, standard page patterns | Primary member and operator flows can be reviewed without visual styling |
 | 2. UI data contracts | Not started | Inventory of required v2 projections and fixtures; removal plan for React-owned accounting/provider policy | Every first-wave screen can render from normalized, versioned contracts including unknown/stale states |
 | 3. Foundation | Not started | Router, application shell, resource/query layer, semantic tokens, baseline theme, primitives, component catalog, test harness | A responsive and keyboard-usable shell renders representative fixtures without legacy page CSS |
@@ -166,12 +167,12 @@ The project-owned review kit lives under [`.product-design/`](../.product-design
 
 - Round: `step-0`
 - Artifact: `primary` (`Baseline dashboard + monitor`)
-- Direction status: `draft`
-- Owner decision: pending
+- Direction status: `frozen`
+- Owner decision: `selected`
 - Runtime profiles: `member`, `operator` (presentation fixtures, never authorization)
-- Viewports: 1440×900 desktop, 820×1024 tablet portrait, 390×844 mobile portrait, and 844×390 mobile landscape
+- Viewports: 1440×900 desktop, 820×1024 tablet portrait, 1180×820 tablet-landscape focus, 390×844 mobile portrait, and 844×390 mobile landscape
 
-The artifact makes Dashboard, Models, and operator Monitor interactive. Setup, My usage, Provider connections, Model routes, and System are explicit information-architecture placeholders rather than falsely complete workflows. It uses fictional in-memory data, performs no network or real product operation, and resets on reload.
+The accepted artifact makes Dashboard, Models, My usage, Setup, operator Monitor, Provider connections, Model routes, and System reviewable with representative fictional in-memory behavior. It performs no network or real product operation and resets on reload. Production translation rules and API gaps are defined in [`ui-implementation-handoff.md`](ui-implementation-handoff.md).
 
 Review locally:
 
@@ -189,7 +190,7 @@ npm run design:validate:browser
 npm run design:capture
 ```
 
-Passing validation makes the artifact reviewable; it does not approve or freeze it. Do not create alternative candidates until explicit owner acceptance is recorded and `.product-design/direction/frozen-design-prompt.md` is deliberately frozen.
+Passing validation makes an artifact reviewable but does not itself approve it. This Step 0 direction is now explicitly selected and frozen. Material deviations require a recorded design decision or a new harness round; implementation and production promotion remain separate decisions.
 
 ## Phase 1 decisions required
 

@@ -1,33 +1,85 @@
 # Frozen design prompt
 
-Status: draft — not frozen
+Status: frozen
 
-Do not launch divergent designers or create additional candidates until the owner has reviewed and explicitly accepted the runnable Step 0 interaction architecture.
+Frozen on: 2026-07-23
 
-## Draft direction under review
+Accepted artifact: `step-0/primary` — **Baseline dashboard + monitor**
 
-Design Codex Pool as a conventional, maintainable dashboard and monitoring product. The default member experience should make gateway availability, setup, model discovery, and personal usage immediately understandable. Operator diagnostics and administration must be clearly separated. Establish a neutral professional baseline first; preserve the existing Signal Room identity later as a theme over the same routes, components, semantics, and tests.
+Harness decision: `selected`
 
-## Fixed product constraints
+## Accepted direction
+
+Implement Codex Pool as a conventional, maintainable dashboard and monitoring product. The member experience makes gateway availability, setup, model discovery, and personal usage immediately understandable. Operator diagnostics and administration are visibly separate and backend-authorized.
+
+The accepted default theme is a Fitonist-inspired dark bento system on a full-viewport product canvas:
+
+- near-black application canvas and charcoal cards;
+- white metric hierarchy and cool-gray support text;
+- warm coral-red primary accent (`#f87171`) with deep red chart gradient (`#b91c1c`);
+- green health/trends (`#4ade80`), yellow comparison/warnings (`#fde047`), and cyan information (`#22d3ee`);
+- pill controls, rounded bento cards, subtle inner highlights, restrained shadows/glow, and dotted chart fields;
+- smooth dual-spline time-series charts with red primary area/line, yellow comparison line, minimal axes, active marker, nodes, and tooltip;
+- textured capsule bars only for discrete comparisons.
+
+The application has no decorative page background behind it and no inset/floating outer frame.
+
+## Frozen interaction architecture
+
+### Member workspace
+
+- Dashboard
+- Models
+- Setup
+- My usage
+- Profile
+
+### Operator workspace
+
+- Overview
+- Monitor
+- Provider connections
+- Model routes
+- Usage and economics
+- Members
+- System
+
+Dashboard summarizes. Monitor diagnoses. Administration configures.
+
+### Responsive behavior
+
+- Desktop uses a persistent, divider-collapsible sidebar and full dashboard composition.
+- Tablet portrait retains a reduced dashboard hierarchy.
+- Tablet landscape is a secondary-screen focus view with a collapsed rail, four role-scoped readouts, freshness, and one dominant live graph.
+- Member mobile uses a personal focused dashboard.
+- Operator mobile starts in focused Monitor.
+- Portrait and landscape mobile share the same focused composition and fit above fixed navigation.
+
+## Frozen product constraints
 
 - Canonical language is `GatewayUser → Provider → ProviderConnection → ModelRoute`.
-- The front page is a concise dashboard, not the full operations console.
-- Dashboard summarizes; Monitor diagnoses; administration configures.
-- Member and operator jobs require separate navigation hierarchy.
-- Unknown runtime providers must render safely.
-- Unknown, zero, stale, unavailable, measured, and inferred are distinct.
-- React does not own provider accounting, quota, health, or routing semantics.
-- Themes cannot alter workflows, authority, validation, semantics, or accessibility.
+- The front page is a concise dashboard, not the complete operations console.
+- Member and operator navigation are separate; presentation context never grants authority.
+- Unknown runtime providers render safely with neutral presentation.
+- Unknown, zero, stale, unavailable, measured, and inferred remain distinct.
+- Backend projections own provider accounting, quota, health, evidence, and routing semantics.
+- Themes cannot alter workflows, authorization, validation, semantics, or accessibility.
 - Responsive, keyboard, partial-failure, and last-known-good behavior are product requirements.
-- All design artifacts use fictional in-memory data and perform no real operations.
+- Nonfunctional controls do not appear.
+- Desktop has one visible profile control; compact layouts have one visible profile control.
+- The legacy staging client remains available until parity and soak criteria pass.
 
-## Open Step 0 questions
+## Implementation authorization boundary
 
-- Is the member/operator workspace separation clear without feeling like two unrelated products?
-- Does the dashboard answer the five primary overview questions within ten seconds?
-- Is Monitor discoverable without allowing operator density to dominate the front page?
-- Are navigation and page patterns conventional enough to maintain while retaining product character?
-- Does the mobile hierarchy preserve primary member jobs and keep operator tools reachable?
-- Is the neutral baseline strong enough to support a later Signal Room theme without component forks?
+Owner acceptance authorizes production implementation planning and incremental work on `feat/ui-ux-redesign`.
 
-Owner acceptance will freeze interaction architecture only. It will not authorize production migration, remove the legacy staging client, or approve every visual detail.
+It does not authorize:
+
+- production deployment or restart;
+- staging rebuild or replacement;
+- removal of the legacy Signal Room;
+- real credential/provider operations from design artifacts;
+- bypassing backend access policy;
+- silently changing the frozen information architecture or default theme.
+
+Material changes to the frozen direction require a recorded design decision or a new review round. Production migration remains a separate explicit release decision.

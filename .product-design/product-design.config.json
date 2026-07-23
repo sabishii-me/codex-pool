@@ -9,7 +9,7 @@
     "port": 8765
   },
   "direction": {
-    "status": "draft",
+    "status": "frozen",
     "productTruth": "direction/product-truth.md",
     "prompt": "direction/frozen-design-prompt.md",
     "artifactContract": "direction/artifact-contract.md",

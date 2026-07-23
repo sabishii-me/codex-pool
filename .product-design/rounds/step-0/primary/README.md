@@ -1,6 +1,6 @@
 # Codex Pool primary Step 0 interpretation
 
-Status: reviewable draft — owner acceptance required
+Status: accepted and frozen — implementation has not started
 
 ## Purpose
 
@@ -49,4 +49,4 @@ All state is in memory and resets on reload. The artifact performs no network or
 3. Is Monitor the right home for current Signal Room diagnostic depth?
 4. Is the baseline sufficiently conventional and professional?
 5. Does mobile keep ordinary member work primary while preserving operator reachability?
-6. What must change before this interaction architecture can be frozen?
+6. What must change before future material deviations from the frozen interaction architecture are accepted?

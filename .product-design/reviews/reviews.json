@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "revision": 23,
+  "revision": 24,
   "directions": {},
   "rounds": {
     "step-0": {
       "primary": {
         "rating": 2,
-        "decision": "undecided",
+        "decision": "selected",
         "pageComments": [
           {
             "id": "74fed037-3e84-4bec-a2e9-68564c5e5403",
@@ -114,8 +114,8 @@
             "resolvedAt": "2026-07-23T12:02:59.530Z"
           }
         ],
-        "note": "no tablet landscape, for mobile device the ux should forced on the monitor, especially for landspace mobile. and tablet landspace, it should should fouced on a graph or self uage states. the use case ususaly user put the tablet as sec screen to check the realtime state. please do a rethink and redesign not just a patch",
-        "updatedAt": "2026-07-23T12:06:50.648Z"
+        "note": "Owner accepted the current Step 0 interaction architecture and warm-red Fitonist-inspired visual system as the default theme on 2026-07-23. Earlier numeric rating is preserved rather than inferred or rewritten. This selection authorizes implementation planning, not production promotion or removal of the legacy staging client.",
+        "updatedAt": "2026-07-23T13:35:02.599Z"
       }
     }
   }

@@ -69,6 +69,16 @@ export interface ProviderConnectionStats {
 /** @deprecated Use ProviderConnectionStats. */
 export type AccountStats = ProviderConnectionStats;
 
+export interface PoolUserStats {
+  user_id: string;
+  total_billable_tokens: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  request_count: number;
+  first_seen?: string;
+  last_seen?: string;
+}
+
 export interface PoolStats {
   total_accounts: number;
   active_accounts: number;

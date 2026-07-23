@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import {
-  loadDashboardResources,
-  loadSession,
-  logout,
-} from "./api";
-import type { FriendSession, ModelDescriptor, PoolStats, SignalAnalytics } from "./types";
+import { loadDashboardResources, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
+import type { FriendSession, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
 import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForPath, type AppRoute } from "./routes";
 
 export function providerPresentation(provider: string) {
@@ -21,6 +17,8 @@ export function App() {
   const [stats, setStats] = useState<PoolStats | null>(null);
   const [signal, setSignal] = useState<SignalAnalytics | null>(null);
   const [models, setModels] = useState<ModelDescriptor[]>([]);
+  const [connections, setConnections] = useState<OperatorProviderConnectionV2[]>([]);
+  const [users, setUsers] = useState<PoolUserStats[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,9 +29,13 @@ export function App() {
     if (resources.stats) setStats(resources.stats);
     if (resources.signal) setSignal(resources.signal);
     if (resources.catalog) setModels(resources.catalog.models);
+    if (operator) {
+      try { setConnections(await loadProviderConnectionsV2()); } catch { setConnections([]); }
+      try { setUsers((await loadPoolUsers()).users); } catch { setUsers([]); }
+    }
     setError(resources.errors.join(" · "));
     setLoading(false);
-  }, []);
+  }, [operator]);
 
   useEffect(() => {
     loadSession().then(setSession).catch(() => setSession(null)).finally(() => setBooting(false));
@@ -44,7 +46,7 @@ export function App() {
     refresh();
     const timer = window.setInterval(refresh, 30_000);
     return () => window.clearInterval(timer);
-  }, [session, refresh]);
+  }, [session, refresh, operator]);
 
   useEffect(() => {
     const onPop = () => setRoute(routeForPath(window.location.pathname));
@@ -91,7 +93,7 @@ export function App() {
         <Sidebar route={route.path} operator={operator} onNavigate={go} onSignOut={signOut} email={session.email} />
         <main className="new-main" id="main-content" tabIndex={-1}>
           {error && <div className="new-alert" role="alert"><b>Data refresh incomplete</b><span>{error}</span></div>}
-          <Page route={route.path} stats={stats} signal={signal} models={models} session={session} onNavigate={go} />
+          <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} session={session} onNavigate={go} />
         </main>
       </div>
     </div>

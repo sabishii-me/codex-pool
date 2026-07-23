@@ -1,4 +1,4 @@
-import type { OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, SignalAnalytics } from "./types";
+import type { OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -27,6 +27,10 @@ export async function loadSession(): Promise<FriendSession | null> {
 
 export async function logout() {
   await fetch("/auth/logout", { method: "POST" });
+}
+
+export async function loadPoolUsers(): Promise<{ users: PoolUserStats[]; total_users: number }> {
+  return decode(await fetch("/api/pool/users", { cache: "no-store" }));
 }
 
 export async function loadPoolStats(): Promise<PoolStats> {

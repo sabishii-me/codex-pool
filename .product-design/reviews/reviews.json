@@ -1,6 +1,55 @@
 {
   "schemaVersion": 1,
-  "revision": 0,
+  "revision": 6,
   "directions": {},
-  "rounds": {}
+  "rounds": {
+    "step-0": {
+      "primary": {
+        "rating": 0,
+        "decision": "undecided",
+        "pageComments": [],
+        "elementComments": [
+          {
+            "id": "6d8982f3-21ea-45c5-bef9-50d16b9d750f",
+            "kind": "element",
+            "comment": "i think have a usage leaderboard under my uage.",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "acknowledged",
+            "createdAt": "2026-07-23T11:37:07.086Z",
+            "elementRef": "a.nav-link",
+            "elementLabel": "▥ My usage",
+            "acknowledgedAt": "2026-07-23T11:41:17.152Z"
+          },
+          {
+            "id": "6df1583b-cbe0-45fc-9aea-5c69f31eaa30",
+            "kind": "element",
+            "comment": "scroller didn't have style, and also side bar should hide by default",
+            "viewport": "mobile-landscape",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "acknowledged",
+            "createdAt": "2026-07-23T11:38:54.515Z",
+            "elementRef": "nav[aria-label=\"Workspace navigation\"]",
+            "elementLabel": "Workspace navigation",
+            "acknowledgedAt": "2026-07-23T11:41:17.401Z"
+          },
+          {
+            "id": "e4040071-d7fd-4f5b-af6d-874d9dadc5a7",
+            "kind": "element",
+            "comment": "sidebar need be collapsable",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "acknowledged",
+            "createdAt": "2026-07-23T11:39:56.498Z",
+            "elementRef": "a[data-product-action=\"navigate-dashboard\"]",
+            "elementLabel": "Codex Pool dashboard",
+            "acknowledgedAt": "2026-07-23T11:41:17.646Z"
+          }
+        ]
+      }
+    }
+  }
 }

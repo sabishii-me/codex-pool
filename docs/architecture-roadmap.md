@@ -364,7 +364,13 @@ Keep this baseline available in parallel with Phase 9 until the replacement UI m
 
 ### Phase 9 — UI/UX redesign
 
-Review and redesign the UI separately after the domain language and data API are agreed. The UI should organize around users, providers, provider connections, models, usage, and system health—not the current overloaded account abstraction.
+Status: active — discovery and direction are complete; implementation has not started. See the durable [`Phase 9 UI redesign plan`](ui-redesign-plan.md), the detailed [`UI/UX review`](ui-ux-review.md), and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1) for progress and exit criteria.
+
+Phase 9 will first establish a conventional, maintainable dashboard-and-monitor baseline with stable routes, member/operator separation, normalized backend view models, reusable components, responsive behavior, and accessibility foundations. The existing Signal Room identity will be retained as a theme over the shared UX structure rather than defining navigation and workflow behavior.
+
+The front page will be a concise overview of gateway status, important activity, provider/model availability, actionable incidents, and next actions. Detailed diagnosis belongs in Monitor; provider connections, model routes, members, and system configuration remain explicit operator destinations.
+
+The UI should organize around users, providers, provider connections, models, usage, and system health—not the current overloaded account abstraction. Pinned staging remains the legacy compatibility client until the replacement satisfies workflow parity and soak reliability.
 
 ## First engineering milestone
 

@@ -1,6 +1,10 @@
 # UI/UX Review and Redesign Direction
 
-Status: proposed
+Status: active — UX Phase 0 complete; implementation not started
+
+Implementation plan: [`ui-redesign-plan.md`](ui-redesign-plan.md)
+
+GitHub tracker: [sabishii-me/codex-pool#1](https://github.com/sabishii-me/codex-pool/issues/1)
 
 Related roadmap: [`architecture-roadmap.md`](architecture-roadmap.md)
 
@@ -622,6 +626,8 @@ Use a router and a query/cache layer. Provider presentation metadata should come
 ## Redesign roadmap
 
 ### UX Phase 0 — Research and task definition
+
+Status: complete. The current documents, frontend source, pinned staging UI, and representative desktop/mobile states were reviewed. The accepted direction is a conventional dashboard-and-monitor baseline with a separate member/operator information architecture; Signal Room becomes a theme over that shared foundation. Detailed progress and exit criteria are tracked in [`ui-redesign-plan.md`](ui-redesign-plan.md) and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1).
 
 - Identify standard-user and operator jobs.
 - Inventory current screens and metrics.

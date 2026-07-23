@@ -55,6 +55,7 @@ import {
   type AccountFlow,
   type CapacityForecast,
 } from "./insights";
+import { AppShell } from "./app-shell";
 import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForView, routeIsAllowed, type RouteTarget, type View } from "./routes";
 import type {
   ProviderConnectionStats,
@@ -361,17 +362,13 @@ export function App() {
   };
 
   return (
-    <div className="signal-app">
-      <SignalNoise />
-      <Header
-        stats={stats}
-        loading={loading}
-        operator={adminElevated}
-        onRefresh={refresh}
-      />
-      <div className="app-grid">
-        <Navigation view={view} operator={adminElevated} onChange={changeView} onSignOut={signOut} email={session.email} />
-        <main className="signal-main" id="main-content">
+    <AppShell
+      view={view}
+      routePath={route.path}
+      operator={adminElevated}
+      header={<Header stats={stats} loading={loading} operator={adminElevated} onRefresh={refresh} />}
+      navigation={<Navigation view={view} operator={adminElevated} onChange={changeView} onSignOut={signOut} email={session.email} />}
+    >
           {error && <div className="signal-error" role="alert">SIGNAL INTERRUPTED // {error}</div>}
           {view === "pulse" && <Pulse stats={stats} signal={signal} onAccounts={() => changeView("accounts")} />}
           {view === "insights" && <Insights stats={stats} signal={signal} onAccounts={() => changeView("accounts")} />}
@@ -406,9 +403,7 @@ export function App() {
               onSignOut={signOut}
             />
           )}
-        </main>
-      </div>
-    </div>
+    </AppShell>
   );
 }
 

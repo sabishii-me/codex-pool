@@ -114,8 +114,8 @@ In the real product:
 - At 1440px, show a persistent sidebar and a readable two-column dashboard hierarchy.
 - At 820px portrait, retain clear workspace grouping while reducing simultaneous secondary content.
 - At 1180×820 landscape tablet, assume secondary-screen monitoring: show one dominant live graph, freshness, and a small current-state strip; member scope is personal usage and operator scope is pool health.
-- At 390px portrait, use a compact header and bottom navigation; operator presentation starts in Monitor while member presentation starts with personal gateway status.
-- At 844×390 landscape mobile, operator presentation is a focused Monitor with the live graph and incident state ahead of administration; member presentation prioritizes gateway state and personal usage.
+- At 390px portrait, use the same focused composition as landscape tablet—freshness, four readouts, and one dominant graph. Operator scope starts in Monitor; member scope starts with personal gateway usage.
+- At 844×390 landscape mobile, preserve that same role-scoped focus hierarchy in a single screen above fixed navigation; broad diagnostics and administration remain behind navigation.
 - Wide comparison tables must have disclosure/list alternatives on narrow screens.
 
 ## Visual direction

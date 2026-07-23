@@ -253,5 +253,5 @@ document.querySelector("#retry-persistence").addEventListener("click", () => {
 const initialPage = location.hash.slice(1);
 const compactPortrait = matchMedia("(max-width: 720px)").matches;
 const compactLandscape = matchMedia("(max-height: 500px) and (orientation: landscape) and (max-width: 900px)").matches;
-const defaultPage = runtime === "operator" && (compactPortrait || compactLandscape) ? "monitor" : runtime === "member" && compactLandscape ? "usage" : "dashboard";
+const defaultPage = runtime === "operator" && (compactPortrait || compactLandscape) ? "monitor" : "dashboard";
 navigate(initialPage && (workspacePages[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : defaultPage, false);

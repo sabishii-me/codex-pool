@@ -20,6 +20,7 @@
     "viewports": [
       { "id": "desktop", "label": "Desktop", "width": 1440, "height": 900 },
       { "id": "tablet-portrait", "label": "Tablet portrait", "width": 820, "height": 1024 },
+      { "id": "tablet-landscape", "label": "Tablet landscape focus", "width": 1180, "height": 820 },
       { "id": "mobile-portrait", "label": "Mobile portrait", "width": 390, "height": 844 },
       { "id": "mobile-landscape", "label": "Mobile landscape", "width": 844, "height": 390 }
     ],

@@ -13,7 +13,8 @@ This single artifact tests the Phase 9 interaction architecture before visual al
 - representative Models and My usage experiences, including a privacy-conscious weekly leaderboard;
 - accessible collapsible desktop navigation and compact mobile-landscape navigation;
 - neutral professional baseline presentation;
-- responsive desktop, tablet, portrait-mobile, and landscape-mobile hierarchy;
+- responsive desktop, tablet portrait, tablet-landscape secondary-screen, portrait-mobile, and landscape-mobile hierarchy;
+- role-aware compact defaults: operator mobile opens Monitor, member landscape opens My usage, and tablet landscape opens a focused live graph;
 - localized resource failure and in-memory recovery.
 
 It does not claim full legacy parity or final visual approval. Setup, Provider connections, Model routes, and System provide representative Step 0 content and interactions so the information architecture can be reviewed; their production workflows remain part of later tracked phases.
@@ -21,13 +22,14 @@ It does not claim full legacy parity or final visual approval. Setup, Provider c
 ## Runtime profiles
 
 - `member` — member workspace, personal metric scope, no operator navigation.
-- `operator` — adds a separate Operations group, degraded-capacity example, pool metric scope, and Monitor.
+- `operator` — adds a separate Operations group, degraded-capacity example, pool metric scope, and Monitor. Compact operator profiles start in Monitor; tablet landscape uses a pool-health focus view.
 
 Runtime profiles are presentation-only fixtures and do not authorize anything.
 
 ## Interactions
 
 - Navigate Dashboard, Models, My usage, Setup, Monitor, Provider connections, Model routes, and System.
+- Review role-aware device defaults: desktop Dashboard, operator mobile Monitor, member mobile landscape My usage, and tablet-landscape live focus.
 - Collapse and expand the desktop sidebar for the current in-memory preview session.
 - Review a fictional weekly leaderboard with abbreviated member labels and aggregate processed-token totals.
 - Change dashboard activity range.

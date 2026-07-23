@@ -90,6 +90,13 @@
           </div>
         </header>
 
+        <section class="secondary-screen-focus" data-product-region="secondary-screen-focus" aria-labelledby="focus-title">
+          <header><div><p class="eyebrow">Secondary-screen focus</p><h2 id="focus-title">Live personal usage</h2><p id="focus-description">Your request activity · rolling 30 minutes</p></div><div class="live-status"><span class="status-dot healthy" aria-hidden="true"></span>Live · updated 18s ago</div></header>
+          <div class="focus-readouts" id="focus-readouts"></div>
+          <div class="focus-chart" id="focus-chart" role="img" aria-label="Live role-scoped activity over thirty minutes."></div>
+          <footer><span id="focus-summary">Activity is within your normal range.</span><span>Fictional design-preview data</span></footer>
+        </section>
+
         <section class="hero-status" data-product-region="gateway-status" aria-labelledby="gateway-status-title">
           <div class="status-icon success" aria-hidden="true">✓</div>
           <div class="hero-copy"><div><h2 id="gateway-status-title">Gateway operational</h2><span class="status-badge success">Healthy</span></div><p>Requests are routing normally across available providers.</p></div>
@@ -175,6 +182,7 @@
         <section class="monitor-summary" aria-label="Monitor summary">
           <article><span>Request rate</span><strong>21.4/min</strong><small>Pool-wide · measured</small></article><article><span>P95 latency</span><strong>2.8s</strong><small>Last 15 minutes</small></article><article><span>Error rate</span><strong>0.7%</strong><small>Within normal range</small></article><article id="persistence-metric"><span>Usage persistence</span><strong class="healthy-text">Healthy</strong><small>Canonical events current</small></article>
         </section>
+        <section class="panel live-monitor-panel" aria-labelledby="live-monitor-title"><header class="panel-header"><div><h2 id="live-monitor-title">Live request flow</h2><p>Pool-wide · rolling 30 minutes · fictional preview</p></div><div class="live-status"><span class="status-dot healthy" aria-hidden="true"></span>Live · 18s</div></header><div class="live-chart-layout"><div class="live-chart" id="live-monitor-chart" role="img" aria-label="Live pool request flow over thirty minutes, currently 21.4 requests per minute with one reduced-capacity provider."></div><aside><span>Now</span><strong>21.4/min</strong><small>Request rate</small><span>Headroom</span><strong>71%</strong><small>Across eligible routes</small></aside></div></section>
         <div class="monitor-grid">
           <section class="panel incident-detail" aria-labelledby="monitor-incident-title"><header class="panel-header"><div><h2 id="monitor-incident-title">Active incident</h2><p>Provider capacity · Warning</p></div><span class="status-badge warning">Degraded</span></header><div class="incident-body"><h3>DeepSeek capacity is limited</h3><p>Connection <code>DS-02</code> entered cooldown after an upstream quota response. The route remains available through <code>DS-01</code>.</p><dl><div><dt>User impact</dt><dd>Reduced request headroom; no current outage</dd></div><div><dt>Routing response</dt><dd>Traffic shifted to one eligible connection</dd></div><div><dt>Expected recovery</dt><dd>About 42 minutes</dd></div><div><dt>Last observed</dt><dd>4 minutes ago</dd></div></dl><button class="button secondary" type="button" data-navigate="connections">Inspect connection</button></div></section>
           <section class="panel event-panel" aria-labelledby="events-title"><header class="panel-header"><div><h2 id="events-title">Recent operational events</h2><p>Newest first</p></div></header><ol class="event-list"><li><time>14:28</time><span class="event-marker warning" aria-hidden="true"></span><div><strong>Connection entered cooldown</strong><p>DeepSeek · DS-02 · quota response</p></div></li><li><time>14:25</time><span class="event-marker info" aria-hidden="true"></span><div><strong>Routing compensated</strong><p>Traffic shifted to one eligible connection</p></div></li><li><time>14:12</time><span class="event-marker success" aria-hidden="true"></span><div><strong>Provider registry reloaded</strong><p>Five provider definitions active</p></div></li></ol></section>

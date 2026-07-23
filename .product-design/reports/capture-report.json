@@ -4,9 +4,9 @@
     "id": "codex-pool",
     "label": "Codex Pool"
   },
-  "generatedAt": "2026-07-23T12:02:58.930Z",
+  "generatedAt": "2026-07-23T12:11:04.202Z",
   "summary": {
-    "captures": 8,
+    "captures": 10,
     "failures": 0
   },
   "captures": [
@@ -24,6 +24,14 @@
       "viewport": "tablet-portrait",
       "runtime": "member",
       "file": "step-0/primary/tablet-portrait--member.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "tablet-landscape",
+      "runtime": "member",
+      "file": "step-0/primary/tablet-landscape--member.png",
       "errors": []
     },
     {
@@ -56,6 +64,14 @@
       "viewport": "tablet-portrait",
       "runtime": "operator",
       "file": "step-0/primary/tablet-portrait--operator.png",
+      "errors": []
+    },
+    {
+      "roundId": "step-0",
+      "artifactId": "primary",
+      "viewport": "tablet-landscape",
+      "runtime": "operator",
+      "file": "step-0/primary/tablet-landscape--operator.png",
       "errors": []
     },
     {

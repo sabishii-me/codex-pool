@@ -4,10 +4,10 @@
     "id": "codex-pool",
     "label": "Codex Pool"
   },
-  "generatedAt": "2026-07-23T12:02:34.927Z",
+  "generatedAt": "2026-07-23T12:11:06.719Z",
   "browser": true,
   "summary": {
-    "checks": 25,
+    "checks": 27,
     "failures": 0
   },
   "checks": [
@@ -127,6 +127,12 @@
     },
     {
       "kind": "browser",
+      "target": "step-0/primary/tablet-landscape/member",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
       "target": "step-0/primary/mobile-portrait/member",
       "ok": true,
       "message": ""
@@ -146,6 +152,12 @@
     {
       "kind": "browser",
       "target": "step-0/primary/tablet-portrait/operator",
+      "ok": true,
+      "message": ""
+    },
+    {
+      "kind": "browser",
+      "target": "step-0/primary/tablet-landscape/operator",
       "ok": true,
       "message": ""
     },

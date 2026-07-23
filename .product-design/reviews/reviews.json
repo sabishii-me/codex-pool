@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 22,
+  "revision": 23,
   "directions": {},
   "rounds": {
     "step-0": {
@@ -114,8 +114,8 @@
             "resolvedAt": "2026-07-23T12:02:59.530Z"
           }
         ],
-        "note": "still have too many placehoders, ",
-        "updatedAt": "2026-07-23T11:50:36.055Z"
+        "note": "no tablet landscape, for mobile device the ux should forced on the monitor, especially for landspace mobile. and tablet landspace, it should should fouced on a graph or self uage states. the use case ususaly user put the tablet as sec screen to check the realtime state. please do a rethink and redesign not just a patch",
+        "updatedAt": "2026-07-23T12:06:50.648Z"
       }
     }
   }

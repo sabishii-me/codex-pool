@@ -61,6 +61,26 @@ function renderChart(range) {
 }
 renderChart("24h");
 
+const livePoints = [28,32,30,38,35,42,39,45,48,44,52,49,58,55,61,57,64,60,69,66,72,68,75,73,79,76,82,78,84,81];
+function renderLiveBars(target, points = livePoints) {
+  const max = Math.max(...points);
+  target.innerHTML = points.map((value, index) => `<i style="height:${Math.max(8, value / max * 94)}%;opacity:${.58 + index / points.length * .42}" title="Interval ${index + 1}: ${value}"></i>`).join("");
+}
+renderLiveBars(document.querySelector("#live-monitor-chart"));
+renderLiveBars(document.querySelector("#focus-chart"), runtime === "operator" ? livePoints : livePoints.map((value, index) => Math.round(value * .52 + (index % 4) * 2)));
+
+const focus = runtime === "operator" ? {
+  title: "Live pool health", description: "Requests, latency, errors, and capacity · rolling 30 minutes", summary: "Routing is stable with one reduced-capacity provider.",
+  values: [["Request rate","21.4/min","Measured"],["P95 latency","2.8s","Last 15 min"],["Error rate","0.7%","Normal range"],["Headroom","71%","Estimated"]]
+} : {
+  title: "Live personal usage", description: "Your request activity · rolling 30 minutes", summary: "Your activity is within its normal range.",
+  values: [["Your requests","38","Last 30 min"],["Processed tokens","412K","Measured"],["Active route","gpt-5.6","63% of requests"],["Gateway","Healthy","12 models"]]
+};
+document.querySelector("#focus-title").textContent = focus.title;
+document.querySelector("#focus-description").textContent = focus.description;
+document.querySelector("#focus-summary").textContent = focus.summary;
+document.querySelector("#focus-readouts").innerHTML = focus.values.map(([label,value,detail]) => `<article><span>${label}</span><strong>${value}</strong><small>${detail}</small></article>`).join("");
+
 document.querySelectorAll("[data-range]").forEach(button => button.addEventListener("click", () => {
   document.querySelectorAll("[data-range]").forEach(item => {
     const active = item === button;
@@ -178,6 +198,13 @@ sidebarToggle.addEventListener("click", () => {
   sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
   sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
 });
+const tabletLandscapeFocus = matchMedia("(min-width: 901px) and (max-width: 1200px) and (orientation: landscape)").matches;
+if (tabletLandscapeFocus) {
+  document.body.classList.add("sidebar-collapsed");
+  sidebarToggle.setAttribute("aria-expanded", "false");
+  sidebarToggle.setAttribute("aria-label", "Expand sidebar");
+  sidebarToggle.title = "Expand sidebar";
+}
 
 document.querySelector("#leaderboard-privacy").addEventListener("click", () => showToast("This preview shows abbreviated fictional names and aggregate weekly usage only."));
 
@@ -224,4 +251,7 @@ document.querySelector("#retry-persistence").addEventListener("click", () => {
 });
 
 const initialPage = location.hash.slice(1);
-navigate(initialPage && (workspacePages[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : "dashboard", false);
+const compactPortrait = matchMedia("(max-width: 720px)").matches;
+const compactLandscape = matchMedia("(max-height: 500px) and (orientation: landscape) and (max-width: 900px)").matches;
+const defaultPage = runtime === "operator" && (compactPortrait || compactLandscape) ? "monitor" : runtime === "member" && compactLandscape ? "usage" : "dashboard";
+navigate(initialPage && (workspacePages[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : defaultPage, false);

@@ -12,7 +12,7 @@ This single artifact tests the Phase 9 interaction architecture before visual al
 - detailed operator Monitor;
 - representative Models and My usage experiences, including a privacy-conscious weekly leaderboard;
 - accessible collapsible desktop navigation and compact mobile-landscape navigation;
-- neutral professional baseline presentation;
+- dark data-first default using Black Hole, Gluon Grey, Avocado Peel, Granite Canyon, Morning Tea, and Pale Phthalo Blue semantic roles;
 - responsive desktop, tablet portrait, tablet-landscape secondary-screen, portrait-mobile, and landscape-mobile hierarchy;
 - role-aware compact defaults: operator mobile opens Monitor, member landscape opens My usage, and tablet landscape opens a focused live graph;
 - localized resource failure and in-memory recovery.

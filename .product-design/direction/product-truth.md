@@ -120,14 +120,30 @@ In the real product:
 
 ## Visual direction
 
-Step 0 uses a neutral professional baseline. It should feel clear, restrained, and credible rather than stylistically anonymous, but it must not depend on the black/gold Signal Room identity.
+Step 0 uses a dark, data-first default inspired by the supplied dashboard reference. The reference is design input only and is not loaded by the artifact.
 
-The accepted interaction architecture will later support at least:
+Default palette:
 
-1. Baseline — neutral reference presentation.
-2. Signal Room — black/gold, heraldic, atmospheric presentation.
+| Token role | Name | Value |
+|---|---|---|
+| Canvas/deepest background | Black Hole | `#020203` |
+| Primary surface/sidebar layer | Gluon Grey | `#1a191c` |
+| Elevated surface/strong border | Avocado Peel | `#39373d` |
+| Muted structural information | Granite Canyon | `#6c6e79` |
+| Secondary emphasis/comparison/warning | Morning Tea | `#c7bc92` |
+| Primary text/action/data series | Pale Phthalo Blue | `#cad2fd` |
 
-Both must use the same routes, components, semantics, and tests. Themes may alter semantic token values, supported typography roles, radii, elevation, chart palettes, assets, and nonessential effects. They may not alter navigation meaning, permissions, status semantics, validation, accounting, routing, or accessibility.
+Visual rules:
+
+- preserve large near-black negative space instead of filling every region with cards;
+- use charcoal elevation and low-contrast borders for structure;
+- reserve pale blue for primary data, text, active navigation, and primary actions;
+- reserve tea for warnings, comparison series, and secondary emphasis;
+- keep charts sparse and high contrast, especially in mobile/tablet focus modes;
+- do not use decorative remote imagery or reproduce the reference asset in the product;
+- retain text labels and shapes for semantic state so palette does not become the only status signal.
+
+The accepted interaction architecture may later support additional themes, including a more explicitly heraldic Signal Room variant. Every theme must retain the same routes, components, semantics, contrast obligations, and tests.
 
 ## Forbidden product claims
 

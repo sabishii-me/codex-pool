@@ -694,6 +694,82 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .signal-skeleton { grid-template-columns: 1fr; }
 }
 
+
+/* Phase 9 production shell: replaces the legacy Signal Room rail while preserving legacy feature pages inside the AppShell migration boundary. */
+.app-shell-boundary { --shell-bg: #0e0e10; --shell-surface: #18181b; --shell-elevated: #202024; --shell-border: #27272a; --shell-border-strong: #3f3f46; --shell-text: #fff; --shell-muted: #a1a1aa; --shell-red: #f87171; --shell-yellow: #fde047; --shell-green: #4ade80; --shell-cyan: #22d3ee; min-height: 100vh; background: var(--shell-bg); color: var(--shell-text); }
+.app-shell-boundary .signal-noise, .app-shell-boundary::after { display: none; }
+.app-shell-boundary .command-rail.app-topbar { height: 72px; display: grid; grid-template-columns: 260px minmax(0,1fr) auto; align-items: center; gap: 24px; padding: 0 28px; border-bottom: 1px solid var(--shell-border); background: rgba(14,14,16,.96); box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.app-shell-boundary .app-brand { min-width: 0; height: 72px; padding: 0; gap: 10px; border-right: 0; }
+.app-shell-boundary .command-mark { width: 36px; height: 36px; filter: grayscale(1) brightness(2); }
+.app-shell-boundary .command-brand-copy { display: block; font: 700 13px/1.2 Inter, system-ui, sans-serif; letter-spacing: .05em; }
+.app-shell-boundary .command-brand-copy span { display: block; color: var(--shell-text); }
+.app-shell-boundary .command-brand-copy em { display: block; margin-top: 4px; color: var(--shell-muted); font: 600 9px/1 Inter, system-ui, sans-serif; letter-spacing: .1em; }
+.app-shell-boundary .app-topbar-title { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.app-shell-boundary .app-topbar-title span { color: var(--shell-muted); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.app-shell-boundary .app-topbar-title strong { color: var(--shell-text); font-size: 16px; letter-spacing: -.01em; }
+.app-shell-boundary .app-topbar-actions { margin-left: 0; gap: 14px; font-size: 10px; }
+.app-shell-boundary .app-live-status { display: flex; align-items: center; gap: 6px; color: var(--shell-green); font-weight: 750; }
+.app-shell-boundary .app-topbar-time { color: var(--shell-muted); }
+.app-shell-boundary .app-sync-button { min-height: 32px; border: 1px solid var(--shell-border-strong); border-radius: 999px; background: var(--shell-elevated); color: var(--shell-text); padding: 0 13px; cursor: pointer; font-size: 10px; font-weight: 750; }
+.app-shell-boundary .app-sync-button:hover { border-color: var(--shell-red); color: var(--shell-red); }
+.app-shell-boundary .operator-live { border-radius: 999px; background: rgba(248,113,113,.13); color: var(--shell-red); padding: 7px 10px; font-size: 9px; font-weight: 750; }
+.app-shell-boundary .app-grid { display: grid; grid-template-columns: 228px minmax(0,1fr); min-height: calc(100vh - 72px); }
+.app-shell-boundary .app-sidebar { position: sticky; top: 72px; height: calc(100vh - 72px); display: flex; flex-direction: column; border-right: 1px solid var(--shell-border); background: #111113; padding: 22px 14px 14px; }
+.app-shell-boundary .app-nav-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 12px 12px; border-bottom: 1px solid var(--shell-border); }
+.app-shell-boundary .app-nav-heading span { color: var(--shell-muted); font-size: 10px; font-weight: 750; letter-spacing: .11em; }
+.app-shell-boundary .app-nav-heading small { color: var(--shell-red); font-size: 8px; font-weight: 750; letter-spacing: .08em; }
+.app-shell-boundary .app-nav-item { width: 100%; min-height: 44px; flex: 0 0 auto; flex-direction: row; justify-content: flex-start; gap: 12px; border: 0; border-radius: 10px; color: var(--shell-muted); padding: 0 12px; font: 600 12px Inter, system-ui, sans-serif; letter-spacing: 0; }
+.app-shell-boundary .app-nav-item span { width: 20px; color: var(--shell-muted); font-size: 17px; text-align: center; }
+.app-shell-boundary .app-nav-item b { font-weight: 650; }
+.app-shell-boundary .app-nav-item:hover { background: var(--shell-elevated); color: var(--shell-text); }
+.app-shell-boundary .app-nav-item.active { background: #fff; color: #0e0e10; box-shadow: 0 5px 18px rgba(0,0,0,.25); }
+.app-shell-boundary .app-nav-item.active span { color: #0e0e10; }
+.app-shell-boundary .app-nav-item.nav-user { min-height: 58px; display: grid; grid-template-columns: 20px 1fr; grid-template-rows: 1fr 1fr; column-gap: 12px; padding-top: 8px; padding-bottom: 8px; }
+.app-shell-boundary .app-nav-item.nav-user span { grid-row: 1 / 3; align-self: center; }
+.app-shell-boundary .app-nav-item.nav-user small { overflow: hidden; color: inherit; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell-boundary .app-nav-item.sign-out { min-height: 42px; }
+.app-shell-boundary .signal-main { min-width: 0; padding: 28px 32px 48px; background: var(--shell-bg); }
+.app-shell-boundary .signal-error { max-width: 1440px; margin: 0 auto 16px; border: 1px solid rgba(255,92,87,.45); border-radius: 10px; background: rgba(255,92,87,.08); color: #ff9b96; }
+.app-shell-boundary .signal-view { max-width: 1440px; }
+.app-shell-boundary .inline-instruments, .app-shell-boundary .primary-signal-grid, .app-shell-boundary .signal-panel, .app-shell-boundary .view-title, .app-shell-boundary .profile-card, .app-shell-boundary .setup-grid, .app-shell-boundary .account-table, .app-shell-boundary .model-table, .app-shell-boundary .model-controls { border-color: var(--shell-border); background-color: var(--shell-surface); }
+.app-shell-boundary .inline-instruments { border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.app-shell-boundary .instrument { background: var(--shell-surface); border-color: var(--shell-border); padding: 17px; }
+.app-shell-boundary .instrument span { color: var(--shell-muted); }
+.app-shell-boundary .instrument strong { color: var(--shell-text); }
+.app-shell-boundary .instrument.accent strong { color: var(--shell-red); }
+.app-shell-boundary .signal-panel { border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.18); overflow: hidden; }
+.app-shell-boundary .signal-panel > header { height: 48px; border-color: var(--shell-border); }
+.app-shell-boundary .signal-panel > header span { color: var(--shell-red); border-color: var(--shell-border); }
+.app-shell-boundary .signal-panel > header h2 { color: var(--shell-muted); }
+.app-shell-boundary .view-title { border-radius: 16px; padding-left: 14px; }
+.app-shell-boundary .view-title h1 { color: var(--shell-text); text-transform: none; font: 700 26px Inter, system-ui, sans-serif; }
+.app-shell-boundary .view-title > span { color: var(--shell-red); border-color: var(--shell-border); }
+.app-shell-boundary .setup-grid { border-radius: 16px; overflow: hidden; }
+.app-shell-boundary .profile-card, .app-shell-boundary .account-table, .app-shell-boundary .model-table { border-radius: 16px; overflow: hidden; }
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) and (max-width: 900px) {
+  .app-shell-boundary .command-rail.app-topbar { height: 60px; grid-template-columns: auto minmax(0,1fr) auto; gap: 12px; padding: 0 14px; }
+  .app-shell-boundary .app-brand { height: 60px; width: auto; }
+  .app-shell-boundary .command-mark { width: 30px; height: 30px; }
+  .app-shell-boundary .command-brand-copy em { display: none; }
+  .app-shell-boundary .command-brand-copy { font-size: 11px; }
+  .app-shell-boundary .app-topbar-title { display: none; }
+  .app-shell-boundary .app-topbar-actions { gap: 8px; }
+  .app-shell-boundary .app-topbar-time { display: none; }
+  .app-shell-boundary .operator-live { display: none; }
+  .app-shell-boundary .app-grid { display: block; min-height: calc(100vh - 60px); }
+  .app-shell-boundary .app-sidebar { position: fixed; inset: auto 0 0; z-index: 40; width: 100%; height: 64px; flex-direction: row; border: 0; border-top: 1px solid var(--shell-border); background: rgba(17,17,19,.98); padding: 0; }
+  .app-shell-boundary .app-nav-heading, .app-shell-boundary .app-sidebar .nav-spacer { display: none; }
+  .app-shell-boundary .app-nav-item { min-height: 64px; flex: 1 1 0; flex-direction: column; justify-content: center; gap: 4px; border-radius: 0; padding: 0 3px; font-size: 9px; }
+  .app-shell-boundary .app-nav-item span { width: auto; font-size: 16px; }
+  .app-shell-boundary .app-nav-item.nav-user { display: none; }
+  .app-shell-boundary .app-nav-item.sign-out { display: none; }
+  .app-shell-boundary .signal-main { padding: 20px 12px 84px; }
+  .app-shell-boundary .signal-view { max-width: none; }
+  .app-shell-boundary .view-title h1 { font-size: 21px; }
+  .app-shell-boundary .inline-instruments { border-radius: 12px; }
+  .app-shell-boundary .signal-panel { border-radius: 12px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }

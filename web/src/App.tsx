@@ -455,21 +455,18 @@ function Header({ stats, loading, operator, onRefresh }: {
 }) {
   const generated = stats ? new Date(stats.generated_at) : null;
   return (
-    <header className="command-rail">
+    <header className="command-rail app-topbar">
       <a href="#main-content" className="skip-link">Skip to data</a>
-      <div className="command-brand">
+      <div className="command-brand app-brand">
         <img src="/hero.webp" alt="" className="command-mark" />
-        <div className="command-brand-copy">
-          <span>AI POOL</span>
-          <em>FULL-SPECTRUM SIGNAL ROOM</em>
-        </div>
+        <div className="command-brand-copy"><span>AI POOL</span><em>MODEL GATEWAY</em></div>
       </div>
-      <div className="rail-readouts">
-        <span><i className="lamp live" /> POOL {stats?.active_accounts ?? "–"}/{stats?.total_accounts ?? "–"}</span>
-        <span>24H {formatTokens(stats?.last_24h_tokens ?? 0)}</span>
-        <span>{generated ? generated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "--:--:--"}</span>
-        <button onClick={onRefresh} disabled={loading}>{loading ? "SYNCING" : "SYNC"}</button>
-        {operator && <span className="operator-live">OPERATOR LIVE</span>}
+      <div className="app-topbar-title"><span>{operator ? "Operations" : "Workspace"}</span><strong>{operator ? "Live gateway monitor" : "Gateway overview"}</strong></div>
+      <div className="rail-readouts app-topbar-actions">
+        <span className="app-live-status"><i className="lamp live" /> LIVE</span>
+        <span className="app-topbar-time">{generated ? generated.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "--:--"}</span>
+        <button className="app-sync-button" onClick={onRefresh} disabled={loading}>{loading ? "SYNCING" : "SYNC"}</button>
+        {operator && <span className="operator-live">OPERATOR</span>}
       </div>
     </header>
   );
@@ -485,18 +482,18 @@ function Navigation({ view, operator, onChange, onSignOut, email }: { view: View
     ["accounts", "ACCOUNTS", "▦"],
   ];
   return (
-    <nav className="signal-nav" aria-label="Signal room">
-      <div className="nav-index">A.01</div>
-      {items.filter(([, , , operatorOnly]) => !operatorOnly || operator).map(([id, label, glyph]) => (
-        <button key={id} className={classNames("nav-item", view === id && "active")} onClick={() => onChange(id)}>
-          <span>{glyph}</span>{label}
+    <nav className="signal-nav app-sidebar" aria-label="Workspace navigation">
+      <div className="app-nav-heading"><span>WORKSPACE</span><small>{operator ? "OPERATOR" : "MEMBER"}</small></div>
+      {items.filter(([, , , operatorOnly]) => !operatorOnly || operator).map(([id, label, glyph, operatorOnly]) => (
+        <button key={id} className={classNames("nav-item", "app-nav-item", view === id && "active")} onClick={() => onChange(id)} aria-current={view === id ? "page" : undefined}>
+          <span>{glyph}</span><b>{label}</b>
         </button>
       ))}
       <div className="nav-spacer" />
-      <button className={classNames("nav-item", "nav-user", view === "profile" && "active")} onClick={() => onChange("profile")} title={email}>
-        <span>◍</span>{email}
+      <button className={classNames("nav-item", "app-nav-item", "nav-user", view === "profile" && "active")} onClick={() => onChange("profile")} title={email} aria-label={`Open profile for ${email}`} aria-current={view === "profile" ? "page" : undefined}>
+        <span>◍</span><b>PROFILE</b><small>Signed-in member</small>
       </button>
-      <button className="nav-item sign-out" onClick={onSignOut}><span>×</span>EXIT</button>
+      <button className="nav-item app-nav-item sign-out" onClick={onSignOut}><span>×</span><b>SIGN OUT</b></button>
     </nav>
   );
 }

@@ -5,14 +5,15 @@ import {
   loadSession,
   logout,
 } from "./api";
-import type { FriendSession, ModelDescriptor, PoolStats, Provider, SignalAnalytics } from "./types";
+import type { FriendSession, ModelDescriptor, PoolStats, SignalAnalytics } from "./types";
+import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForPath, type AppRoute } from "./routes";
 
 export function providerPresentation(provider: string) {
   if (provider === "nvidia") return { label: "NVIDIA", color: "#76b900", dither: "green", glyph: "◓" as const };
   const label = provider.split("-").filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ") || "Unknown";
   return { label, color: "#8b8b8b", dither: "grey", glyph: "◇" as const };
 }
-import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForPath, type AppRoute, type View } from "./routes";
+import { CardHeader, Metric, PageFrame, SplineChart, StatusBadge, compact } from "./components/ui";
 
 export function App() {
   const [session, setSession] = useState<FriendSession | null>(null);
@@ -147,9 +148,4 @@ function ProfilePage({ session }: { session: FriendSession }) { return <PageFram
 
 function OperatorPage({ title, description, rows, empty }: { title: string; description: string; rows: Array<{ title: string; meta: string; state: string; detail: string }>; empty?: string }) { return <PageFrame kicker="Operations" title={title} description={description}><section className="operator-list">{rows.length ? rows.map(row => <article className="model-row-new" key={row.title}><div><b>{row.title}</b><small>{row.meta}</small></div><StatusBadge tone={row.state === "healthy" ? "success" : "warning"}>{row.state}</StatusBadge><span>{row.detail}</span><button className="secondary-button">Inspect</button></article>) : <div className="empty-state"><b>{empty}</b><p>This route is part of the approved shell and awaits its normalized production projection.</p></div>}</section></PageFrame>; }
 
-function PageFrame({ kicker, title, description, action, children }: { kicker: string; title: string; description: string; action?: React.ReactNode; children: React.ReactNode }) { return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}</div>; }
-function CardHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: React.ReactNode }) { return <header className="card-header"><div><h2>{title}</h2><p>{subtitle}</p></div>{action}</header>; }
-function Metric({ label, value, note }: { label: string; value: string; note: string }) { return <article className="metric"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>; }
-function StatusBadge({ tone, children }: { tone: "success" | "warning"; children: React.ReactNode }) { return <span className={`status-badge ${tone}`}>{children}</span>; }
-function compact(value: number) { return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(value || 0); }
-function SplineChart({ values }: { values: number[] }) { const normalized = values.map(value => Number.isFinite(value) ? value : 0); const points = normalized.length > 1 ? normalized : [12, 18, 14, 23, 20, 29, 25, 35, 31, 40, 37, 46]; const max = Math.max(...points, 1); const path = points.map((value, i) => `${i ? "L" : "M"}${(i / (points.length - 1)) * 100},${94 - (value / max) * 78}`).join(" "); const area = `${path} L100,100 L0,100 Z`; return <div className="spline-chart" role="img" aria-label="Request activity trend chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="red-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#f87171" stopOpacity=".28" /><stop offset="1" stopColor="#f87171" stopOpacity="0" /></linearGradient></defs><path className="chart-area" d={area} /><path className="chart-line comparison" d={points.map((value, i) => `${i ? "L" : "M"}${(i / (points.length - 1)) * 100},${94 - (Math.max(1, value * .68) / max) * 78}`).join(" ")} /><path className="chart-line" d={path} /></svg></div>; }
+function compactLegacy(value: number) { return compact(value); }

@@ -2,22 +2,47 @@
 
 :root {
   color-scheme: dark;
-  --canvas: #0e0e10;
-  --surface: #18181b;
-  --elevated: #202024;
-  --border: #27272a;
-  --border-strong: #3f3f46;
-  --text: #fff;
-  --text-secondary: #d4d4d8;
-  --muted: #a1a1aa;
-  --red: #f87171;
-  --red-deep: #b91c1c;
-  --yellow: #fde047;
-  --green: #4ade80;
-  --cyan: #22d3ee;
-  --danger: #ff5c57;
-  --radius: 16px;
-  --shadow: 0 14px 40px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.035);
+  --color-canvas: #0e0e10;
+  --color-surface: #18181b;
+  --color-surface-elevated: #202024;
+  --color-border-subtle: #27272a;
+  --color-border-strong: #3f3f46;
+  --color-content-primary: #fff;
+  --color-content-secondary: #d4d4d8;
+  --color-content-muted: #a1a1aa;
+  --color-accent-primary: #f87171;
+  --color-accent-primary-strong: #b91c1c;
+  --color-accent-warning: #fde047;
+  --color-accent-success: #4ade80;
+  --color-accent-info: #22d3ee;
+  --color-danger: #ff5c57;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --shadow-card: 0 14px 40px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.035);
+  /* Compatibility aliases for component styles. */
+  --canvas: var(--color-canvas);
+  --surface: var(--color-surface);
+  --elevated: var(--color-surface-elevated);
+  --border: var(--color-border-subtle);
+  --border-strong: var(--color-border-strong);
+  --text: var(--color-content-primary);
+  --text-secondary: var(--color-content-secondary);
+  --muted: var(--color-content-muted);
+  --red: var(--color-accent-primary);
+  --red-deep: var(--color-accent-primary-strong);
+  --yellow: var(--color-accent-warning);
+  --green: var(--color-accent-success);
+  --cyan: var(--color-accent-info);
+  --danger: var(--color-danger);
+  --radius: var(--radius-card);
+  --shadow: var(--shadow-card);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 * { box-sizing: border-box; }

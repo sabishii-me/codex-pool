@@ -16,7 +16,7 @@ This single artifact tests the Phase 9 interaction architecture before visual al
 - responsive desktop, tablet, portrait-mobile, and landscape-mobile hierarchy;
 - localized resource failure and in-memory recovery.
 
-It does not claim full legacy parity or final visual approval. Setup, Provider connections, Model routes, and System are navigation placeholders so their placement can be reviewed without pretending their workflows are complete.
+It does not claim full legacy parity or final visual approval. Setup, Provider connections, Model routes, and System provide representative Step 0 content and interactions so the information architecture can be reviewed; their production workflows remain part of later tracked phases.
 
 ## Runtime profiles
 
@@ -27,7 +27,7 @@ Runtime profiles are presentation-only fixtures and do not authorize anything.
 
 ## Interactions
 
-- Navigate Dashboard, Models, My usage, Monitor, and placeholder routes.
+- Navigate Dashboard, Models, My usage, Setup, Monitor, Provider connections, Model routes, and System.
 - Collapse and expand the desktop sidebar for the current in-memory preview session.
 - Review a fictional weekly leaderboard with abbreviated member labels and aggregate processed-token totals.
 - Change dashboard activity range.

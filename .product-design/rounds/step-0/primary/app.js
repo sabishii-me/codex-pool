@@ -110,27 +110,44 @@ document.querySelectorAll("[data-filter]").forEach(button => button.addEventList
   renderModels();
 }));
 
-const pageNames = {
-  setup: ["Setup", "Choose a client, copy a working configuration, and verify the gateway connection.", "Member workspace"],
-  connections: ["Provider connections", "Manage credentialed upstream capacity and connection lifecycle operations.", "Operations"],
-  routes: ["Model routes", "Inspect public routes, upstream targets, eligible connections, and routing policy.", "Operations"],
-  system: ["System", "Review runtime, persistence, configuration, and recovery state.", "Operations"]
+const workspacePages = {
+  setup: {
+    title: "Setup", section: "Member workspace", copy: "Configure a supported client and verify the gateway connection.", action: "Choose client",
+    content: `<div class="workspace-grid"><section class="panel"><header class="panel-header"><div><h2>Recommended setup</h2><p>Pi · macOS, Windows, or Linux</p></div><span class="status-badge success">3 steps</span></header><div class="workspace-panel-body"><p>Use the generated gateway configuration, then run one verification request.</p><ol class="step-list"><li><span><strong>Choose your client</strong><small>Pi is selected for this preview</small></span><button class="text-button" type="button" data-preview-action="change-client">Change</button></li><li><span><strong>Copy configuration</strong><small>Uses a fictional preview credential</small></span><button class="text-button" type="button" data-preview-action="copy-config">Copy</button></li><li><span><strong>Verify connection</strong><small>No live request is made in Step 0</small></span><button class="text-button" type="button" data-preview-action="verify">Verify</button></li></ol><div class="code-preview"><header><span>Pi provider configuration</span><span>Preview only</span></header><code>{ "provider": "codex-pool", "baseUrl": "https://gateway.example.invalid" }</code></div></div></section><aside class="panel"><header class="panel-header"><div><h2>Supported clients</h2><p>Setup coverage</p></div></header><div class="workspace-aside-list"><article><strong>Pi</strong><small>Recommended · configuration file</small></article><article><strong>Claude Code</strong><small>Environment configuration</small></article><article><strong>Codex CLI</strong><small>Provider profile</small></article><article><strong>Gemini CLI</strong><small>Environment configuration</small></article><article><strong>Cute Code</strong><small>Application settings</small></article></div></aside></div>`
+  },
+  connections: {
+    title: "Provider connections", section: "Operations", copy: "Manage credentialed upstream capacity and connection lifecycle state.", action: "Add connection",
+    content: `<section class="panel"><header class="panel-header"><div><h2>Connections</h2><p>8 healthy · 1 degraded · fictional preview</p></div><span class="status-badge warning">1 needs attention</span></header><div class="data-list"><article><div><strong>Codex primary</strong><small>Codex · North America</small></div><div><span class="data-label">State</span><div class="data-value healthy-text">Healthy</div></div><div><span class="data-label">Last request</span><div class="data-value">12s ago</div></div><button class="button secondary" data-preview-action="inspect">Inspect</button></article><article><div><strong>DeepSeek reserve</strong><small>DeepSeek · Global</small></div><div><span class="data-label">State</span><div class="data-value">Cooldown</div></div><div><span class="data-label">Recovery</span><div class="data-value">42 min</div></div><button class="button secondary" data-preview-action="inspect">Inspect</button></article><article><div><strong>Northstar default</strong><small>Unknown runtime provider · neutral presentation</small></div><div><span class="data-label">State</span><div class="data-value healthy-text">Healthy</div></div><div><span class="data-label">Last request</span><div class="data-value">4m ago</div></div><button class="button secondary" data-preview-action="inspect">Inspect</button></article></div></section>`
+  },
+  routes: {
+    title: "Model routes", section: "Operations", copy: "Inspect public routes, upstream targets, eligibility, and fallback policy.", action: "Review policy",
+    content: `<section class="panel"><header class="panel-header"><div><h2>Active routes</h2><p>12 available · 2 limited</p></div><span class="evidence">Measured now</span></header><div class="data-list"><article><div><strong>gpt-5.6</strong><small>Codex · GPT-5.6</small></div><div><span class="data-label">Eligible</span><div class="data-value">3 connections</div></div><div><span class="data-label">Policy</span><div class="data-value">Weighted fair</div></div><button class="button secondary" data-preview-action="route">Details</button></article><article><div><strong>deepseek-v4-flash</strong><small>DeepSeek · V4 Flash</small></div><div><span class="data-label">Eligible</span><div class="data-value">1 connection</div></div><div><span class="data-label">Policy</span><div class="data-value">Reduced capacity</div></div><button class="button secondary" data-preview-action="route">Details</button></article><article><div><strong>northstar-reasoner</strong><small>Northstar AI · Reasoner</small></div><div><span class="data-label">Eligible</span><div class="data-value">1 connection</div></div><div><span class="data-label">Policy</span><div class="data-value">Standard</div></div><button class="button secondary" data-preview-action="route">Details</button></article></div></section>`
+  },
+  system: {
+    title: "System", section: "Operations", copy: "Review runtime, persistence, configuration, and recovery readiness.", action: "Run checks",
+    content: `<section class="panel"><header class="panel-header"><div><h2>System checks</h2><p>Design-preview status snapshot</p></div><span class="status-badge success">All operational</span></header><div class="workspace-panel-body system-checks"><article><h2><span class="status-dot healthy"></span>Gateway runtime</h2><p>Healthy · started 3 days ago</p></article><article><h2><span class="status-dot healthy"></span>Canonical usage events</h2><p>Current · no pending reconciliation</p></article><article><h2><span class="status-dot healthy"></span>Provider registry</h2><p>Five definitions · last reload successful</p></article><article><h2><span class="status-dot healthy"></span>Background jobs</h2><p>Eight running · no failed jobs</p></article></div></section>`
+  }
 };
 
+function renderWorkspace(page) {
+  const data = workspacePages[page];
+  document.querySelector("#workspace-title").textContent = data.title;
+  document.querySelector("#workspace-section").textContent = data.section;
+  document.querySelector("#workspace-copy").textContent = data.copy;
+  document.querySelector("#workspace-actions").innerHTML = `<button class="button primary" type="button" data-preview-action="primary">${data.action}</button>`;
+  document.querySelector("#workspace-content").innerHTML = data.content;
+  document.querySelectorAll("#page-workspace [data-preview-action]").forEach(button => button.addEventListener("click", () => showToast(`${button.textContent.trim()} simulated in this design preview.`)));
+}
+
 function navigate(page, updateHash = true) {
-  if (page === "monitor" && runtime !== "operator") page = "dashboard";
-  const direct = ["dashboard", "models", "usage", "monitor"].includes(page) ? page : "placeholder";
+  if (["monitor", "connections", "routes", "system"].includes(page) && runtime !== "operator") page = "dashboard";
+  const direct = ["dashboard", "models", "usage", "monitor"].includes(page) ? page : "workspace";
   document.querySelectorAll(".page").forEach(section => {
     const active = section.id === `page-${direct}`;
     section.hidden = !active;
     section.classList.toggle("active", active);
   });
-  if (direct === "placeholder") {
-    const [title, copy, section] = pageNames[page] || ["Not represented", "This route is outside the Step 0 artifact scope.", "Step 0"];
-    document.querySelector("#placeholder-title").textContent = title;
-    document.querySelector("#placeholder-copy").textContent = copy;
-    document.querySelector("#placeholder-section").textContent = section;
-  }
+  if (direct === "workspace") renderWorkspace(page);
   document.querySelectorAll("[data-page]").forEach(link => {
     const active = link.dataset.page === page;
     link.classList.toggle("active", active);
@@ -208,4 +225,4 @@ document.querySelector("#retry-persistence").addEventListener("click", () => {
 });
 
 const initialPage = location.hash.slice(1);
-navigate(initialPage && (pageNames[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : "dashboard", false);
+navigate(initialPage && (workspacePages[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : "dashboard", false);

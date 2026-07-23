@@ -1,13 +1,27 @@
 {
   "schemaVersion": 1,
-  "revision": 9,
+  "revision": 16,
   "directions": {},
   "rounds": {
     "step-0": {
       "primary": {
-        "rating": 0,
+        "rating": 2,
         "decision": "undecided",
-        "pageComments": [],
+        "pageComments": [
+          {
+            "id": "74fed037-3e84-4bec-a2e9-68564c5e5403",
+            "kind": "page",
+            "comment": "retake place",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "applied",
+            "createdAt": "2026-07-23T11:50:36.060Z",
+            "acknowledgedAt": "2026-07-23T11:51:54.449Z",
+            "resolution": "Replaced generic placeholder routing with representative Step 0 pages for Setup, Provider connections, Model routes, and System. Each now contains route-specific information hierarchy, fictional data, responsive layout, and in-memory actions without claiming production completeness.",
+            "resolvedAt": "2026-07-23T11:55:15.883Z"
+          }
+        ],
         "elementComments": [
           {
             "id": "6d8982f3-21ea-45c5-bef9-50d16b9d750f",
@@ -53,8 +67,25 @@
             "acknowledgedAt": "2026-07-23T11:41:17.646Z",
             "resolution": "Added an accessible desktop collapse/expand control. Collapsed navigation retains icons, titles, accessible labels, active state, incident count, and in-memory session behavior without browser persistence.",
             "resolvedAt": "2026-07-23T11:48:02.546Z"
+          },
+          {
+            "id": "fd0d4406-f81e-4228-8534-6323f2f1c68d",
+            "kind": "element",
+            "comment": "at wrong place when collapsed",
+            "viewport": "desktop",
+            "orientation": "landscape",
+            "runtime": "operator",
+            "status": "applied",
+            "createdAt": "2026-07-23T11:49:39.771Z",
+            "elementRef": "button#sidebar-toggle",
+            "elementLabel": "Expand sidebar",
+            "acknowledgedAt": "2026-07-23T11:51:54.179Z",
+            "resolution": "Moved the collapsed-state expand control fully inside the 76px sidebar rail beneath the brand mark. Geometry checks confirm the complete 28px control remains within the rail and retains its accessible Expand sidebar label.",
+            "resolvedAt": "2026-07-23T11:55:15.585Z"
           }
-        ]
+        ],
+        "note": "still have too many placehoders, ",
+        "updatedAt": "2026-07-23T11:50:36.055Z"
       }
     }
   }

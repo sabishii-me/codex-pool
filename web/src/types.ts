@@ -15,11 +15,17 @@ export interface FriendSession {
   cute_code_settings_json: string;
 }
 
+export interface GatewayHealth {
+  status: string;
+  uptime: string;
+}
 export interface MFAStatus {
   enrolled: boolean;
   elevated: boolean;
   recovery_codes_remaining: number;
 }
+
+
 
 export interface ProviderConnectionStats {
   id: string;

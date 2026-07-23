@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { loadDashboardResources, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
-import type { FriendSession, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
+import { loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
+import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
 import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForPath, type AppRoute } from "./routes";
 
 export function providerPresentation(provider: string) {
@@ -19,6 +19,7 @@ export function App() {
   const [models, setModels] = useState<ModelDescriptor[]>([]);
   const [connections, setConnections] = useState<OperatorProviderConnectionV2[]>([]);
   const [users, setUsers] = useState<PoolUserStats[]>([]);
+  const [health, setHealth] = useState<GatewayHealth | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -32,6 +33,7 @@ export function App() {
     if (operator) {
       try { setConnections(await loadProviderConnectionsV2()); } catch { setConnections([]); }
       try { setUsers((await loadPoolUsers()).users); } catch { setUsers([]); }
+      try { setHealth(await loadGatewayHealth()); } catch { setHealth(null); }
     }
     setError(resources.errors.join(" · "));
     setLoading(false);
@@ -93,7 +95,7 @@ export function App() {
         <Sidebar route={route.path} operator={operator} onNavigate={go} onSignOut={signOut} email={session.email} />
         <main className="new-main" id="main-content" tabIndex={-1}>
           {error && <div className="new-alert" role="alert"><b>Data refresh incomplete</b><span>{error}</span></div>}
-          <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} session={session} onNavigate={go} />
+          <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} onNavigate={go} />
         </main>
       </div>
     </div>

@@ -112,7 +112,6 @@ document.querySelectorAll("[data-filter]").forEach(button => button.addEventList
 
 const pageNames = {
   setup: ["Setup", "Choose a client, copy a working configuration, and verify the gateway connection.", "Member workspace"],
-  usage: ["My usage", "Review personal requests, normalized token usage, and trends.", "Member workspace"],
   connections: ["Provider connections", "Manage credentialed upstream capacity and connection lifecycle operations.", "Operations"],
   routes: ["Model routes", "Inspect public routes, upstream targets, eligible connections, and routing policy.", "Operations"],
   system: ["System", "Review runtime, persistence, configuration, and recovery state.", "Operations"]
@@ -120,7 +119,7 @@ const pageNames = {
 
 function navigate(page, updateHash = true) {
   if (page === "monitor" && runtime !== "operator") page = "dashboard";
-  const direct = ["dashboard", "models", "monitor"].includes(page) ? page : "placeholder";
+  const direct = ["dashboard", "models", "usage", "monitor"].includes(page) ? page : "placeholder";
   document.querySelectorAll(".page").forEach(section => {
     const active = section.id === `page-${direct}`;
     section.hidden = !active;
@@ -154,6 +153,17 @@ document.querySelectorAll("[data-page]").forEach(link => link.addEventListener("
   navigate(link.dataset.page);
 }));
 document.querySelectorAll("[data-navigate]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.navigate)));
+
+const sidebarToggle = document.querySelector("#sidebar-toggle");
+sidebarToggle.addEventListener("click", () => {
+  const collapsed = document.body.classList.toggle("sidebar-collapsed");
+  sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
+  sidebarToggle.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+  sidebarToggle.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+  showToast(collapsed ? "Sidebar collapsed for this preview session." : "Sidebar expanded.");
+});
+
+document.querySelector("#leaderboard-privacy").addEventListener("click", () => showToast("This preview shows abbreviated fictional names and aggregate weekly usage only."));
 
 const drawer = document.querySelector("#mobile-drawer");
 const backdrop = document.querySelector("#drawer-backdrop");
@@ -198,4 +208,4 @@ document.querySelector("#retry-persistence").addEventListener("click", () => {
 });
 
 const initialPage = location.hash.slice(1);
-navigate(initialPage && (pageNames[initialPage] || ["dashboard", "models", "monitor"].includes(initialPage)) ? initialPage : "dashboard", false);
+navigate(initialPage && (pageNames[initialPage] || ["dashboard", "models", "usage", "monitor"].includes(initialPage)) ? initialPage : "dashboard", false);

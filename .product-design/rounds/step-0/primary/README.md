@@ -10,12 +10,13 @@ This single artifact tests the Phase 9 interaction architecture before visual al
 - separate member and operator navigation;
 - concise front-page dashboard;
 - detailed operator Monitor;
-- representative Models experience;
+- representative Models and My usage experiences, including a privacy-conscious weekly leaderboard;
+- accessible collapsible desktop navigation and compact mobile-landscape navigation;
 - neutral professional baseline presentation;
 - responsive desktop, tablet, portrait-mobile, and landscape-mobile hierarchy;
 - localized resource failure and in-memory recovery.
 
-It does not claim full legacy parity or final visual approval. Setup, My usage, Provider connections, Model routes, and System are navigation placeholders so their placement can be reviewed without pretending their workflows are complete.
+It does not claim full legacy parity or final visual approval. Setup, Provider connections, Model routes, and System are navigation placeholders so their placement can be reviewed without pretending their workflows are complete.
 
 ## Runtime profiles
 
@@ -26,7 +27,9 @@ Runtime profiles are presentation-only fixtures and do not authorize anything.
 
 ## Interactions
 
-- Navigate Dashboard, Models, Monitor, and placeholder routes.
+- Navigate Dashboard, Models, My usage, Monitor, and placeholder routes.
+- Collapse and expand the desktop sidebar for the current in-memory preview session.
+- Review a fictional weekly leaderboard with abbreviated member labels and aggregate processed-token totals.
 - Change dashboard activity range.
 - Search and filter model routes.
 - Simulate copying a model ID without using the clipboard.

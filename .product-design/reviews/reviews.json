@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 6,
+  "revision": 9,
   "directions": {},
   "rounds": {
     "step-0": {
@@ -16,11 +16,13 @@
             "viewport": "desktop",
             "orientation": "landscape",
             "runtime": "operator",
-            "status": "acknowledged",
+            "status": "applied",
             "createdAt": "2026-07-23T11:37:07.086Z",
             "elementRef": "a.nav-link",
             "elementLabel": "▥ My usage",
-            "acknowledgedAt": "2026-07-23T11:41:17.152Z"
+            "acknowledgedAt": "2026-07-23T11:41:17.152Z",
+            "resolution": "Implemented a My usage page with personal measured summaries and a fictional weekly community leaderboard. Ranking uses abbreviated display names and aggregate processed-token totals with an explicit privacy explanation.",
+            "resolvedAt": "2026-07-23T11:48:01.977Z"
           },
           {
             "id": "6df1583b-cbe0-45fc-9aea-5c69f31eaa30",
@@ -29,11 +31,13 @@
             "viewport": "mobile-landscape",
             "orientation": "landscape",
             "runtime": "operator",
-            "status": "acknowledged",
+            "status": "applied",
             "createdAt": "2026-07-23T11:38:54.515Z",
             "elementRef": "nav[aria-label=\"Workspace navigation\"]",
             "elementLabel": "Workspace navigation",
-            "acknowledgedAt": "2026-07-23T11:41:17.401Z"
+            "acknowledgedAt": "2026-07-23T11:41:17.401Z",
+            "resolution": "Changed the compact-shell breakpoint so the configured 844x390 mobile-landscape profile hides the persistent sidebar by default and uses bottom navigation plus the drawer. Added intentional thin scrollbar styling to navigation and overflow regions.",
+            "resolvedAt": "2026-07-23T11:48:02.260Z"
           },
           {
             "id": "e4040071-d7fd-4f5b-af6d-874d9dadc5a7",
@@ -42,11 +46,13 @@
             "viewport": "desktop",
             "orientation": "landscape",
             "runtime": "operator",
-            "status": "acknowledged",
+            "status": "applied",
             "createdAt": "2026-07-23T11:39:56.498Z",
             "elementRef": "a[data-product-action=\"navigate-dashboard\"]",
             "elementLabel": "Codex Pool dashboard",
-            "acknowledgedAt": "2026-07-23T11:41:17.646Z"
+            "acknowledgedAt": "2026-07-23T11:41:17.646Z",
+            "resolution": "Added an accessible desktop collapse/expand control. Collapsed navigation retains icons, titles, accessible labels, active state, incident count, and in-memory session behavior without browser persistence.",
+            "resolvedAt": "2026-07-23T11:48:02.546Z"
           }
         ]
       }

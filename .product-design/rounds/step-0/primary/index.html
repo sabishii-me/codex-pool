@@ -15,33 +15,36 @@
 
   <div class="app-shell">
     <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#dashboard" data-product-action="navigate-dashboard" aria-label="Codex Pool dashboard">
-        <span class="brand-mark" aria-hidden="true">CP</span>
-        <span><strong>Codex Pool</strong><small>Model gateway</small></span>
-      </a>
+      <div class="sidebar-brand-row">
+        <a class="brand" href="#dashboard" data-product-action="navigate-dashboard" aria-label="Codex Pool dashboard">
+          <span class="brand-mark" aria-hidden="true">CP</span>
+          <span class="brand-copy"><strong>Codex Pool</strong><small>Model gateway</small></span>
+        </a>
+        <button class="sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" title="Collapse sidebar"><span aria-hidden="true">‹</span></button>
+      </div>
 
       <nav class="desktop-navigation" aria-label="Workspace navigation">
         <div class="nav-group">
           <span class="nav-label">Workspace</span>
-          <a class="nav-link active" href="#dashboard" data-page="dashboard"><span aria-hidden="true">⌂</span>Dashboard</a>
-          <a class="nav-link" href="#models" data-page="models"><span aria-hidden="true">◇</span>Models</a>
-          <a class="nav-link" href="#setup" data-page="setup"><span aria-hidden="true">↗</span>Setup</a>
-          <a class="nav-link" href="#usage" data-page="usage"><span aria-hidden="true">▥</span>My usage</a>
+          <a class="nav-link active" href="#dashboard" data-page="dashboard" aria-label="Dashboard" title="Dashboard"><span aria-hidden="true">⌂</span><span class="nav-text">Dashboard</span></a>
+          <a class="nav-link" href="#models" data-page="models" aria-label="Models" title="Models"><span aria-hidden="true">◇</span><span class="nav-text">Models</span></a>
+          <a class="nav-link" href="#setup" data-page="setup" aria-label="Setup" title="Setup"><span aria-hidden="true">↗</span><span class="nav-text">Setup</span></a>
+          <a class="nav-link" href="#usage" data-page="usage" aria-label="My usage" title="My usage"><span aria-hidden="true">▥</span><span class="nav-text">My usage</span></a>
         </div>
         <div class="nav-group operator-only">
           <span class="nav-label">Operations</span>
-          <a class="nav-link" href="#monitor" data-page="monitor"><span aria-hidden="true">⌁</span>Monitor <span class="nav-count">1</span></a>
-          <a class="nav-link" href="#connections" data-page="connections"><span aria-hidden="true">⇄</span>Provider connections</a>
-          <a class="nav-link" href="#routes" data-page="routes"><span aria-hidden="true">⑂</span>Model routes</a>
-          <a class="nav-link" href="#system" data-page="system"><span aria-hidden="true">⚙</span>System</a>
+          <a class="nav-link" href="#monitor" data-page="monitor" aria-label="Monitor, one incident" title="Monitor"><span aria-hidden="true">⌁</span><span class="nav-text">Monitor</span><span class="nav-count">1</span></a>
+          <a class="nav-link" href="#connections" data-page="connections" aria-label="Provider connections" title="Provider connections"><span aria-hidden="true">⇄</span><span class="nav-text">Provider connections</span></a>
+          <a class="nav-link" href="#routes" data-page="routes" aria-label="Model routes" title="Model routes"><span aria-hidden="true">⑂</span><span class="nav-text">Model routes</span></a>
+          <a class="nav-link" href="#system" data-page="system" aria-label="System" title="System"><span aria-hidden="true">⚙</span><span class="nav-text">System</span></a>
         </div>
       </nav>
 
       <div class="sidebar-footer">
         <button class="user-button" type="button" data-product-action="open-profile">
           <span class="avatar">AC</span>
-          <span><strong>Avery Chen</strong><small id="runtime-label">Member workspace</small></span>
-          <span aria-hidden="true">···</span>
+          <span class="user-copy"><strong>Avery Chen</strong><small id="runtime-label">Member workspace</small></span>
+          <span class="user-more" aria-hidden="true">···</span>
         </button>
       </div>
     </aside>
@@ -157,6 +160,17 @@
         </section>
       </section>
 
+      <section class="page" data-product-page="usage" id="page-usage" aria-labelledby="usage-title" hidden>
+        <header class="page-header"><div><p class="eyebrow">Member workspace</p><h1 id="usage-title">My usage</h1><p>Your measured gateway activity and a privacy-conscious community comparison.</p></div><div class="page-actions"><button class="button secondary" type="button" data-usage-range="30d">Last 30 days</button><button class="button primary" type="button" data-navigate="models">Browse models</button></div></header>
+        <section class="usage-summary" aria-label="Personal usage summary">
+          <article><span>Requests</span><strong>1,248</strong><small>Last 7 days · measured</small></article><article><span>Processed tokens</span><strong>18.6M</strong><small>Last 7 days · measured</small></article><article><span>Most used route</span><strong>gpt-5.6</strong><small>42% of your requests</small></article><article><span>Active days</span><strong>7 / 7</strong><small>Current week</small></article>
+        </section>
+        <div class="usage-layout">
+          <section class="panel usage-trend-panel" aria-labelledby="usage-trend-title"><header class="panel-header"><div><h2 id="usage-trend-title">Your weekly activity</h2><p>Processed requests by day</p></div><span class="evidence">Measured</span></header><div class="weekly-bars" role="img" aria-label="Weekly request activity. Wednesday is highest at 214 requests."><div style="--bar:58%"><i></i><strong>142</strong><span>Mon</span></div><div style="--bar:72%"><i></i><strong>176</strong><span>Tue</span></div><div style="--bar:88%"><i></i><strong>214</strong><span>Wed</span></div><div style="--bar:67%"><i></i><strong>164</strong><span>Thu</span></div><div style="--bar:79%"><i></i><strong>193</strong><span>Fri</span></div><div style="--bar:55%"><i></i><strong>134</strong><span>Sat</span></div><div style="--bar:92%"><i></i><strong>225</strong><span>Sun</span></div></div><footer class="usage-note">Your activity is 11% higher than last week.</footer></section>
+          <section class="panel leaderboard-panel" data-product-region="usage-leaderboard" aria-labelledby="leaderboard-title"><header class="panel-header"><div><h2 id="leaderboard-title">Community leaderboard</h2><p>Weekly processed tokens · resets Monday</p></div><span class="status-badge neutral">Abbreviated</span></header><div class="privacy-note"><span aria-hidden="true">◉</span><p><strong>Privacy by default.</strong> Members see abbreviated display names and aggregate usage only. Operators do not receive extra identity detail here.</p></div><ol class="leaderboard-list"><li><span class="rank">1</span><span class="leader-avatar">MR</span><span><strong>Mina R.</strong><small>31.2M processed tokens</small></span><b>↑ 2</b></li><li class="current-user"><span class="rank">2</span><span class="leader-avatar">AC</span><span><strong>You · Avery C.</strong><small>18.6M processed tokens</small></span><b>—</b></li><li><span class="rank">3</span><span class="leader-avatar">JK</span><span><strong>Jordan K.</strong><small>15.9M processed tokens</small></span><b>↓ 1</b></li><li><span class="rank">4</span><span class="leader-avatar">SP</span><span><strong>Sam P.</strong><small>12.4M processed tokens</small></span><b>↑ 1</b></li><li><span class="rank">5</span><span class="leader-avatar">RL</span><span><strong>Riley L.</strong><small>9.8M processed tokens</small></span><b>—</b></li></ol><footer class="leaderboard-footer"><span>5 of 18 active members shown</span><button class="text-button" type="button" id="leaderboard-privacy">How privacy works</button></footer></section>
+        </div>
+      </section>
+
       <section class="page" data-product-page="monitor" id="page-monitor" aria-labelledby="monitor-title" hidden>
         <header class="page-header"><div><p class="eyebrow">Operations</p><h1 id="monitor-title">Monitor</h1><p>Diagnose availability, routing, and persistence without changing configuration.</p></div><button class="button secondary" type="button" data-navigate="connections">Manage connections</button></header>
         <section class="monitor-summary" aria-label="Monitor summary">
@@ -177,7 +191,7 @@
     <nav class="bottom-navigation" aria-label="Mobile primary navigation">
       <a class="active" href="#dashboard" data-page="dashboard"><span aria-hidden="true">⌂</span>Dashboard</a>
       <a href="#models" data-page="models"><span aria-hidden="true">◇</span>Models</a>
-      <a href="#setup" data-page="setup"><span aria-hidden="true">↗</span>Setup</a>
+      <a href="#usage" data-page="usage"><span aria-hidden="true">▥</span>Usage</a>
       <button id="more-button" type="button" aria-label="Open all navigation" aria-expanded="false" aria-controls="mobile-drawer"><span aria-hidden="true">•••</span>More</button>
     </nav>
   </div>

@@ -1,155 +1,127 @@
-# Isolated Development Instance
+# Isolated Staging and Development Gateways
 
-Use a second Docker Compose project for development. Do not rebuild, restart, or mount the state of the gateway currently serving clients.
+Keep three independent gateways:
 
-## Isolation model
+| Resource | Production | Staging baseline | Active development |
+|---|---|---|---|
+| Compose project | current/default | `codex-pool-staging` | `codex-pool-dev` |
+| Compose file | `docker-compose.yml` | `docker-compose.staging.yml` | `docker-compose.dev.yml` |
+| Image | `codex-pool:latest` | pinned `codex-pool:staging-a91560b` | mutable `codex-pool:dev` |
+| Endpoint | `localhost:8989` | `127.0.0.1:18990` | `127.0.0.2:18991` |
+| Provider state | `./pool` | `./staging/pool` | `./dev/pool` |
+| Provider specs | operator-defined | `./staging/provider-specs` | `./dev/provider-specs` |
+| Data/session state | `./data` | `./staging/data` | `./dev/data` |
+| Variables | production names | `STAGING_*` | `DEV_*` |
 
-| Resource | Production | Development |
-|---|---|---|
-| Compose project | default/current | `codex-pool-dev` |
-| Image | `codex-pool:latest` | `codex-pool:dev` |
-| Host endpoint | `localhost:8989` | `127.0.0.1:18990` |
-| Provider state | `./pool` | `./dev/pool` |
-| Provider specifications | operator-defined | `./dev/provider-specs` |
-| Database/state | `./data` | `./dev/data` |
-| Environment | `.env`/host | `.env.dev` |
+Staging is the validated legacy-UI control client. It has no Compose `build` section, so normal source rebuilds cannot replace it. Active development is disposable and follows the current checkout.
 
-The development endpoint intentionally uses `127.0.0.1` rather than `localhost`. Browser cookies do not include ports, so two dashboards on `localhost` would overwrite each other's `pool_session`, OAuth, and administrator-elevation cookies.
+The gateways deliberately use different loopback IP addresses. Browser cookies are scoped by hostname, not port; using `127.0.0.1` for both would make their session and elevation cookies collide.
 
-The host port binds only to loopback. It is not reachable from another machine unless the Compose file is deliberately changed.
+Neither non-production gateway mounts production databases, users, MFA, sessions, analytics, or JWT secrets. Provider credential snapshots may be copied deliberately, but they consume the same upstream quotas. Refresh is disabled by default.
 
-## First-time setup
+## Staging baseline
 
-From the repository root:
+Staging currently preserves the validated commit/image `a91560b` and the existing isolated baseline state.
 
-```bash
-cp .env.dev.example .env.dev
-```
-
-On PowerShell:
-
-```powershell
-Copy-Item .env.dev.example .env.dev
-```
-
-Development uses `DEV_LOCAL_SESSION=true` by default. This serves the same current React signal-room shell as production and creates an isolated synthetic `developer@localhost.invalid` member in `dev/data/pool_users.json`; it does not require Google OAuth merely to inspect empty development state. The server rejects local-session mode unless both `DEV_PUBLIC_URL` and the incoming request host are loopback (`127.0.0.1`, `::1`, or `localhost`). This mode does not grant administrator elevation.
-
-For testing the real authentication flow, set `DEV_LOCAL_SESSION=false`, then:
-
-1. Generate a development-only `DEV_POOL_JWT_SECRET`.
-2. Add your address to `DEV_ALLOWED_EMAILS` and, if needed, `DEV_ADMIN_EMAILS`.
-3. Use a separate Google OAuth web client with this exact callback:
-
-```text
-http://127.0.0.1:18990/auth/callback/google
-```
-
-Do not reuse production session/JWT secrets. OAuth client separation is recommended so callback configuration and credential rotation cannot disrupt production. `DEV_LOCAL_SESSION=true` is for loopback development only and must never be enabled in production Compose.
-
-## Start and stop
-
-Start or rebuild development:
+Start without rebuilding:
 
 ```bash
-docker compose \
-  --env-file .env.dev \
-  -p codex-pool-dev \
-  -f docker-compose.dev.yml \
-  up -d --build
+docker compose -p codex-pool-staging -f docker-compose.staging.yml up -d
 ```
 
-Check status and logs:
+Check:
 
 ```bash
-docker compose -p codex-pool-dev -f docker-compose.dev.yml ps
-docker compose -p codex-pool-dev -f docker-compose.dev.yml logs -f codex-pool-dev
+docker compose -p codex-pool-staging -f docker-compose.staging.yml ps
 curl http://127.0.0.1:18990/healthz
 ```
 
-Open:
+Open `http://127.0.0.1:18990`.
 
-```text
-http://127.0.0.1:18990
-```
-
-Stop development without deleting its state:
+Run the compatibility baseline:
 
 ```bash
-docker compose -p codex-pool-dev -f docker-compose.dev.yml down
+cd web
+POOL_LOCAL_DEV_BASELINE=1 POOL_BASE_URL=http://127.0.0.1:18990 npm run test:e2e:baseline
 ```
 
-Delete only development containers and state:
+To promote a newly validated baseline, use an immutable tag containing its commit, update `STAGING_IMAGE`, and migrate staging deliberately. Never point staging at `codex-pool:dev` or `codex-pool:latest`.
+
+## Active development
+
+Optionally copy `.env.dev.example` to ignored `.env.dev`, then start/rebuild:
 
 ```bash
-docker compose -p codex-pool-dev -f docker-compose.dev.yml down --volumes
-rm -rf dev/pool dev/data
+docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml up -d --build
 ```
 
-The bind-mounted state directories are not removed by `down --volumes`; remove them explicitly only when a clean development state is intended.
+Defaults also work without an env file because all interpolation names are `DEV_*` and cannot inherit production equivalents.
 
-## Codex OAuth broker
+Check:
 
-Install the host-side broker once on Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install-codex-oauth-broker.ps1
+```bash
+docker compose -p codex-pool-dev -f docker-compose.dev.yml ps
+curl http://127.0.0.2:18991/healthz
 ```
 
-It starts with user login and exposes a loopback control API on `127.0.0.1:1460`. When the dashboard starts Codex OAuth, the broker temporarily acquires `1455` or `1457`, forwards one callback, and releases the provider callback port. Consecutive accounts do not require commands or broker restarts.
+Open `http://127.0.0.2:18991`.
 
-```powershell
-# Verify
-powershell -File scripts/install-codex-oauth-broker.ps1 -Status
+`DEV_LOCAL_SESSION=true` creates an isolated `developer@localhost.invalid` member in `dev/data/pool_users.json`. It does not grant administrator elevation. The server accepts this mode only for loopback `PUBLIC_URL` and request hosts.
 
-# Remove
-powershell -File scripts/install-codex-oauth-broker.ps1 -Uninstall
-```
-
-## Provider credentials
-
-Development starts with an empty provider pool. Prefer fixtures and protocol test servers while implementing UI, routing, and accounting changes.
-
-If a real upstream smoke test is necessary:
-
-1. Add a credential specifically owned by the development instance through its dashboard.
-2. Prefer a low-risk/test key with spending limits.
-3. Keep `DEV_PROXY_MAX_ATTEMPTS=1`.
-4. Enable refresh only if the test requires it:
+For real Google authentication, use a separate OAuth client and callback:
 
 ```text
-DEV_PROXY_DISABLE_REFRESH=false
+http://127.0.0.2:18991/auth/callback/google
 ```
 
-Do not mount `./pool` into development. Do not casually copy OAuth account files from production: both instances could refresh the same credential and race while persisting rotated tokens.
+## State rules
 
-A production database should not be copied while live. Create purpose-built fixtures or use a database-native consistent snapshot that has been stripped of secrets and personal data.
+- `staging/data` is the durable baseline history; do not mutate/delete it during ordinary development.
+- `dev/data` is disposable and must start without copied staging/production databases or users.
+- `staging/pool` and `dev/pool` may contain intentional credential snapshots, but neither may mount `./pool`.
+- Keep `PROXY_DISABLE_REFRESH=true` for shared snapshots unless a test explicitly requires refresh.
+- Keep attempts at one to avoid multiplying real quota use.
+- Do not inspect bind-mounted SQLite concurrently from Windows as proof of durability; stop the corresponding container or use its APIs.
 
-## Vite frontend development
+## Vite UI development
 
-`web/vite.config.ts` already proxies application routes to `127.0.0.1:18990`.
-
-Run the isolated backend first, then:
+`web/vite.config.ts` proxies to active development at `127.0.0.2:18991`.
 
 ```bash
 cd web
 npm install
-npm run dev -- --host 127.0.0.1
+npm run dev -- --host 127.0.0.2
 ```
 
-Open the `127.0.0.1` Vite URL it prints. Keep the hostname consistent to avoid sending development cookies to the production `localhost` origin.
+Open the printed `127.0.0.2` URL. Staging remains available independently on `127.0.0.1:18990` for comparison.
 
-OAuth callbacks currently return to the backend endpoint configured in `.env.dev`. After login, return to the Vite URL for hot-reload UI work.
+## Codex OAuth broker
 
-## Operational guardrails
+The host broker remains at `127.0.0.1:1460` and leases callback ports `1455`/`1457` only during authorization. Both gateways can request leases sequentially. The `gateway_origin` sent by the UI determines where the callback is forwarded.
 
-- Always include `-p codex-pool-dev -f docker-compose.dev.yml` in development Compose commands.
-- Never run `docker compose down` against the production file while doing development work.
-- Never tag a development build as `codex-pool:latest`.
-- Do not use broad Docker prune commands while the production container is running.
-- Inspect mounts before starting:
+## Stop/remove
 
 ```bash
-docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml config
+# Active development only
+docker compose -p codex-pool-dev -f docker-compose.dev.yml down
+
+# Staging only
+docker compose -p codex-pool-staging -f docker-compose.staging.yml down
 ```
 
-The resolved mounts must end in `./dev/pool`, `./dev/data`, and `./dev/provider-specs`, never `./pool`, `./data`, or a production specifications directory. Development interpolation variables are deliberately `DEV_`-prefixed, so omitting `--env-file` cannot silently import equivalent production values from the root `.env`.
+Bind-mounted state is not removed by `down --volumes`. Delete `dev/` only when a clean development reset is intended. Do not delete `staging/` without first preserving the baseline intentionally.
+
+## Guardrails
+
+- Always include the project and Compose file in commands.
+- Never run production Compose commands to validate staging/development changes.
+- Never tag an active development build as `codex-pool:latest`.
+- Never use broad Docker prune commands while any gateway is in use.
+- Render both contracts before starting:
+
+```bash
+docker compose -p codex-pool-staging -f docker-compose.staging.yml config
+docker compose -p codex-pool-dev -f docker-compose.dev.yml config
+```
+
+Resolved mounts must end in their own `staging/*` or `dev/*` directories, never production `pool/` or `data/`.

@@ -12,6 +12,7 @@ config.toml
 pool
 data
 dev
+staging
 *.db
 *.db-shm
 *.db-wal

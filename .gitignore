@@ -6,6 +6,7 @@
 .env
 .env.*
 !.env.dev.example
+!.env.staging.example
 .air.toml
 .conductor/
 .claude/
@@ -23,6 +24,8 @@
 security-audit-results.tsv
 
 # Local data / secrets
+dev/
+staging/
 pool/
 data/
 config.toml

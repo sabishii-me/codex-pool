@@ -89,16 +89,19 @@ pool/
 go build && ./codex-pool
 ```
 
-### Isolated development
+### Isolated staging and development
 
-When the main gateway is in active use, run development as a separate Compose project with its own image, port, credentials, and databases. See [Isolated Development Instance](docs/development-instance.md).
+When the main gateway is in active use, keep a pinned staging baseline and a separate active-development project. See [Staging and Development Gateways](docs/development-instance.md).
 
 ```bash
-cp .env.dev.example .env.dev
-docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml up -d --build
+# Stable legacy UI baseline (no build)
+docker compose -p codex-pool-staging -f docker-compose.staging.yml up -d
+
+# Active source checkout
+docker compose -p codex-pool-dev -f docker-compose.dev.yml up -d --build
 ```
 
-The development endpoint is `http://127.0.0.1:18990`; it never mounts the production `pool/` or `data/` directories.
+Staging is `http://127.0.0.1:18990`; active development is `http://127.0.0.2:18991`. Each has separate provider, database, user, session, and specification directories, and neither mounts production `pool/` or `data/`.
 
 ### 3. Point your CLI
 

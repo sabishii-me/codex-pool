@@ -1,6 +1,6 @@
 # Legacy UI Baseline
 
-The current Signal Room UI is the stable compatibility client for the refactored gateway. It is intentionally **not** the Phase 9 redesign. Keep it available during the long daily-use period so backend regressions can be distinguished from redesign regressions.
+The current Signal Room UI is the stable compatibility client for the refactored gateway. It runs on the pinned staging gateway at `http://127.0.0.1:18990` and is intentionally **not** the Phase 9 redesign. Active development uses `http://127.0.0.2:18991`. Keep staging available during the long daily-use period so backend regressions can be distinguished from redesign regressions.
 
 ## Baseline guarantees
 
@@ -14,7 +14,7 @@ The current Signal Room UI is the stable compatibility client for the refactored
 
 ## Quick daily check
 
-The isolated development gateway must be healthy at `http://127.0.0.1:18990`.
+The isolated staging gateway must be healthy at `http://127.0.0.1:18990`.
 
 ```bash
 cd web

@@ -7,7 +7,7 @@ services:
     ports:
       # Use a different hostname as well as a different port when opening the
       # dashboard. Browser cookies are shared across ports on the same host.
-      - "127.0.0.1:18990:8989"
+      - "127.0.0.2:18991:8989"
     volumes:
       # Never point these mounts at ./pool or ./data. Provider credentials and
       # all mutable development state must remain independent from production.
@@ -31,15 +31,15 @@ services:
       # Set this to false explicitly only when exercising a real dev connection.
       PROXY_DISABLE_REFRESH: ${DEV_PROXY_DISABLE_REFRESH:-true}
       PROXY_DEBUG: ${DEV_PROXY_DEBUG:-false}
-      PUBLIC_URL: ${DEV_PUBLIC_URL:-http://127.0.0.1:18990}
+      PUBLIC_URL: ${DEV_PUBLIC_URL:-http://127.0.0.2:18991}
       # Serve the current React UI with an isolated synthetic member session.
       # The backend refuses this mode unless PUBLIC_URL and request Host are loopback.
       LOCAL_DEV_SESSION: ${DEV_LOCAL_SESSION:-true}
-      FRIEND_NAME: ${DEV_FRIEND_NAME:-Codex Pool Dev}
-      POOL_JWT_SECRET: ${DEV_POOL_JWT_SECRET:-development-only-change-before-sharing}
+      FRIEND_NAME: ${DEV_FRIEND_NAME:-Codex Pool Active Development}
+      POOL_JWT_SECRET: ${DEV_POOL_JWT_SECRET:-active-development-only-change-before-sharing}
       OAUTH_GOOGLE_CLIENT_ID: ${DEV_OAUTH_GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${DEV_OAUTH_GOOGLE_CLIENT_SECRET:-}
-      OAUTH_GOOGLE_REDIRECT_URI: ${DEV_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.1:18990/auth/callback/google}
+      OAUTH_GOOGLE_REDIRECT_URI: ${DEV_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.2:18991/auth/callback/google}
       ALLOWED_EMAILS: ${DEV_ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${DEV_ADMIN_EMAILS:-}
       UPSTREAM_KIMI_PLATFORM_BASE: ${DEV_UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}

@@ -113,6 +113,7 @@ body.sidebar-collapsed .user-button { display: flex; justify-content: center; pa
 .icon-button:hover { border-color: var(--border-strong); background: var(--bg-subtle); }
 .notification-dot { position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border: 1px solid white; border-radius: 50%; background: var(--warning); }
 .avatar.compact { cursor: pointer; }
+.mobile-profile-button { display: none; }
 .mobile-menu-button { display: none; }
 
 main { grid-column: 2; min-width: 0; padding: 30px 32px 48px; }
@@ -364,7 +365,7 @@ body[data-runtime="operator"] .count-badge.operator-only { display: grid !import
   .app-shell { display: block; padding-top: 84px; }
   .sidebar { display: none; }
   .topbar { position: fixed; top: 28px; left: 0; right: 0; height: 56px; padding: 0 11px; }
-  .mobile-menu-button { display: grid; }
+  .mobile-menu-button, .mobile-profile-button { display: grid; }
   .topbar-context { display: none; }
   .refresh-state { font-size: 9px; }
   .topbar-actions { margin-left: auto; gap: 8px; }

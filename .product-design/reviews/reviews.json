@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "revision": 18,
+  "revision": 22,
   "directions": {},
   "rounds": {
     "step-0": {
@@ -90,10 +90,13 @@
             "viewport": "desktop",
             "orientation": "landscape",
             "runtime": "operator",
-            "status": "open",
+            "status": "applied",
             "createdAt": "2026-07-23T12:00:15.348Z",
             "elementRef": "button[data-product-action=\"open-notifications\"]",
-            "elementLabel": "Notifications, one item"
+            "elementLabel": "Notifications, one item",
+            "acknowledgedAt": "2026-07-23T12:02:12.329Z",
+            "resolution": "Removed the nonfunctional notification control and its unread indicator from the Step 0 shell rather than simulating unsupported notification behavior.",
+            "resolvedAt": "2026-07-23T12:02:59.224Z"
           },
           {
             "id": "2dae91c0-ff86-495b-a0c7-78cc8b2b571c",
@@ -102,10 +105,13 @@
             "viewport": "desktop",
             "orientation": "landscape",
             "runtime": "operator",
-            "status": "open",
+            "status": "applied",
             "createdAt": "2026-07-23T12:00:32.082Z",
             "elementRef": "button[data-product-action=\"open-profile\"]",
-            "elementLabel": "Open profile for Avery Chen"
+            "elementLabel": "Open profile for Avery Chen",
+            "acknowledgedAt": "2026-07-23T12:02:12.610Z",
+            "resolution": "Removed the duplicate desktop topbar avatar. Desktop keeps the detailed sidebar profile control; compact layouts show one topbar avatar only when the sidebar is hidden.",
+            "resolvedAt": "2026-07-23T12:02:59.530Z"
           }
         ],
         "note": "still have too many placehoders, ",

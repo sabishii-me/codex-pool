@@ -272,7 +272,7 @@ func TestFriendLandingServesReactSignalRoom(t *testing.T) {
 	body := rr.Body.String()
 	for _, want := range []string{
 		`<div id="root"></div>`,
-		`AI Pool — Full-Spectrum Signal Room`,
+		`AI Pool — Model Gateway`,
 		`src="/assets/`,
 		`href="/assets/`,
 	} {

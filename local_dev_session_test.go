@@ -55,7 +55,7 @@ func TestLocalDevModeServesCurrentReactShellWithoutOAuth(t *testing.T) {
 	response := httptest.NewRecorder()
 	handler.serveFriendLanding(response, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:18990/", nil))
 	body := response.Body.String()
-	for _, expected := range []string{`<div id="root"></div>`, `AI Pool — Full-Spectrum Signal Room`, `src="/assets/`} {
+	for _, expected := range []string{`<div id="root"></div>`, `AI Pool — Model Gateway`, `src="/assets/`} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("React shell missing %q", expected)
 		}

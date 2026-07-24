@@ -98,7 +98,16 @@ func (h *proxyHandler) accessPolicy() *AccessPolicy {
 		openSessionAccess: openSessionAccess,
 		adminEmails:       adminEmails,
 		resolveUser:       h.sessionUser,
-		isElevated:        adminElevated,
+		isElevated: func(r *http.Request, userID string) bool {
+			// Local development has no OAuth/MFA ceremony. Permit the synthetic
+			// loopback admin to inspect admin surfaces, but never bypass MFA for
+			// production or non-local sessions.
+			if h.cfg != nil && h.cfg.localDevSession {
+				user, ok := h.localDevelopmentUser(r)
+				return ok && user.ID == userID && adminEmailAllowed(h.cfg.adminEmails, user.Email)
+			}
+			return adminElevated(r, userID)
+		},
 		clientIP:          getClientIP,
 	}
 	if h.bruteForce != nil {

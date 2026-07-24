@@ -1,6 +1,6 @@
 import type { ResourceState } from "../resource-state";
 import type { AppRoute, CapabilityStatus } from "../routes";
-import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "../types";
+import type { FriendSession, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "../types";
 import { AdminCapabilityCheckingPage, AdminLockedPage, ConnectionsPage, MembersPage, SystemPage } from "./admin";
 import { DashboardPage } from "./dashboard";
 import { ModelsPage } from "./models";
@@ -15,7 +15,7 @@ export function Page({ route, stats, signal, models, connections, users, health,
   models: ModelDescriptor[];
   connections: ResourceState<OperatorProviderConnectionV2[]>;
   users: ResourceState<PoolUserStats[]>;
-  health: ResourceState<GatewayHealth>;
+  health: ResourceState<SystemProjection>;
   session: FriendSession;
   capability: CapabilityStatus;
   isElevated: boolean;

@@ -4,7 +4,7 @@ import { loginAs } from "./helpers/acceptance";
 const resources = [
   ["/admin/connections", "Connections", "Credentialed upstream capacity"],
   ["/admin/members", "Members", "Gateway user identities"],
-  ["/admin/system", "System", "Platform state"],
+  ["/admin/system", "System", "Measured runtime"],
 ] as const;
 
 for (const [route, heading, description] of resources) {
@@ -49,8 +49,11 @@ test("Connections renders localized error and empty states", async ({ page }) =>
   await page.reload(); await expect(page.getByText("No provider connections are configured")).toBeVisible();
 });
 
-test("System does not fabricate missing projections", async ({ page }) => {
+test("System renders measured runtime, persistence, registry, and working operations", async ({ page }) => {
   await loginAs(page, "admin-elevated"); await page.goto("/admin/system");
-  for (const label of ["Persistence health", "Projection freshness", "Background jobs", "Configuration revision", "Recovery readiness"]) await expect(page.getByText(label)).toBeVisible();
-  await expect(page.getByText("No backend projection").first()).toBeVisible();
+  for (const label of ["Gateway runtime", "Connection capacity", "Provider registry", "Usage ledger", "Analytics projection", "Gateway users"]) await expect(page.getByText(label, { exact: true }).last()).toBeVisible();
+  await expect(page.getByText("No backend projection")).toHaveCount(0);
+  const reload = page.waitForRequest(request => request.url().endsWith("/api/v2/system/reload-connections") && request.method() === "POST");
+  await page.getByRole("button", { name: "Reload connections" }).click(); await reload;
+  await expect(page.getByRole("status")).toContainText("reloaded");
 });

@@ -1,13 +1,84 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
+	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 type systemAdminRoute struct {
 	method  string
 	handler http.HandlerFunc
+}
+
+type systemProjection struct {
+	Evidence struct {
+		Kind        string    `json:"kind"`
+		Source      string    `json:"source"`
+		GeneratedAt time.Time `json:"generated_at"`
+	} `json:"evidence"`
+	Runtime struct {
+		Status        string    `json:"status"`
+		StartedAt     time.Time `json:"started_at"`
+		UptimeSeconds int64     `json:"uptime_seconds"`
+	} `json:"runtime"`
+	Capacity struct {
+		ConnectionsTotal  int `json:"connections_total"`
+		ConnectionsActive int `json:"connections_active"`
+		ConnectionsDead   int `json:"connections_dead"`
+		ConnectionsOff    int `json:"connections_disabled"`
+		Providers         int `json:"providers_registered"`
+		Declarative       int `json:"declarative_providers"`
+	} `json:"capacity"`
+	Persistence []systemPersistenceProjection `json:"persistence"`
+}
+
+type systemPersistenceProjection struct {
+	Name       string `json:"name"`
+	Configured bool   `json:"configured"`
+	Healthy    bool   `json:"healthy"`
+	Detail     string `json:"detail"`
+}
+
+func (h *proxyHandler) serveSystemProjection(w http.ResponseWriter, _ *http.Request) {
+	now := time.Now().UTC()
+	projection := systemProjection{}
+	projection.Evidence.Kind, projection.Evidence.Source, projection.Evidence.GeneratedAt = "measured", "gateway runtime", now
+	projection.Runtime.Status, projection.Runtime.StartedAt = "ok", h.startTime.UTC()
+	projection.Runtime.UptimeSeconds = int64(time.Since(h.startTime).Seconds())
+	for _, connection := range h.pool.allAccounts() {
+		projection.Capacity.ConnectionsTotal++
+		connection.mu.Lock()
+		switch {
+		case connection.Dead:
+			projection.Capacity.ConnectionsDead++
+		case connection.Disabled:
+			projection.Capacity.ConnectionsOff++
+		default:
+			projection.Capacity.ConnectionsActive++
+		}
+		connection.mu.Unlock()
+	}
+	if h.registry != nil {
+		projection.Capacity.Providers = len(h.registry.All())
+		projection.Capacity.Declarative = len(h.registry.DeclarativeProviders())
+	}
+	usage := systemPersistenceProjection{Name: "Usage ledger", Configured: h.store != nil, Detail: "Exactly-once usage store"}
+	if h.store != nil && h.store.db != nil {
+		usage.Healthy = h.store.db.View(func(_ *bbolt.Tx) error { return nil }) == nil
+	}
+	analytics := systemPersistenceProjection{Name: "Analytics projection", Configured: h.analyticsStore != nil, Detail: "SQLite analytics store"}
+	if h.analyticsStore != nil && h.analyticsStore.db != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		analytics.Healthy = h.analyticsStore.db.PingContext(ctx) == nil
+		cancel()
+	}
+	members := systemPersistenceProjection{Name: "Gateway users", Configured: h.poolUsers != nil, Healthy: h.poolUsers != nil, Detail: "Authorized member store"}
+	projection.Persistence = []systemPersistenceProjection{usage, analytics, members}
+	respondJSON(w, projection)
 }
 
 // SystemAdminAPI owns elevated operational controls and gateway-user
@@ -51,7 +122,13 @@ func (h *proxyHandler) systemAdminAPIService() *SystemAdminAPI {
 		authorizeAdmin: h.checkAdminAuth,
 		poolUsers:      h.servePoolUsersAdmin,
 		routes: map[string]systemAdminRoute{
-			"/metrics": {handler: h.metrics.serve},
+			"/api/v2/system": {method: http.MethodGet, handler: h.serveSystemProjection},
+			"/api/v2/system/reload-connections": {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) {
+				h.reloadAccounts()
+				respondJSON(w, map[string]string{"status": "ok"})
+			}},
+			"/api/v2/system/clear-rate-limits": {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) { h.clearAllRateLimits(w) }},
+			"/metrics":                         {handler: h.metrics.serve},
 			"/admin/reload": {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) {
 				h.reloadAccounts()
 				w.WriteHeader(http.StatusOK)

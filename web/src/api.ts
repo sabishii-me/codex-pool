@@ -1,4 +1,4 @@
-import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, UsageEconomicsProjection, UsageProjection } from "./types";
+import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
@@ -35,6 +35,14 @@ export async function loadSession(): Promise<FriendSession | null> {
 
 export async function logout() {
   await fetch("/auth/logout", { method: "POST" });
+}
+
+export async function loadSystemProjection(): Promise<SystemProjection> {
+  return decode(await fetch("/api/v2/system", { cache: "no-store" }));
+}
+
+export async function runSystemOperation(action: "reload-connections" | "clear-rate-limits") {
+  return decode<Record<string, unknown>>(await fetch(`/api/v2/system/${action}`, { method: "POST" }));
 }
 
 export async function loadGatewayHealth(): Promise<GatewayHealth> {

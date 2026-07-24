@@ -1,10 +1,25 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestSystemAdminAPIProjectionReportsMeasuredRuntime(t *testing.T) {
+	handler := &proxyHandler{startTime: time.Now().Add(-time.Minute), pool: newProviderPool(nil, false), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})}
+	response := httptest.NewRecorder()
+	handler.serveSystemProjection(response, httptest.NewRequest(http.MethodGet, "/api/v2/system", nil))
+	var projection systemProjection
+	if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &projection) != nil {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if projection.Evidence.Kind != "measured" || projection.Runtime.UptimeSeconds < 59 || projection.Capacity.Providers != 3 {
+		t.Fatalf("projection=%#v", projection)
+	}
+}
 
 func TestSystemAdminAPIAuthorizesBeforeMethodAndHandler(t *testing.T) {
 	called := false

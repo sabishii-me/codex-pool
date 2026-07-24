@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkMFAStatus, loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout, verifyMFA } from "./api";
-import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
+import { checkMFAStatus, loadDashboardResources, loadPoolUsers, loadProviderConnectionsV2, loadSession, loadSystemProjection, logout, verifyMFA } from "./api";
+import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "./types";
 import type { ResourceState } from "./resource-state";
 import { capabilityPending, currentRoute, initialCapability, isElevated, navigateTo, routeForPath, type AppRoute, type CapabilityStatus } from "./routes";
 import { Page } from "./features/pages";
@@ -20,7 +20,7 @@ export function App() {
   const [models, setModels] = useState<ModelDescriptor[]>([]);
   const [connections, setConnections] = useState<ResourceState<OperatorProviderConnectionV2[]>>({ status: "idle" });
   const [users, setUsers] = useState<ResourceState<PoolUserStats[]>>({ status: "idle" });
-  const [health, setHealth] = useState<ResourceState<GatewayHealth>>({ status: "idle" });
+  const [health, setHealth] = useState<ResourceState<SystemProjection>>({ status: "idle" });
   const [capability, setCapability] = useState<CapabilityStatus>({ status: "idle" });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -58,7 +58,7 @@ export function App() {
       setErrors(dashboard.errors);
       if (!elevated) { clearProtected(); return; }
       setConnections({ status: "loading" }); setUsers({ status: "loading" }); setHealth({ status: "loading" });
-      const [connectionResult, userResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadGatewayHealth()]);
+      const [connectionResult, userResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadSystemProjection()]);
       setConnections(connectionResult.status === "fulfilled" ? (connectionResult.value.length ? { status: "ready", data: connectionResult.value } : { status: "empty" }) : { status: "error", message: connectionResult.reason instanceof Error ? connectionResult.reason.message : "Connections unavailable" });
       setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Members unavailable" });
       setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "Runtime health unavailable" });

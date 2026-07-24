@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { isAuthorizationError, mutateProviderConnection, renameProviderConnection } from "../api";
+import { isAuthorizationError, mutateProviderConnection, renameProviderConnection, runSystemOperation } from "../api";
 import type { ResourceState } from "../resource-state";
-import type { GatewayHealth, OperatorProviderConnectionV2, PoolUserStats } from "../types";
+import type { OperatorProviderConnectionV2, PoolUserStats, SystemProjection } from "../types";
 import { PageFrame, StatusBadge } from "../components/ui";
 
 export function AdminCapabilityCheckingPage({ resource }: { resource: "Connections" | "Members" | "System" }) {
@@ -66,9 +66,23 @@ export function MembersPage({ state }: { state: ResourceState<PoolUserStats[]> }
   return <PageFrame kicker="Administration" title="Members" description="Gateway user identities and concise measured activity."><ResourceMessage state={state} loading="Loading gateway members" empty="No member activity is available" />{state.status === "ready" ? <section className="admin-table">{state.data.map(user => <article className="admin-row" key={user.user_id}><div><b>{user.user_id}</b><small>{user.last_seen ? `Last activity ${new Date(user.last_seen).toLocaleString()}` : "No activity timestamp"}</small></div><span>{user.request_count.toLocaleString()} requests</span><span>{user.total_billable_tokens.toLocaleString()} billable tokens</span></article>)}</section> : null}<div className="resource-limitation"><b>Administration projection is limited</b><p>The current backend exposes usage identities and activity, but not member role, plan, enabled state, or security operations.</p></div></PageFrame>;
 }
 
-export function SystemPage({ state }: { state: ResourceState<GatewayHealth> }) {
-  return <PageFrame kicker="Administration" title="System" description="Platform state that is not owned by Models, Usage, Connections, or Members."><ResourceMessage state={state} loading="Loading runtime health" empty="Runtime health is unavailable" />{state.status === "ready" ? <section className="system-grid"><div className="system-card"><span>Gateway runtime</span><b>{state.data.status}</b><small>Uptime {state.data.uptime}</small></div><Unavailable title="Persistence health" /><Unavailable title="Projection freshness" /><Unavailable title="Background jobs" /><Unavailable title="Configuration revision" /><Unavailable title="Recovery readiness" /></section> : null}</PageFrame>;
+export function SystemPage({ state }: { state: ResourceState<SystemProjection> }) {
+  const [operation, setOperation] = useState<string | null>(null);
+  const [message, setMessage] = useState("");
+  const run = async (label: string, action: "reload-connections" | "clear-rate-limits") => {
+    if (operation) return;
+    setOperation(label); setMessage("");
+    try { const result = await runSystemOperation(action); setMessage(action === "clear-rate-limits" ? `${Number(result.cleared ?? 0)} active rate limits cleared.` : "Provider connections reloaded."); }
+    catch (error) { setMessage(error instanceof Error ? error.message : `${label} failed`); }
+    finally { setOperation(null); }
+  };
+  return <PageFrame kicker="Administration" title="System" description="Measured runtime, persistence, and registry state owned by the gateway."><ResourceMessage state={state} loading="Loading system projection" empty="System projection is unavailable" />{state.status === "ready" ? <>
+    <div className="evidence-strip"><span>{state.data.evidence.kind}</span><b>{state.data.evidence.source}</b><small>Generated {new Date(state.data.evidence.generated_at).toLocaleString()}</small></div>
+    <section className="system-grid"><div className="system-card"><span>Gateway runtime</span><b>{state.data.runtime.status}</b><small>Started {new Date(state.data.runtime.started_at).toLocaleString()} · {formatUptime(state.data.runtime.uptime_seconds)}</small></div><div className="system-card"><span>Connection capacity</span><b>{state.data.capacity.connections_active} active</b><small>{state.data.capacity.connections_total} total · {state.data.capacity.connections_disabled} disabled · {state.data.capacity.connections_dead} dead</small></div><div className="system-card"><span>Provider registry</span><b>{state.data.capacity.providers_registered} providers</b><small>{state.data.capacity.declarative_providers} declarative specifications active</small></div>{state.data.persistence.map(item => <div className={`system-card ${item.healthy ? "" : "unavailable"}`} key={item.name}><span>{item.name}</span><b>{item.healthy ? "Healthy" : item.configured ? "Unavailable" : "Not configured"}</b><small>{item.detail}</small></div>)}</section>
+    <section className="system-operations"><div><span>Operational controls</span><h2>Gateway maintenance</h2><p>These actions use current backend operations and do not imply persistence or recovery guarantees beyond their response.</p></div><div><button disabled={operation !== null} onClick={() => void run("Reload", "reload-connections")}>{operation === "Reload" ? "Reloading…" : "Reload connections"}</button><button disabled={operation !== null} onClick={() => { if (window.confirm("Clear all active provider rate-limit cooldowns?")) void run("Clear", "clear-rate-limits"); }}>{operation === "Clear" ? "Clearing…" : "Clear rate limits"}</button></div>{message ? <p role="status">{message}</p> : null}</section>
+  </> : null}</PageFrame>;
 }
+function formatUptime(seconds: number) { const days = Math.floor(seconds / 86400); const hours = Math.floor(seconds % 86400 / 3600); const minutes = Math.floor(seconds % 3600 / 60); return `Uptime ${days ? `${days}d ` : ""}${hours}h ${minutes}m`; }
 
 function ResourceMessage<T>({ state, loading, empty }: { state: ResourceState<T>; loading: string; empty: string }) {
   if (state.status === "idle") return <div className="resource-message"><b>Admin capability required</b><p>This protected resource is locked.</p></div>;
@@ -77,4 +91,3 @@ function ResourceMessage<T>({ state, loading, empty }: { state: ResourceState<T>
   if (state.status === "empty") return <div className="resource-message"><b>{empty}</b><p>The authorized projection returned no records.</p></div>;
   return null;
 }
-function Unavailable({ title }: { title: string }) { return <div className="system-card unavailable"><span>{title}</span><b>Unavailable</b><small>No backend projection</small></div>; }

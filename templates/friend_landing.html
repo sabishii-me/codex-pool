@@ -1095,10 +1095,6 @@
                                         <svg viewBox="0 0 24 24"><path d="M12,2 L14.5,9.5 L22,12 L14.5,14.5 L12,22 L9.5,14.5 L2,12 L9.5,9.5 L12,2 M6,12 L8,18 L14,12 L8,6 L6,12" fill="currentColor"/></svg>
                                         Gemini
                                     </button>
-                                    <button type="button" class="tab" id="tool-tab-cute-code" data-tab="cute-code">
-                                        <svg viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5l-2 3-2-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h2V8H7zm4 0v2h6V8h-6zm-4 4v2h6v-2H7zm8 0v2h2v-2h-2z" fill="currentColor"/></svg>
-                                        Cute Code
-                                    </button>
                                     <button type="button" class="tab" id="tool-tab-pi" data-tab="pi">
                                         <!-- Pi Icon -->
                                         <svg viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm5 4h2v10H9V9zm4 0h2v10h-2V9zm-6 8h10v2H7v-2z" fill="currentColor"/></svg>
@@ -1695,51 +1691,6 @@ brew install claude-code</pre>
                     </div>
                     <p style="color: #888; font-size: 0.75rem; font-style: italic;">
                         The installer merges these providers into your existing file. Open <code>/model</code> in Pi to reload it without restarting.
-                    </p>
-                </div>
-
-                <!-- CUTE CODE -->
-                <div id="tab-cute-code" class="tab-content">
-                    <div class="install-section">
-                        <div class="section-header">
-                            <svg viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5l-2 3-2-3H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4v2h2V8H7zm4 0v2h6V8h-6zm-4 4v2h6v-2H7zm8 0v2h2v-2h-2z" fill="currentColor"/></svg>
-                            Cute Code Setup
-                        </div>
-                        <p style="color: #999; font-size: 0.8rem; margin-bottom: 15px;">
-                            Installs cute-code, writes pool settings to <code>~/.claude/settings.json</code>, and registers Codex/OpenAI, Claude, Kimi, MiniMax, GLM, and Grok models.
-                        </p>
-                    </div>
-
-                    <div class="step-label">01 // Install and configure</div>
-                    <p style="color: var(--text-disabled); font-size: 0.75rem; margin: 0 0 8px 0; text-transform: uppercase; letter-spacing: 0.1em;">
-                        macOS / Linux (bash/zsh)
-                    </p>
-                    <div class="code-wrapper">
-                        <button class="copy-btn" onclick="copyToClipboard('cute-code-install-unix', this)">Copy</button>
-                        <div class="code-block">
-                            <pre id="cute-code-install-unix"></pre>
-                        </div>
-                    </div>
-                    <p style="color: var(--text-disabled); font-size: 0.75rem; margin: 16px 0 8px 0; text-transform: uppercase; letter-spacing: 0.1em;">
-                        Windows (PowerShell)
-                    </p>
-                    <div class="code-wrapper">
-                        <button class="copy-btn" onclick="copyToClipboard('cute-code-install-windows', this)">Copy</button>
-                        <div class="code-block">
-                            <pre id="cute-code-install-windows"></pre>
-                        </div>
-                    </div>
-
-                    <div class="step-label">02 // Generated settings.json</div>
-                    <p style="color: var(--text-disabled); font-size: 0.8rem; margin-bottom: 10px;">Target: <code>~/.claude/settings.json</code></p>
-                    <div class="code-wrapper">
-                        <button class="copy-btn" onclick="copyToClipboard('cute-code-settings-json', this)">Copy</button>
-                        <div class="code-block">
-                            <pre id="cute-code-settings-json"></pre>
-                        </div>
-                    </div>
-                    <p style="color: #888; font-size: 0.75rem; font-style: italic;">
-                        After setup, run <code>cute-code --model gpt-5.6-sol</code> or pick any configured model in the model selector.
                     </p>
                 </div>
 
@@ -2536,7 +2487,6 @@ Before you finish, report exactly which files changed and paste the smoke-test o
             let geminiApiKey = '';
             let claudeApiKey = '';
             let piModelsJson = '# Loading...';
-            let cuteCodeSettingsJson = '# Loading...';
 
             if (friendCode) {
                 try {
@@ -2556,7 +2506,6 @@ Before you finish, report exactly which files changed and paste the smoke-test o
                     geminiApiKey = result.gemini_api_key || '';
                     claudeApiKey = result.claude_api_key || '';
                     piModelsJson = result.pi_models_json || '# Unable to fetch';
-                    cuteCodeSettingsJson = result.cute_code_settings_json || '# Unable to fetch';
                     localStorage.setItem('downloadToken', downloadToken);
                     localStorage.setItem('publicUrl', publicUrl);
                 } catch (error) {
@@ -2669,10 +2618,6 @@ $env:CLAUDE_CODE_OAUTH_TOKEN = "${claudeApiKey}"`;
                 document.getElementById('claude-env-windows').textContent = `# Run the one-liner above to configure automatically`;
             }
 
-            const cuteCodeScriptUrl = `${publicUrl}/setup/cute-code/${downloadToken}`;
-            document.getElementById('cute-code-install-unix').textContent = `curl -sL "${cuteCodeScriptUrl}" | bash`;
-            document.getElementById('cute-code-install-windows').textContent = `irm "${cuteCodeScriptUrl}?shell=powershell" | iex`;
-            document.getElementById('cute-code-settings-json').textContent = cuteCodeSettingsJson;
 
             populateApiDocs(publicUrl, claudeApiKey || '');
             if (claudeApiKey) {
@@ -2762,7 +2707,6 @@ args = ["~/.codex/model_sync.sh", "${result.public_url}"]`;
                 // Populate Gemini (API key mode - bypasses OAuth)
                 const geminiApiKey = result.gemini_api_key || '';
                 const piModelsJson = result.pi_models_json || '';
-                const cuteCodeSettingsJson = result.cute_code_settings_json || '';
                 const geminiScriptUrl = `${result.public_url}/setup/gemini/${result.download_token}`;
                 document.getElementById('gemini-one-liner-unix').textContent = `curl -sL "${geminiScriptUrl}" | bash`;
                 document.getElementById('gemini-one-liner-windows').textContent = `irm "${geminiScriptUrl}?shell=powershell" | iex`;
@@ -2830,10 +2774,6 @@ export CLAUDE_CODE_OAUTH_TOKEN="${claudeApiKey}"`;
                 document.getElementById('claude-env-windows').textContent = `$env:ANTHROPIC_BASE_URL = "${result.public_url}"
 $env:CLAUDE_CODE_OAUTH_TOKEN = "${claudeApiKey}"`;
 
-                const cuteCodeScriptUrl = `${result.public_url}/setup/cute-code/${result.download_token}`;
-                document.getElementById('cute-code-install-unix').textContent = `curl -sL "${cuteCodeScriptUrl}" | bash`;
-                document.getElementById('cute-code-install-windows').textContent = `irm "${cuteCodeScriptUrl}?shell=powershell" | iex`;
-                document.getElementById('cute-code-settings-json').textContent = cuteCodeSettingsJson;
 
                 populateApiDocs(result.public_url, claudeApiKey || '');
                 if (claudeApiKey) {

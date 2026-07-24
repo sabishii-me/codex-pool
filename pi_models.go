@@ -39,30 +39,6 @@ type piModelCost struct {
 	CacheWrite float64 `json:"cacheWrite"`
 }
 
-type cuteCodeSettings struct {
-	Model            string                `json:"model,omitempty"`
-	OpenAIBaseURL    string                `json:"openaiBaseUrl"`
-	OpenAIAPIKey     string                `json:"openaiApiKey"`
-	AnthropicBaseURL string                `json:"anthropicBaseUrl"`
-	AnthropicAPIKey  string                `json:"anthropicApiKey"`
-	CustomModels     []cuteCodeModelConfig `json:"customModels"`
-	CodexPool        cuteCodePoolConfig    `json:"codexPool"`
-}
-
-type cuteCodePoolConfig struct {
-	URL string `json:"url"`
-}
-
-type cuteCodeModelConfig struct {
-	ID            string `json:"id"`
-	Name          string `json:"name,omitempty"`
-	Protocol      string `json:"protocol"`
-	BaseURL       string `json:"baseUrl,omitempty"`
-	APIKey        string `json:"apiKey,omitempty"`
-	ContextWindow int    `json:"contextWindow,omitempty"`
-	Description   string `json:"description,omitempty"`
-}
-
 func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byte, error) {
 	baseURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	cfg := piModelsConfig{
@@ -151,26 +127,6 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 	return json.MarshalIndent(cfg, "", "  ")
 }
 
-func generateCuteCodeSettingsJSON(publicURL, apiKey string) ([]byte, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
-	settings := cuteCodeSettings{
-		Model:            "gpt-5.6-sol",
-		OpenAIBaseURL:    baseURL,
-		OpenAIAPIKey:     apiKey,
-		AnthropicBaseURL: baseURL,
-		AnthropicAPIKey:  apiKey,
-		CodexPool: cuteCodePoolConfig{
-			URL: baseURL,
-		},
-	}
-	for _, accountType := range []AccountType{AccountTypeCodex, AccountTypeClaude, AccountTypeKimi, AccountTypeKimiPlatform, AccountTypeMinimax, AccountTypeZAI, AccountTypeXiaomi, AccountTypeDeepSeek, AccountTypeQwen, AccountTypeOpenRouter, AccountTypeNvidia} {
-		settings.CustomModels = append(settings.CustomModels, cuteModelsForProvider(baseURL, apiKey, accountType)...)
-	}
-	settings.CustomModels = append(settings.CustomModels, grokCuteModels(baseURL, apiKey)...)
-	settings.CustomModels = append(settings.CustomModels, antigravityCuteModels(baseURL, apiKey)...)
-	return json.MarshalIndent(settings, "", "  ")
-}
-
 func antigravityPiModels() []piModelConfig {
 	models := antigravityModels.Models(nil)
 	result := make([]piModelConfig, 0, len(models))
@@ -184,74 +140,12 @@ func antigravityPiModels() []piModelConfig {
 	return result
 }
 
-func antigravityCuteModels(baseURL, apiKey string) []cuteCodeModelConfig {
-	models := antigravityModels.Models(nil)
-	result := make([]cuteCodeModelConfig, 0, len(models))
-	for _, model := range models {
-		result = append(result, cuteOpenAIModel(baseURL, apiKey, "antigravity/"+model.ID, model.DisplayName, model.MaxTokens, "Google Antigravity"))
-	}
-	return result
-}
-
 func grokPiModels() []piModelConfig {
 	models := make([]piModelConfig, 0, len(grokModelCatalog))
 	for _, model := range grokModelCatalog {
 		models = append(models, piTextModel(model.ID, model.Name, model.Reasoning, model.ContextWindow, model.MaxTokens))
 	}
 	return models
-}
-
-func grokCuteModels(baseURL, apiKey string) []cuteCodeModelConfig {
-	models := make([]cuteCodeModelConfig, 0, len(grokModelCatalog))
-	for _, model := range grokModelCatalog {
-		models = append(models, cuteOpenAIModel(baseURL, apiKey, model.ID, model.Name, model.ContextWindow, ""))
-	}
-	return models
-}
-
-func cuteModelsForProvider(baseURL, apiKey string, accountType AccountType) []cuteCodeModelConfig {
-	models := modelsForProvider(accountType)
-	result := make([]cuteCodeModelConfig, 0, len(models))
-	for _, model := range models {
-		protocol := "anthropic"
-		if accountType == AccountTypeCodex || accountType == AccountTypeNvidia {
-			protocol = "openai"
-		}
-		result = append(result, cuteCodeModelConfig{
-			ID:            model.ID,
-			Name:          model.DisplayName,
-			Protocol:      protocol,
-			BaseURL:       baseURL,
-			APIKey:        apiKey,
-			ContextWindow: model.ContextWindow,
-			Description:   model.Description,
-		})
-	}
-	return result
-}
-
-func cuteOpenAIModel(baseURL, apiKey, id, name string, contextWindow int, description string) cuteCodeModelConfig {
-	return cuteCodeModelConfig{
-		ID:            id,
-		Name:          name,
-		Protocol:      "openai",
-		BaseURL:       baseURL,
-		APIKey:        apiKey,
-		ContextWindow: contextWindow,
-		Description:   description,
-	}
-}
-
-func cuteAnthropicModel(baseURL, apiKey, id, name string, contextWindow int, description string) cuteCodeModelConfig {
-	return cuteCodeModelConfig{
-		ID:            id,
-		Name:          name,
-		Protocol:      "anthropic",
-		BaseURL:       baseURL,
-		APIKey:        apiKey,
-		ContextWindow: contextWindow,
-		Description:   description,
-	}
 }
 
 func piTextModel(id, name string, reasoning bool, contextWindow, maxTokens int) piModelConfig {

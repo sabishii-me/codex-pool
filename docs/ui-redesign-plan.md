@@ -230,7 +230,7 @@ Before promotion, the replacement must preserve or improve:
 - [ ] Operator elevation and MFA enrollment, verification, recovery, and disable flows
 - [ ] Dashboard independent-resource refresh and last-known-good preservation
 - [ ] Model search, provider filtering, availability, metadata, and route-ID copying
-- [ ] Pi, Cute Code, Codex, Gemini, Claude, and Grok setup/config downloads
+- [ ] Pi, Codex, Gemini, Claude, and Grok setup/config downloads
 - [ ] Provider contribution, credential validation, and Codex browser OAuth
 - [ ] Canonical v2 provider identities and unknown runtime provider rendering
 - [ ] Provider-connection inspect, rename, test, enable/disable, and remove operations

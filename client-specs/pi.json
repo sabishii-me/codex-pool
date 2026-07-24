@@ -1,0 +1,12 @@
+{
+  "id": "pi",
+  "display_name": "Pi",
+  "description": "Merge gateway providers and the current model catalog into Pi.",
+  "adapter": "pi",
+  "enabled": true,
+  "order": 50,
+  "environments": [
+    {"id":"macos-linux","label":"macOS or Linux","shell":"bash","setup_path":"/setup/pi/{download_token}","config_path":"/config/pi/{download_token}","config_file":"~/.pi/agent/models.json","install_command":"curl -fsSL \"{setup_url}\" | bash","verify_command":"pi --version","launch_command":"pi","configuration_note":"The installer merges gateway providers into the existing models.json instead of replacing other providers."},
+    {"id":"windows","label":"Windows","shell":"powershell","setup_path":"/setup/pi/{download_token}","config_path":"/config/pi/{download_token}","config_file":"%USERPROFILE%\\.pi\\agent\\models.json","install_command":"Invoke-Expression (Invoke-RestMethod \"{setup_url}\")","verify_command":"pi --version","launch_command":"pi","configuration_note":"The installer merges gateway providers into the existing models.json instead of replacing other providers."}
+  ]
+}

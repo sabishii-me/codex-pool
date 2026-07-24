@@ -1,0 +1,12 @@
+{
+  "id": "codex-cli",
+  "display_name": "Codex CLI",
+  "description": "Configure Codex CLI with the gateway model catalog and credentials.",
+  "adapter": "codex",
+  "enabled": true,
+  "order": 10,
+  "environments": [
+    {"id":"macos-linux","label":"macOS or Linux","shell":"bash","setup_path":"/setup/codex/{download_token}","config_path":"/config/codex/{download_token}","config_file":"~/.codex","install_command":"curl -fsSL \"{setup_url}\" | bash","verify_command":"codex --version","launch_command":"codex","configuration_note":"The installer preserves existing Codex configuration and installs the gateway model catalog."},
+    {"id":"windows","label":"Windows","shell":"powershell","setup_path":"/setup/codex/{download_token}","config_path":"/config/codex/{download_token}","config_file":"%USERPROFILE%\\.codex","install_command":"Invoke-Expression (Invoke-RestMethod \"{setup_url}\")","verify_command":"codex --version","launch_command":"codex","configuration_note":"The installer preserves existing Codex configuration and installs the gateway model catalog."}
+  ]
+}

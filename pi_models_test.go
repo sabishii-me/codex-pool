@@ -266,23 +266,7 @@ func TestGeneratedClientConfigsIncludeDiscoveredAntigravityModels(t *testing.T) 
 	if models := piConfig.Providers["antigravity"].Models; len(models) != 1 || models[0].ID != "antigravity/gemini-live" {
 		t.Fatalf("Pi Antigravity models = %#v", models)
 	}
-	cuteJSON, err := generateCuteCodeSettingsJSON("https://pool.example.com", "pool-token")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cuteConfig cuteCodeSettings
-	if err := json.Unmarshal(cuteJSON, &cuteConfig); err != nil {
-		t.Fatal(err)
-	}
-	found := false
-	for _, model := range cuteConfig.CustomModels {
-		if model.ID == "antigravity/gemini-live" {
-			found = true
-		}
-	}
-	if !found {
-		t.Fatal("Cute Code Antigravity model missing")
-	}
+
 }
 
 func TestIsKimiModelHandlesPiBuiltInIDs(t *testing.T) {

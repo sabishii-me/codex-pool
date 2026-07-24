@@ -230,6 +230,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.dataAPIService().TryServe(w, r) {
 		return
 	}
+	if r.URL.Path == "/api/v2/setup/clients" {
+		if !requireMethod(w, r, http.MethodGet) {
+			return
+		}
+		h.handleSetupClients(w, r)
+		return
+	}
 	if h.providerAdminAPIService().TryServe(w, r) {
 		return
 	}
@@ -245,6 +252,11 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.systemAdminAPIService().TryServe(w, r) {
 		return
 	}
+	// Cute Code was removed rather than retained as a compatibility surface.
+	if r.URL.Path == "/cute-code" || strings.HasPrefix(r.URL.Path, "/setup/cute-code/") || strings.HasPrefix(r.URL.Path, "/config/cute-code/") {
+		http.NotFound(w, r)
+		return
+	}
 
 	// Browser navigation is a separate boundary from API and model-proxy
 	// routing. Canonical product routes serve the embedded SPA directly,
@@ -258,9 +270,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/":
 		h.serveFriendLanding(w, r)
-		return
-	case "/cute-code":
-		h.serveCuteCodeLanding(w, r)
 		return
 	case "/status":
 		h.serveStatusPage(w, r)
@@ -298,10 +307,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveClaudeSetupScript(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/setup/cute-code/") {
-		h.serveCuteCodeSetupScript(w, r)
-		return
-	}
 	if strings.HasPrefix(r.URL.Path, "/setup/grok/") {
 		h.serveGrokSetupScript(w, r)
 		return
@@ -310,11 +315,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.servePiSetupScript(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/config/cute-code/") {
-		h.serveCuteCodeSettingsConfig(w, r)
-		return
-	}
-
 	// Config download routes (no auth - token is the auth)
 	if strings.HasPrefix(r.URL.Path, "/config/codex/") || strings.HasPrefix(r.URL.Path, "/config/gemini/") || strings.HasPrefix(r.URL.Path, "/config/claude/") || strings.HasPrefix(r.URL.Path, "/config/pi/") || strings.HasPrefix(r.URL.Path, "/config/grok/") {
 		h.serveConfigDownload(w, r)

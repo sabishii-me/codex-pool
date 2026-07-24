@@ -1,4 +1,4 @@
-import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, ModelRoutingProjection, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
+import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, ModelRoutingProjection, PoolStats, PoolUserStats, SetupClientsProjection, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
@@ -137,13 +137,13 @@ export async function loadUsageEconomics(): Promise<UsageEconomicsProjection> {
   return decode(await fetch("/api/v2/usage/economics?scope=pool", { cache: "no-store" }));
 }
 
-export async function loadLivePiModels(downloadToken: string): Promise<string> {
-  const config = await decode<unknown>(await fetch(`/config/pi/${encodeURIComponent(downloadToken)}`, { cache: "no-store" }));
-  return JSON.stringify(config, null, 2);
+export async function loadSetupClients(): Promise<SetupClientsProjection> {
+  return decode(await fetch("/api/v2/setup/clients", { cache: "no-store" }));
 }
 
-export async function loadLiveCuteCodeSettings(downloadToken: string): Promise<string> {
-  const config = await decode<unknown>(await fetch(`/config/cute-code/${encodeURIComponent(downloadToken)}`, { cache: "no-store" }));
+export async function loadSetupConfig(configURL: string): Promise<string> {
+  const response = await fetch(configURL, { cache: "no-store" });
+  const config = await decode<unknown>(response);
   return JSON.stringify(config, null, 2);
 }
 

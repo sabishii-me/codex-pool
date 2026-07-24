@@ -15,30 +15,11 @@ import (
 	"time"
 )
 
-//go:embed templates/friend_landing.html templates/local_landing.html templates/cute_code_landing.html templates/og-image.png templates/og-image-transparent.webp
+//go:embed templates/friend_landing.html templates/local_landing.html templates/og-image.png templates/og-image-transparent.webp
 var friendContent embed.FS
 
 //go:embed web/dist/index.html web/dist/assets/*
 var signalRoomContent embed.FS
-
-func (h *proxyHandler) serveCuteCodeLanding(w http.ResponseWriter, r *http.Request) {
-	data, err := friendContent.ReadFile("templates/cute_code_landing.html")
-	if err != nil {
-		http.Error(w, "internal error: template missing", http.StatusInternalServerError)
-		return
-	}
-
-	publicURL := h.getEffectivePublicURL(r)
-	tmpl, err := template.New("cute-code").Parse(string(data))
-	if err != nil {
-		http.Error(w, "internal error: template parse failed", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	_ = tmpl.Execute(w, map[string]string{"PublicURL": publicURL})
-}
 
 func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.oauthGoogleClientID != "" || h.cfg.localDevSession {
@@ -111,18 +92,17 @@ func (h *proxyHandler) serveHeroImage(w http.ResponseWriter, r *http.Request) {
 // friendSessionResponse is the CLI-credential bundle plus identity/admin
 // status returned by GET /api/pool/session.
 type friendSessionResponse struct {
-	PublicURL            string `json:"public_url"`
-	Email                string `json:"email"`
-	IsAdmin              bool   `json:"is_admin"`
-	MFAEnrolled          bool   `json:"mfa_enrolled"`
-	OriginID             string `json:"origin_id"`
-	DownloadToken        string `json:"download_token"`
-	AuthJSON             string `json:"auth_json"`
-	GeminiAuthJSON       string `json:"gemini_auth_json"`
-	GeminiAPIKey         string `json:"gemini_api_key"`
-	ClaudeAPIKey         string `json:"claude_api_key"`
-	PiModelsJSON         string `json:"pi_models_json"`
-	CuteCodeSettingsJSON string `json:"cute_code_settings_json"`
+	PublicURL      string `json:"public_url"`
+	Email          string `json:"email"`
+	IsAdmin        bool   `json:"is_admin"`
+	MFAEnrolled    bool   `json:"mfa_enrolled"`
+	OriginID       string `json:"origin_id"`
+	DownloadToken  string `json:"download_token"`
+	AuthJSON       string `json:"auth_json"`
+	GeminiAuthJSON string `json:"gemini_auth_json"`
+	GeminiAPIKey   string `json:"gemini_api_key"`
+	ClaudeAPIKey   string `json:"claude_api_key"`
+	PiModelsJSON   string `json:"pi_models_json"`
 }
 
 // writeFriendSessionJSON builds the CLI-credential bundle for an already
@@ -163,11 +143,6 @@ func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Req
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate pi models config.")
 		return
 	}
-	cuteCodeSettingsJSON, err := generateCuteCodeSettingsJSON(h.getEffectivePublicURL(r), claudeAuthData.AccessToken)
-	if err != nil {
-		respondJSONError(w, http.StatusInternalServerError, "Failed to generate cute-code config.")
-		return
-	}
 
 	// Generate Gemini API key for API key mode (bypasses OAuth)
 	geminiAPIKey := generateGeminiAPIKey(secret, user)
@@ -184,18 +159,17 @@ func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(friendSessionResponse{
-		PublicURL:            publicURL,
-		Email:                user.Email,
-		IsAdmin:              isAdmin,
-		MFAEnrolled:          mfaEnrolled,
-		OriginID:             hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())),
-		DownloadToken:        user.Token,
-		AuthJSON:             string(authJSONBytes),
-		GeminiAuthJSON:       string(geminiJSONBytes),
-		GeminiAPIKey:         geminiAPIKey,               // API key for Gemini CLI API key mode
-		ClaudeAPIKey:         claudeAuthData.AccessToken, // JWT token to use as API key
-		PiModelsJSON:         string(piModelsJSON),
-		CuteCodeSettingsJSON: string(cuteCodeSettingsJSON),
+		PublicURL:      publicURL,
+		Email:          user.Email,
+		IsAdmin:        isAdmin,
+		MFAEnrolled:    mfaEnrolled,
+		OriginID:       hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())),
+		DownloadToken:  user.Token,
+		AuthJSON:       string(authJSONBytes),
+		GeminiAuthJSON: string(geminiJSONBytes),
+		GeminiAPIKey:   geminiAPIKey,               // API key for Gemini CLI API key mode
+		ClaudeAPIKey:   claudeAuthData.AccessToken, // JWT token to use as API key
+		PiModelsJSON:   string(piModelsJSON),
 	})
 }
 
@@ -222,155 +196,6 @@ func wantsPowerShell(r *http.Request) bool {
 	default:
 		return false
 	}
-}
-
-func (h *proxyHandler) generateCuteCodeSettingsForToken(token string, r *http.Request) ([]byte, error) {
-	if h.poolUsers == nil {
-		return nil, fmt.Errorf("pool users not configured")
-	}
-	user := h.poolUsers.GetByToken(token)
-	if user == nil {
-		return nil, fmt.Errorf("invalid token")
-	}
-	if user.Disabled {
-		return nil, fmt.Errorf("user disabled")
-	}
-	secret := getPoolJWTSecret()
-	if secret == "" {
-		return nil, fmt.Errorf("JWT secret not configured")
-	}
-	claudeAuth, err := generateClaudeAuth(secret, user)
-	if err != nil {
-		return nil, err
-	}
-	return generateCuteCodeSettingsJSON(h.getEffectivePublicURL(r), claudeAuth.AccessToken)
-}
-
-func (h *proxyHandler) serveCuteCodeSettingsConfig(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimPrefix(r.URL.Path, "/config/cute-code/")
-	if token == "" || strings.Contains(token, "/") {
-		http.Error(w, "invalid token", http.StatusBadRequest)
-		return
-	}
-	settingsJSON, err := h.generateCuteCodeSettingsForToken(token, r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(settingsJSON)
-}
-
-func (h *proxyHandler) serveCuteCodeSetupScript(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimPrefix(r.URL.Path, "/setup/cute-code/")
-	if token == "" || strings.Contains(token, "/") {
-		http.Error(w, "invalid token", http.StatusBadRequest)
-		return
-	}
-	if _, err := h.generateCuteCodeSettingsForToken(token, r); err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-	publicURL := h.getEffectivePublicURL(r)
-
-	if wantsPowerShell(r) {
-		script := fmt.Sprintf(`#requires -Version 5.1
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
-$ConfigUrl = '%s/config/cute-code/%s'
-
-function Set-Utf8NoBom {
-  param([string]$Path, [string]$Value)
-  $utf8 = New-Object System.Text.UTF8Encoding($false)
-  [System.IO.File]::WriteAllText($Path, $Value, $utf8)
-}
-
-Write-Host 'Installing cute-code...'
-try {
-  Invoke-Expression (Invoke-RestMethod 'https://git.irrigate.cc/pp/cute-code/raw/branch/main/install.ps1')
-} catch {
-  Write-Host "Warning: cute-code installer failed or was already installed: $_"
-}
-
-Write-Host 'Configuring cute-code for Codex Pool...'
-$claudeDir = $env:CLAUDE_CONFIG_DIR
-if ([string]::IsNullOrWhiteSpace($claudeDir)) { $claudeDir = Join-Path $HOME '.claude' }
-New-Item -ItemType Directory -Force -Path $claudeDir | Out-Null
-$settingsFile = Join-Path $claudeDir 'settings.json'
-
-$incoming = Invoke-RestMethod -Uri $ConfigUrl
-$settings = $null
-try { $settings = Get-Content -Path $settingsFile -Raw | ConvertFrom-Json } catch {}
-if ($null -eq $settings) { $settings = New-Object PSObject }
-
-foreach ($prop in $incoming.PSObject.Properties) {
-  $settings | Add-Member -MemberType NoteProperty -Name $prop.Name -Value $prop.Value -Force
-}
-
-Set-Utf8NoBom -Path $settingsFile -Value ($settings | ConvertTo-Json -Depth 20)
-Write-Host "cute-code pool settings saved to $settingsFile"
-Write-Host 'Run: cute-code --model gpt-5.6-sol'
-`, publicURL, token)
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Write([]byte(script))
-		return
-	}
-
-	script := fmt.Sprintf(`#!/bin/bash
-set -euo pipefail
-CONFIG_URL="%s/config/cute-code/%s"
-CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-SETTINGS_FILE="$CLAUDE_DIR/settings.json"
-TMP_FILE="$(mktemp)"
-
-mkdir -p "$CLAUDE_DIR"
-
-printf 'Installing cute-code...\n'
-if command -v curl >/dev/null 2>&1; then
-    curl -fsSL https://git.irrigate.cc/pp/cute-code/raw/branch/main/install.sh | bash || true
-fi
-
-curl -fsSL "$CONFIG_URL" -o "$TMP_FILE"
-
-if command -v node >/dev/null 2>&1; then
-    SETTINGS_FILE="$SETTINGS_FILE" TMP_FILE="$TMP_FILE" node << 'NODE_SCRIPT'
-const fs = require('fs');
-const settingsFile = process.env.SETTINGS_FILE;
-const tmpFile = process.env.TMP_FILE;
-let settings = {};
-let incoming = {};
-try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
-incoming = JSON.parse(fs.readFileSync(tmpFile, 'utf8'));
-settings = { ...settings, ...incoming };
-fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
-NODE_SCRIPT
-elif command -v python3 >/dev/null 2>&1; then
-    SETTINGS_FILE="$SETTINGS_FILE" TMP_FILE="$TMP_FILE" python3 << 'PYTHON_SCRIPT'
-import json, os
-settings_file = os.environ['SETTINGS_FILE']
-tmp_file = os.environ['TMP_FILE']
-try:
-    with open(settings_file) as f: settings = json.load(f)
-except Exception:
-    settings = {}
-with open(tmp_file) as f: incoming = json.load(f)
-settings.update(incoming)
-with open(settings_file, 'w') as f:
-    json.dump(settings, f, indent=2)
-    f.write('\n')
-PYTHON_SCRIPT
-else
-    cp "$SETTINGS_FILE" "$SETTINGS_FILE.bak" 2>/dev/null || true
-    cp "$TMP_FILE" "$SETTINGS_FILE"
-fi
-
-rm -f "$TMP_FILE"
-printf 'cute-code pool settings saved to %%s\n' "$SETTINGS_FILE"
-printf 'Run: cute-code --model gpt-5.6-sol\n'
-`, publicURL, token)
-	w.Header().Set("Content-Type", "text/x-shellscript")
-	w.Write([]byte(script))
 }
 
 func (h *proxyHandler) serveCodexSetupScript(w http.ResponseWriter, r *http.Request) {

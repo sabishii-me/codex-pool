@@ -1,0 +1,12 @@
+{
+  "id": "claude-code",
+  "display_name": "Claude Code",
+  "description": "Connect Claude Code to the gateway's Anthropic-compatible endpoint.",
+  "adapter": "claude",
+  "enabled": true,
+  "order": 20,
+  "environments": [
+    {"id":"macos-linux","label":"macOS or Linux","shell":"bash","setup_path":"/setup/claude/{download_token}","config_path":"/config/claude/{download_token}","config_file":"~/.claude/settings.json","install_command":"curl -fsSL \"{setup_url}\" | bash","verify_command":"claude --version","launch_command":"claude","configuration_note":"The installer clears conflicting Claude authentication variables and updates the existing settings file."},
+    {"id":"windows","label":"Windows","shell":"powershell","setup_path":"/setup/claude/{download_token}","config_path":"/config/claude/{download_token}","config_file":"%USERPROFILE%\\.claude\\settings.json","install_command":"Invoke-Expression (Invoke-RestMethod \"{setup_url}\")","verify_command":"claude --version","launch_command":"claude","configuration_note":"The installer clears conflicting Claude authentication variables and updates the existing settings file."}
+  ]
+}

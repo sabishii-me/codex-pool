@@ -241,24 +241,6 @@ func newTestPoolUserStoreWithUser(t *testing.T, token string) *GatewayUserStore 
 	return store
 }
 
-func TestServeCuteCodeLanding(t *testing.T) {
-	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/cute-code", nil)
-	rr := httptest.NewRecorder()
-
-	h.serveCuteCodeLanding(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	body := rr.Body.String()
-	for _, want := range []string{"codex pool + cute-code", "Generate setup", "cute-code --model gpt-5.6-sol"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected cute-code landing to contain %q, got:\n%s", want, body)
-		}
-	}
-}
-
 func TestFriendLandingServesReactSignalRoom(t *testing.T) {
 	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
 	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
@@ -357,96 +339,6 @@ func TestServeHeroImageWebP(t *testing.T) {
 	body := rr.Body.Bytes()
 	if len(body) < 12 || string(body[:4]) != "RIFF" || string(body[8:12]) != "WEBP" {
 		t.Fatalf("hero response is not WebP: %q", body[:min(len(body), 12)])
-	}
-}
-
-func TestServeCuteCodeSetupScript_Bash(t *testing.T) {
-	secret := "test-secret-key-12345678901234567890"
-	t.Setenv("POOL_JWT_SECRET", secret)
-	t.Setenv("PUBLIC_URL", "")
-
-	h := &proxyHandler{poolUsers: newTestPoolUserStoreWithUser(t, "tok-cute")}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/setup/cute-code/tok-cute", nil)
-	rr := httptest.NewRecorder()
-	h.serveCuteCodeSetupScript(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	body := rr.Body.String()
-	for _, want := range []string{
-		"https://git.irrigate.cc/pp/cute-code/raw/branch/main/install.sh",
-		"/config/cute-code/tok-cute",
-		"CLAUDE_DIR=\"${CLAUDE_CONFIG_DIR:-$HOME/.claude}\"",
-		"cute-code --model gpt-5.6-sol",
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected cute-code bash setup to contain %q, got:\n%s", want, body)
-		}
-	}
-}
-
-func TestServeCuteCodeSetupScript_PowerShell(t *testing.T) {
-	secret := "test-secret-key-12345678901234567890"
-	t.Setenv("POOL_JWT_SECRET", secret)
-	t.Setenv("PUBLIC_URL", "")
-
-	h := &proxyHandler{poolUsers: newTestPoolUserStoreWithUser(t, "tok-cute-ps")}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/setup/cute-code/tok-cute-ps?shell=powershell", nil)
-	rr := httptest.NewRecorder()
-	h.serveCuteCodeSetupScript(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	body := rr.Body.String()
-	for _, want := range []string{
-		"https://git.irrigate.cc/pp/cute-code/raw/branch/main/install.ps1",
-		"/config/cute-code/tok-cute-ps",
-		"$claudeDir = $env:CLAUDE_CONFIG_DIR",
-		"cute-code --model gpt-5.6-sol",
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected cute-code PowerShell setup to contain %q, got:\n%s", want, body)
-		}
-	}
-}
-
-func TestServeCuteCodeSettingsConfig(t *testing.T) {
-	secret := "test-secret-key-12345678901234567890"
-	t.Setenv("POOL_JWT_SECRET", secret)
-	t.Setenv("PUBLIC_URL", "")
-
-	h := &proxyHandler{poolUsers: newTestPoolUserStoreWithUser(t, "tok-cute-config")}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/config/cute-code/tok-cute-config", nil)
-	rr := httptest.NewRecorder()
-	h.serveCuteCodeSettingsConfig(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	body := rr.Body.String()
-	for _, want := range []string{
-		`"openaiBaseUrl": "http://example.com"`,
-		`"anthropicBaseUrl": "http://example.com"`,
-		`"openaiApiKey": "sk-ant-oat01-pool-`,
-		`"model": "gpt-5.6-sol"`,
-		`"id": "gpt-5.6-sol"`,
-		`"id": "gpt-5.5"`,
-		`"id": "claude-fable-5"`,
-		`"id": "claude-opus-4-8"`,
-		`"id": "MiniMax-M3"`,
-		`"id": "MiniMax-M2.7"`,
-		`"id": "glm-5.2"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected cute-code config to contain %q, got:\n%s", want, body)
-		}
-	}
-	for _, forbidden := range []string{"remoteCompactForAnthropic", "remoteCompactModel"} {
-		if strings.Contains(body, forbidden) {
-			t.Fatalf("cute-code config should not contain %q, got:\n%s", forbidden, body)
-		}
 	}
 }
 

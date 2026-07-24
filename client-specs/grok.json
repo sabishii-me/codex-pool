@@ -1,0 +1,12 @@
+{
+  "id": "grok-build",
+  "display_name": "Grok Build",
+  "description": "Configure Grok Build model discovery and inference through the gateway.",
+  "adapter": "grok",
+  "enabled": true,
+  "order": 40,
+  "environments": [
+    {"id":"macos-linux","label":"macOS or Linux","shell":"bash","setup_path":"/setup/grok/{download_token}","config_path":"/config/grok/{download_token}","config_file":"~/.grok/config.toml","install_command":"curl -fsSL \"{setup_url}\" | bash","verify_command":"grok --version","launch_command":"grok","configuration_note":"The installer backs up conflicting OAuth state and maintains one gateway-managed model section."},
+    {"id":"windows","label":"Windows","shell":"powershell","setup_path":"/setup/grok/{download_token}","config_path":"/config/grok/{download_token}","config_file":"%USERPROFILE%\\.grok\\config.toml","install_command":"Invoke-Expression (Invoke-RestMethod \"{setup_url}\")","verify_command":"grok --version","launch_command":"grok","configuration_note":"The installer backs up conflicting OAuth state and maintains one gateway-managed model section."}
+  ]
+}

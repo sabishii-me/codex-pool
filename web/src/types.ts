@@ -12,7 +12,31 @@ export interface FriendSession {
   gemini_api_key: string;
   claude_api_key: string;
   pi_models_json: string;
-  cute_code_settings_json: string;
+}
+
+export interface SetupEnvironment {
+  id: string;
+  label: string;
+  shell: "bash" | "powershell";
+  setup_url: string;
+  config_url?: string;
+  config_file?: string;
+  install_command: string;
+  verify_command: string;
+  launch_command: string;
+  configuration_note?: string;
+}
+
+export interface SetupClient {
+  id: string;
+  display_name: string;
+  description: string;
+  environments: SetupEnvironment[];
+}
+
+export interface SetupClientsProjection {
+  clients: SetupClient[];
+  evidence: { source: string; generated_at: string };
 }
 
 export interface SystemProjection {

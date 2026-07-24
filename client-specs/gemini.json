@@ -1,0 +1,12 @@
+{
+  "id": "gemini-cli",
+  "display_name": "Gemini CLI",
+  "description": "Configure Gemini CLI to authenticate through the gateway.",
+  "adapter": "gemini",
+  "enabled": true,
+  "order": 30,
+  "environments": [
+    {"id":"macos-linux","label":"macOS or Linux","shell":"bash","setup_path":"/setup/gemini/{download_token}","config_path":"/config/gemini/{download_token}","config_file":"~/.gemini","install_command":"curl -fsSL \"{setup_url}\" | bash","verify_command":"gemini --version","launch_command":"gemini","configuration_note":"The installer configures Gemini CLI's gateway endpoint and member credential."},
+    {"id":"windows","label":"Windows","shell":"powershell","setup_path":"/setup/gemini/{download_token}","config_path":"/config/gemini/{download_token}","config_file":"%USERPROFILE%\\.gemini","install_command":"Invoke-Expression (Invoke-RestMethod \"{setup_url}\")","verify_command":"gemini --version","launch_command":"gemini","configuration_note":"The installer configures Gemini CLI's gateway endpoint and member credential."}
+  ]
+}

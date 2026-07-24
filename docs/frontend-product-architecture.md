@@ -202,7 +202,16 @@ One identity/security surface. Admin capability adds MFA enrollment, elevation, 
 
 ### Setup `/setup`
 
-No changes. Replan separately.
+Setup is a backend-driven vertical workflow rather than a client tab collection:
+
+1. choose a supported coding client;
+2. choose an environment;
+3. run the generated install/configuration command;
+4. verify the client locally.
+
+The initial registry exposes the production adapters for Codex CLI, Claude Code, Gemini CLI, Grok Build, and Pi. `GET /api/v2/setup/clients` owns client identity, ordering, environments, setup/config URLs, commands, configuration paths, and verification guidance. React does not hard-code client inventory or derive token-bearing routes.
+
+Specifications live under `client-specs/*.json`. A new client using an allowlisted existing adapter can be added without changing React source; a genuinely new configuration strategy requires a tested backend adapter. Cute Code is not a supported client and has no landing, setup, config, or compatibility route.
 
 ## Monitor decision
 
@@ -273,7 +282,7 @@ Updated: 2026-07-25
 | Profile security | Partial | enrollment/confirmation/recovery display complete; rotation operations remain |
 | Selected-model routing | Complete baseline | backend-owned runtime provider, eligibility, exclusions, and evidence on `/models` |
 | Immutable staging candidate | Complete baseline | commit-tagged OCI image, isolated candidate Compose contract, build script and metadata |
-| Setup | Frozen | separate replan |
+| Setup | Complete baseline | backend-driven Codex, Claude, Gemini, Grok, and Pi vertical setup workflow |
 
 The current phase is feature/function delivery. Validation hardening and broad visual polish are deferred to the following phase unless required to make a feature safe or operable.
 
@@ -294,7 +303,7 @@ The frontend keeps routing detail inside `/models`; no `/admin/routes` route exi
 5. ~~Implement backend-owned selected-model routing context.~~
 6. **Complete Profile security rotation/recovery operations.**
 7. Produce and validate an immutable staging candidate before promotion.
-8. Replan Setup separately.
+8. ~~Replan Setup as a backend-driven vertical workflow and remove Cute Code.~~
 
 ### Following hardening/polish phase
 

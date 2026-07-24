@@ -65,6 +65,23 @@ export function App() {
     } finally { setLoading(false); }
   }, [elevated, clearProtected]);
 
+  const refreshConnections = useCallback(async () => {
+    setConnections({ status: "loading" });
+    try {
+      const data = await loadProviderConnectionsV2();
+      setConnections(data.length ? { status: "ready", data } : { status: "empty" });
+    } catch (error) {
+      setConnections({ status: "error", message: error instanceof Error ? error.message : "Connections unavailable" });
+      throw error;
+    }
+  }, []);
+  const authorizationLost = useCallback(() => {
+    clearProtected();
+    setPendingAdminRoute(route.path);
+    setMFAChallengeOpen(true);
+    void refreshCapability(true);
+  }, [clearProtected, refreshCapability, route.path]);
+
   useEffect(() => { loadSession().then(setSession).catch(() => setSession(null)).finally(() => setBooting(false)); }, []);
   useEffect(() => {
     if (!session) return;
@@ -117,7 +134,7 @@ export function App() {
     <div className="new-layout"><Sidebar route={renderedRoute} isAdmin={session.is_admin} onNavigate={go} onSignOut={signOut} email={session.email} />
       <main className="new-main" id="main-content" tabIndex={-1}>
         {errors.length ? <div className="new-alert" role="alert"><b>Some projections are unavailable</b><span>{errors.join(" · ")}</span></div> : null}
-        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onNavigate={go} />
+        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onConnectionsRefresh={refreshConnections} onAuthorizationLost={authorizationLost} onNavigate={go} />
       </main>
     </div>
     {mfaChallengeOpen ? <MFAChallenge capability={capability} destination={pendingAdminRoute} onCancel={closeMFAChallenge} onVerified={completeMFAChallenge} /> : null}

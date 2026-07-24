@@ -1,5 +1,13 @@
 import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, UsageEconomicsProjection, UsageProjection } from "./types";
 
+export class APIError extends Error {
+  constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
+}
+
+export function isAuthorizationError(error: unknown): boolean {
+  return error instanceof APIError && (error.status === 401 || error.status === 403);
+}
+
 async function decode<T>(response: Response): Promise<T> {
   const text = await response.text();
   let data: T | { error?: string } | null = null;
@@ -10,7 +18,7 @@ async function decode<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const structured = data && typeof data === "object" && "error" in data ? data.error : null;
     const plain = data === null ? text.trim() : "";
-    throw new Error(structured || plain || `${response.status} ${response.statusText}`);
+    throw new APIError(structured || plain || `${response.status} ${response.statusText}`, response.status);
   }
   return data as T;
 }
@@ -141,10 +149,15 @@ export async function renameProviderConnection(accountID: string, displayName: s
   }));
 }
 
-export async function mutateAccount(accountID: string, action: "enable" | "disable" | "resurrect" | "refresh") {
-  return decode<Record<string, unknown>>(await fetch(`/admin/accounts/${encodeURIComponent(accountID)}/${action}`, {
+export async function mutateProviderConnection(accountID: string, action: "enable" | "disable" | "recover" | "refresh") {
+  return decode<Record<string, unknown>>(await fetch(`/api/v2/provider-connections/${encodeURIComponent(accountID)}/${action}`, {
     method: "POST",
   }));
+}
+
+/** @deprecated Use mutateProviderConnection. */
+export async function mutateAccount(accountID: string, action: "enable" | "disable" | "resurrect" | "refresh") {
+  return mutateProviderConnection(accountID, action === "resurrect" ? "recover" : action);
 }
 
 export interface MFAEnrollResult {

@@ -45,6 +45,10 @@ func TestProviderAdminAPIRoutesLifecycleActions(t *testing.T) {
 		{"/admin/accounts/c1/disable", "disabled", true},
 		{"/admin/accounts/c1/resurrect", "resurrect", false},
 		{"/admin/accounts/c1/refresh", "refresh", false},
+		{"/api/v2/provider-connections/c1/enable", "disabled", false},
+		{"/api/v2/provider-connections/c1/disable", "disabled", true},
+		{"/api/v2/provider-connections/c1/recover", "resurrect", false},
+		{"/api/v2/provider-connections/c1/refresh", "refresh", false},
 	}
 	for _, test := range cases {
 		action, id, disabled = "", "", false
@@ -89,7 +93,7 @@ func TestProviderAdminAPIRejectsWrongMethodAndUnknownPaths(t *testing.T) {
 	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/accounts/c1/disable", nil)) || response.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("wrong method status=%d", response.Code)
 	}
-	for _, path := range []string{"/admin/accounts", "/admin/accounts/c1/delete", "/api/v2/provider-connections", "/v1/messages"} {
+	for _, path := range []string{"/admin/accounts", "/admin/accounts/c1/delete", "/api/v2/provider-connections", "/api/v2/provider-connections/c1/delete", "/api/v2/provider-connections/c1/validate", "/v1/messages"} {
 		if api.TryServe(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, path, nil)) {
 			t.Fatalf("claimed unknown/read/gateway path %s", path)
 		}

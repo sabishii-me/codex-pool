@@ -32,19 +32,43 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 		return false
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/api/v2/provider-connections/") && strings.HasSuffix(r.URL.Path, "/identity") {
-		if !api.authorizeAdmin(w, r) {
+	const canonicalPrefix = "/api/v2/provider-connections/"
+	if strings.HasPrefix(r.URL.Path, canonicalPrefix) {
+		path := strings.TrimPrefix(r.URL.Path, canonicalPrefix)
+		for _, action := range []string{"identity", "enable", "disable", "recover", "refresh"} {
+			suffix := "/" + action
+			if !strings.HasSuffix(path, suffix) {
+				continue
+			}
+			if !api.authorizeAdmin(w, r) {
+				return true
+			}
+			method := http.MethodPost
+			if action == "identity" {
+				method = http.MethodPatch
+			}
+			if !requireMethod(w, r, method) {
+				return true
+			}
+			connectionID := strings.TrimSuffix(path, suffix)
+			if rejectInvalidProviderConnectionPathID(w, connectionID) {
+				return true
+			}
+			switch action {
+			case "identity":
+				api.rename(w, r, connectionID)
+			case "enable":
+				api.setDisabled(w, connectionID, false)
+			case "disable":
+				api.setDisabled(w, connectionID, true)
+			case "recover":
+				api.resurrect(w, connectionID)
+			case "refresh":
+				api.refresh(w, connectionID)
+			}
 			return true
 		}
-		if !requireMethod(w, r, http.MethodPatch) {
-			return true
-		}
-		connectionID := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/api/v2/provider-connections/"), "/identity")
-		if rejectInvalidProviderConnectionPathID(w, connectionID) {
-			return true
-		}
-		api.rename(w, r, connectionID)
-		return true
+		return false
 	}
 
 	if !strings.HasPrefix(r.URL.Path, "/admin/accounts/") {

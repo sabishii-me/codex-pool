@@ -8,7 +8,7 @@ import { ProfilePage } from "./profile";
 import { SetupPage } from "./setup";
 import { UsagePage } from "./usage";
 
-export function Page({ route, stats, signal, models, connections, users, health, session, capability, isElevated, onNavigate }: {
+export function Page({ route, stats, signal, models, connections, users, health, session, capability, isElevated, onConnectionsRefresh, onAuthorizationLost, onNavigate }: {
   route: string;
   stats: PoolStats | null;
   signal: SignalAnalytics | null;
@@ -19,6 +19,8 @@ export function Page({ route, stats, signal, models, connections, users, health,
   session: FriendSession;
   capability: CapabilityStatus;
   isElevated: boolean;
+  onConnectionsRefresh: () => Promise<void>;
+  onAuthorizationLost: () => void;
   onNavigate: (path: AppRoute) => void;
 }) {
   if (route === "/") return <DashboardPage stats={stats} models={models} connections={connections} isElevated={isElevated} onNavigate={onNavigate} />;
@@ -26,7 +28,7 @@ export function Page({ route, stats, signal, models, connections, users, health,
   if (route === "/usage") return <UsagePage isElevated={isElevated} members={users} />;
   if (route === "/setup") return <SetupPage session={session} />;
   if (route === "/profile") return <ProfilePage session={session} capability={capability} />;
-  if (route === "/admin/connections") return capability.status === "idle" || capability.status === "checking" ? <AdminCapabilityCheckingPage resource="Connections" /> : isElevated ? <ConnectionsPage state={connections} /> : <AdminLockedPage resource="Connections" onUnlock={() => onNavigate("/profile")} />;
+  if (route === "/admin/connections") return capability.status === "idle" || capability.status === "checking" ? <AdminCapabilityCheckingPage resource="Connections" /> : isElevated ? <ConnectionsPage state={connections} onRefresh={onConnectionsRefresh} onAuthorizationLost={onAuthorizationLost} /> : <AdminLockedPage resource="Connections" onUnlock={() => onNavigate("/profile")} />;
   if (route === "/admin/members") return capability.status === "idle" || capability.status === "checking" ? <AdminCapabilityCheckingPage resource="Members" /> : isElevated ? <MembersPage state={users} /> : <AdminLockedPage resource="Members" onUnlock={() => onNavigate("/profile")} />;
   if (route === "/admin/system") return capability.status === "idle" || capability.status === "checking" ? <AdminCapabilityCheckingPage resource="System" /> : isElevated ? <SystemPage state={health} /> : <AdminLockedPage resource="System" onUnlock={() => onNavigate("/profile")} />;
   return <div className="not-found-page"><span>404</span><h1>Page not found</h1><p>This route is not part of the current product architecture.</p><button className="primary-button" onClick={() => onNavigate("/")}>Return Home</button></div>;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkMFAStatus, loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
+import { checkMFAStatus, loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout, verifyMFA } from "./api";
 import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
 import type { ResourceState } from "./resource-state";
 import { capabilityPending, currentRoute, initialCapability, isElevated, navigateTo, routeForPath, type AppRoute, type CapabilityStatus } from "./routes";
@@ -24,23 +24,27 @@ export function App() {
   const [capability, setCapability] = useState<CapabilityStatus>({ status: "idle" });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [mfaChallengeOpen, setMFAChallengeOpen] = useState(false);
+  const [pendingAdminRoute, setPendingAdminRoute] = useState<AppRoute | null>(null);
   const capabilityGeneration = useRef(0);
 
   const elevated = isElevated(capability);
   const clearProtected = useCallback(() => { setConnections({ status: "idle" }); setUsers({ status: "idle" }); setHealth({ status: "idle" }); }, []);
-  const refreshCapability = useCallback(async (initial = false) => {
-    if (!session?.is_admin) return;
+  const refreshCapability = useCallback(async (initial = false): Promise<boolean> => {
+    if (!session?.is_admin) return false;
     const generation = ++capabilityGeneration.current;
     if (initial) setCapability({ status: "checking" });
     try {
       const status = await checkMFAStatus();
-      if (generation !== capabilityGeneration.current) return;
+      if (generation !== capabilityGeneration.current) return false;
       setCapability({ status: "resolved", enrolled: status.enrolled, elevated: status.elevated, recoveryCodesRemaining: status.recovery_codes_remaining });
       if (!status.elevated) clearProtected();
+      return status.elevated;
     } catch (error) {
-      if (generation !== capabilityGeneration.current) return;
+      if (generation !== capabilityGeneration.current) return false;
       clearProtected();
       setCapability({ status: "error", message: error instanceof Error ? error.message : "MFA status unavailable" });
+      return false;
     }
   }, [session?.is_admin, clearProtected]);
 
@@ -73,32 +77,73 @@ export function App() {
   useEffect(() => {
     if (!session || capabilityPending(capability)) return;
     const incoming = currentRoute();
-    if (incoming.adminOnly && !session.is_admin) { const home = routeForPath("/"); navigateTo(home, true); setRoute(home); }
+    if (incoming.adminOnly && !session.is_admin) { const home = routeForPath("/"); navigateTo(home, true); setRoute(home); return; }
+    if (incoming.adminOnly && session.is_admin && !elevated) {
+      setPendingAdminRoute(incoming.path);
+      setMFAChallengeOpen(true);
+    }
   }, [session, capability, elevated]);
 
-  const go = (path: AppRoute) => { const target = routeForPath(path); if (target.adminOnly && !session?.is_admin) return; navigateTo(target); setRoute(target); };
+  const go = (path: AppRoute) => {
+    const target = routeForPath(path);
+    if (target.adminOnly && !session?.is_admin) return;
+    if (target.adminOnly && !elevated) {
+      setPendingAdminRoute(path);
+      setMFAChallengeOpen(true);
+      return;
+    }
+    navigateTo(target); setRoute(target);
+  };
+  const closeMFAChallenge = () => {
+    setMFAChallengeOpen(false);
+    setPendingAdminRoute(null);
+    if (route.adminOnly) { const home = routeForPath("/"); navigateTo(home, true); setRoute(home); }
+  };
+  const completeMFAChallenge = async () => {
+    const nowElevated = await refreshCapability();
+    if (!nowElevated) return false;
+    const target = routeForPath(pendingAdminRoute ?? "/admin/connections");
+    setMFAChallengeOpen(false); setPendingAdminRoute(null); navigateTo(target, route.adminOnly); setRoute(target);
+    return true;
+  };
   const signOut = async () => { await logout(); setSession(null); const home = routeForPath("/"); navigateTo(home, true); setRoute(home); };
 
   if (booting) return <div className="new-boot"><span>AI POOL</span><small>Loading workspace</small></div>;
   if (!session) return <AccessGate />;
 
+  const renderedRoute = route.adminOnly && !elevated ? "/" : route.path;
   return <div className="new-app" data-admin={session.is_admin ? "true" : "false"} data-elevated={elevated ? "true" : "false"} data-route={route.path}>
     <Topbar session={session} isAdmin={session.is_admin} elevated={elevated} loading={loading} onRefresh={refresh} />
-    <div className="new-layout"><Sidebar route={route.path} isAdmin={session.is_admin} elevated={elevated} onNavigate={go} onSignOut={signOut} email={session.email} />
+    <div className="new-layout"><Sidebar route={renderedRoute} isAdmin={session.is_admin} onNavigate={go} onSignOut={signOut} email={session.email} />
       <main className="new-main" id="main-content" tabIndex={-1}>
         {errors.length ? <div className="new-alert" role="alert"><b>Some projections are unavailable</b><span>{errors.join(" · ")}</span></div> : null}
-        {session.is_admin && capability.status === "resolved" && !capability.elevated ? <div className="capability-notice"><b>Admin controls are locked</b><span>Member capabilities remain available. Open Profile to elevate with MFA.</span><button onClick={() => go("/profile")}>Open Profile</button></div> : null}
-        <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onCapabilityRefresh={() => refreshCapability()} onNavigate={go} />
+        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onNavigate={go} />
       </main>
     </div>
+    {mfaChallengeOpen ? <MFAChallenge capability={capability} destination={pendingAdminRoute} onCancel={closeMFAChallenge} onVerified={completeMFAChallenge} /> : null}
   </div>;
 }
 
 function AccessGate() { return <div className="new-access"><div className="access-card"><span className="logo-mark">AI</span><p className="kicker">Private model gateway</p><h1>Welcome to AI Pool</h1><p>Sign in to use your gateway membership and authorized Admin capabilities.</p><a className="primary-button" href="/auth/login/google">Continue with Google</a></div></div>; }
-function Topbar({ session, isAdmin, elevated, loading, onRefresh }: { session: FriendSession; isAdmin: boolean; elevated: boolean; loading: boolean; onRefresh: () => void }) { return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context">{elevated ? "Admin capability active" : isAdmin ? "Admin identity · controls locked" : "Member workspace"}<strong>{elevated ? "Gateway administration" : isAdmin ? "Administration requires MFA" : "Gateway workspace"}</strong></div><div className="topbar-tools">{isAdmin ? <span className={`identity-badge ${elevated ? "elevated" : "locked"}`}>{elevated ? "Admin elevated" : "Admin locked"}</span> : <span className="identity-badge">Member</span>}<span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>; }
-function Sidebar({ route, isAdmin, elevated, onNavigate, onSignOut, email }: { route: string; isAdmin: boolean; elevated: boolean; onNavigate: (path: AppRoute) => void; onSignOut: () => void; email: string }) {
+function Topbar({ session, isAdmin, elevated, loading, onRefresh }: { session: FriendSession; isAdmin: boolean; elevated: boolean; loading: boolean; onRefresh: () => void }) { return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context">{elevated ? "Administration" : "Workspace"}<strong>{elevated ? "Gateway administration" : "Gateway workspace"}</strong></div><div className="topbar-tools">{isAdmin ? <span className="identity-badge">Admin</span> : null}<span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>; }
+function Sidebar({ route, isAdmin, onNavigate, onSignOut, email }: { route: string; isAdmin: boolean; onNavigate: (path: AppRoute) => void; onSignOut: () => void; email: string }) {
   const member = [["/", "Home", "⌂"], ["/models", "Models", "◇"], ["/usage", "Usage", "▥"], ["/setup", "Setup", "↗"], ["/profile", "Profile", "●"]] as const;
   const admin = [["/admin/connections", "Connections", "⇄"], ["/admin/members", "Members", "◎"], ["/admin/system", "System", "⚙"]] as const;
-  return <aside className="new-sidebar"><div className="sidebar-section"><span className="section-label">Workspace</span>{member.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div>{isAdmin ? <div className={`sidebar-section admin-nav ${elevated ? "elevated" : "locked"}`}><span className="section-label">Administration <em>{elevated ? "MFA active" : "MFA locked"}</em></span>{admin.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} locked={!elevated} />)}</div> : null}<div className="sidebar-bottom"><span className="signed-in-identity"><span className="avatar">{email.slice(0, 2).toUpperCase()}</span><small>{email}</small></span><button className="signout-link" onClick={onSignOut}>Sign out</button></div></aside>;
+  return <aside className="new-sidebar"><div className="sidebar-section"><span className="section-label">Workspace</span>{member.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div>{isAdmin ? <div className="sidebar-section admin-nav"><span className="section-label">Administration</span>{admin.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div> : null}<div className="sidebar-bottom"><span className="signed-in-identity"><span className="avatar">{email.slice(0, 2).toUpperCase()}</span><small>{email}</small></span><button className="signout-link" onClick={onSignOut}>Sign out</button></div></aside>;
 }
-function NavButton({ path, current, label, icon, onNavigate, locked = false }: { path: string; current: string; label: string; icon: string; onNavigate: (path: AppRoute) => void; locked?: boolean }) { return <button className={`new-nav-link ${current === path ? "active" : ""} ${locked ? "locked" : ""}`} onClick={() => onNavigate(path as AppRoute)} aria-current={current === path ? "page" : undefined}><span>{icon}</span>{label}{locked ? <small aria-label="MFA locked">🔒</small> : null}</button>; }
+function NavButton({ path, current, label, icon, onNavigate }: { path: string; current: string; label: string; icon: string; onNavigate: (path: AppRoute) => void }) { return <button className={`new-nav-link ${current === path ? "active" : ""}`} onClick={() => onNavigate(path as AppRoute)} aria-current={current === path ? "page" : undefined}><span>{icon}</span>{label}</button>; }
+
+function MFAChallenge({ capability, destination, onCancel, onVerified }: { capability: CapabilityStatus; destination: AppRoute | null; onCancel: () => void; onVerified: () => Promise<boolean> }) {
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const title = destination?.split("/").at(-1) ?? "Admin controls";
+  const submit = async () => {
+    if (code.length !== 6 || submitting) return;
+    setSubmitting(true); setError("");
+    try { await verifyMFA({ code }); if (!await onVerified()) setError("Admin elevation could not be confirmed."); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Verification failed"); }
+    finally { setSubmitting(false); }
+  };
+  return <div className="mfa-modal-layer" role="presentation"><button className="mfa-modal-backdrop" aria-label="Close Admin verification" onClick={onCancel} /><section className="mfa-modal" role="dialog" aria-modal="true" aria-labelledby="mfa-title"><button className="mfa-modal-close" aria-label="Close Admin verification" onClick={onCancel}>×</button><span className="mfa-modal-mark">AI</span><p className="kicker">Admin verification</p><h1 id="mfa-title">Unlock {title}</h1><p>Enter the six-digit code from your authenticator app. You will continue to the requested Admin resource after verification.</p>{capability.status === "resolved" && !capability.enrolled ? <div className="resource-message"><b>MFA enrollment required</b><p>Enroll an authenticator before Admin controls can be unlocked.</p></div> : <><label className="mfa-code-field"><span>Authentication code</span><input autoFocus aria-label="MFA verification code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={code} onChange={event => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} onKeyDown={event => { if (event.key === "Enter") void submit(); }} /></label>{error ? <p className="form-error" role="alert">{error}</p> : null}<div className="mfa-modal-actions"><button className="secondary-button" onClick={onCancel}>Cancel</button><button className="primary-button" disabled={code.length !== 6 || submitting} onClick={submit}>{submitting ? "Verifying…" : "Verify and continue"}</button></div></>}</section></div>;
+}

@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from "react";
-import { loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { checkMFAStatus, loadDashboardResources, loadGatewayHealth, loadPoolUsers, loadProviderConnectionsV2, loadSession, logout } from "./api";
 import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
-import { currentRoute, initialRoute, isCompactViewport, navigateTo, routeForPath, type AppRoute } from "./routes";
+import type { ResourceState } from "./resource-state";
+import { capabilityPending, currentRoute, initialCapability, isElevated, navigateTo, routeForPath, type AppRoute, type CapabilityStatus } from "./routes";
+import { Page } from "./features/pages";
 
 export function providerPresentation(provider: string) {
   if (provider === "nvidia") return { label: "NVIDIA", color: "#76b900", dither: "green", glyph: "◓" as const };
   const label = provider.split("-").filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(" ") || "Unknown";
   return { label, color: "#8b8b8b", dither: "grey", glyph: "◇" as const };
 }
-import { Page } from "./features/pages";
 
 export function App() {
   const [session, setSession] = useState<FriendSession | null>(null);
@@ -17,105 +18,87 @@ export function App() {
   const [stats, setStats] = useState<PoolStats | null>(null);
   const [signal, setSignal] = useState<SignalAnalytics | null>(null);
   const [models, setModels] = useState<ModelDescriptor[]>([]);
-  const [connections, setConnections] = useState<OperatorProviderConnectionV2[]>([]);
-  const [users, setUsers] = useState<PoolUserStats[]>([]);
-  const [health, setHealth] = useState<GatewayHealth | null>(null);
+  const [connections, setConnections] = useState<ResourceState<OperatorProviderConnectionV2[]>>({ status: "idle" });
+  const [users, setUsers] = useState<ResourceState<PoolUserStats[]>>({ status: "idle" });
+  const [health, setHealth] = useState<ResourceState<GatewayHealth>>({ status: "idle" });
+  const [capability, setCapability] = useState<CapabilityStatus>({ status: "idle" });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const capabilityGeneration = useRef(0);
 
-  const operator = Boolean(session?.is_admin);
+  const elevated = isElevated(capability);
+  const clearProtected = useCallback(() => { setConnections({ status: "idle" }); setUsers({ status: "idle" }); setHealth({ status: "idle" }); }, []);
+  const refreshCapability = useCallback(async (initial = false) => {
+    if (!session?.is_admin) return;
+    const generation = ++capabilityGeneration.current;
+    if (initial) setCapability({ status: "checking" });
+    try {
+      const status = await checkMFAStatus();
+      if (generation !== capabilityGeneration.current) return;
+      setCapability({ status: "resolved", enrolled: status.enrolled, elevated: status.elevated, recoveryCodesRemaining: status.recovery_codes_remaining });
+      if (!status.elevated) clearProtected();
+    } catch (error) {
+      if (generation !== capabilityGeneration.current) return;
+      clearProtected();
+      setCapability({ status: "error", message: error instanceof Error ? error.message : "MFA status unavailable" });
+    }
+  }, [session?.is_admin, clearProtected]);
+
   const refresh = useCallback(async () => {
     setLoading(true);
-    const resources = await loadDashboardResources();
-    if (resources.stats) setStats(resources.stats);
-    if (resources.signal) setSignal(resources.signal);
-    if (resources.catalog) setModels(resources.catalog.models);
-    if (operator) {
-      try { setConnections(await loadProviderConnectionsV2()); } catch { setConnections([]); }
-      try { setUsers((await loadPoolUsers()).users); } catch { setUsers([]); }
-      try { setHealth(await loadGatewayHealth()); } catch { setHealth(null); }
-    }
-    setError(resources.errors.join(" · "));
-    setLoading(false);
-  }, [operator]);
+    try {
+      const dashboard = await loadDashboardResources();
+      if (dashboard.stats) setStats(dashboard.stats);
+      if (dashboard.signal) setSignal(dashboard.signal);
+      if (dashboard.catalog) setModels(dashboard.catalog.models);
+      setErrors(dashboard.errors);
+      if (!elevated) { clearProtected(); return; }
+      setConnections({ status: "loading" }); setUsers({ status: "loading" }); setHealth({ status: "loading" });
+      const [connectionResult, userResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadGatewayHealth()]);
+      setConnections(connectionResult.status === "fulfilled" ? (connectionResult.value.length ? { status: "ready", data: connectionResult.value } : { status: "empty" }) : { status: "error", message: connectionResult.reason instanceof Error ? connectionResult.reason.message : "Connections unavailable" });
+      setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Members unavailable" });
+      setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "Runtime health unavailable" });
+    } finally { setLoading(false); }
+  }, [elevated, clearProtected]);
 
-  useEffect(() => {
-    loadSession().then(setSession).catch(() => setSession(null)).finally(() => setBooting(false));
-  }, []);
-
-  useEffect(() => {
-    if (!session) return;
-    refresh();
-    const timer = window.setInterval(refresh, 30_000);
-    return () => window.clearInterval(timer);
-  }, [session, refresh, operator]);
-
-  useEffect(() => {
-    const onPop = () => setRoute(routeForPath(window.location.pathname));
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-
+  useEffect(() => { loadSession().then(setSession).catch(() => setSession(null)).finally(() => setBooting(false)); }, []);
   useEffect(() => {
     if (!session) return;
+    setCapability(initialCapability(session.is_admin));
+    if (session.is_admin) void refreshCapability(true);
+    return () => { capabilityGeneration.current++; };
+  }, [session?.email, session?.is_admin, refreshCapability]);
+  useEffect(() => { if (!session) return; void refresh(); const timer = window.setInterval(refresh, 30_000); return () => window.clearInterval(timer); }, [session, refresh]);
+  useEffect(() => { const onPop = () => setRoute(routeForPath(window.location.pathname)); window.addEventListener("popstate", onPop); return () => window.removeEventListener("popstate", onPop); }, []);
+  useEffect(() => {
+    if (!session || capabilityPending(capability)) return;
     const incoming = currentRoute();
-    if (incoming.operatorOnly && !operator) {
-      const fallback = initialRoute(false, isCompactViewport());
-      navigateTo(fallback, true);
-      setRoute(fallback);
-      return;
-    }
-    if (incoming.path === "/" && operator && isCompactViewport()) {
-      const compactHome = initialRoute(true, true);
-      navigateTo(compactHome, true);
-      setRoute(compactHome);
-    }
-  }, [session, operator]);
+    if (incoming.adminOnly && !session.is_admin) { const home = routeForPath("/"); navigateTo(home, true); setRoute(home); }
+  }, [session, capability, elevated]);
 
-  const go = (path: AppRoute) => {
-    const target = routeForPath(path);
-    if (target.operatorOnly && !operator) return;
-    navigateTo(target);
-    setRoute(target);
-  };
+  const go = (path: AppRoute) => { const target = routeForPath(path); if (target.adminOnly && !session?.is_admin) return; navigateTo(target); setRoute(target); };
+  const signOut = async () => { await logout(); setSession(null); const home = routeForPath("/"); navigateTo(home, true); setRoute(home); };
 
   if (booting) return <div className="new-boot"><span>AI POOL</span><small>Loading workspace</small></div>;
   if (!session) return <AccessGate />;
 
-  const signOut = async () => {
-    await logout();
-    setSession(null);
-    navigateTo(routeForPath("/"), true);
-  };
-
-  return (
-    <div className="new-app" data-workspace={operator ? "operator" : "member"} data-route={route.path}>
-      <Topbar session={session} operator={operator} loading={loading} onRefresh={refresh} />
-      <div className="new-layout">
-        <Sidebar route={route.path} operator={operator} onNavigate={go} onSignOut={signOut} email={session.email} />
-        <main className="new-main" id="main-content" tabIndex={-1}>
-          {error && <div className="new-alert" role="alert"><b>Data refresh incomplete</b><span>{error}</span></div>}
-          <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} onNavigate={go} />
-        </main>
-      </div>
+  return <div className="new-app" data-admin={session.is_admin ? "true" : "false"} data-elevated={elevated ? "true" : "false"} data-route={route.path}>
+    <Topbar session={session} isAdmin={session.is_admin} elevated={elevated} loading={loading} onRefresh={refresh} />
+    <div className="new-layout"><Sidebar route={route.path} isAdmin={session.is_admin} elevated={elevated} onNavigate={go} onSignOut={signOut} email={session.email} />
+      <main className="new-main" id="main-content" tabIndex={-1}>
+        {errors.length ? <div className="new-alert" role="alert"><b>Some projections are unavailable</b><span>{errors.join(" · ")}</span></div> : null}
+        {session.is_admin && capability.status === "resolved" && !capability.elevated ? <div className="capability-notice"><b>Admin controls are locked</b><span>Member capabilities remain available. Open Profile to elevate with MFA.</span><button onClick={() => go("/profile")}>Open Profile</button></div> : null}
+        <Page route={route.path} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onCapabilityRefresh={() => refreshCapability()} onNavigate={go} />
+      </main>
     </div>
-  );
+  </div>;
 }
 
-function AccessGate() {
-  return <div className="new-access"><div className="access-card"><span className="logo-mark">AI</span><p className="kicker">Private model gateway</p><h1>Welcome to AI Pool</h1><p>One gateway for the models your workspace can use.</p><a className="primary-button" href="/auth/login/google">Continue with Google</a></div></div>;
+function AccessGate() { return <div className="new-access"><div className="access-card"><span className="logo-mark">AI</span><p className="kicker">Private model gateway</p><h1>Welcome to AI Pool</h1><p>Sign in to use your gateway membership and authorized Admin capabilities.</p><a className="primary-button" href="/auth/login/google">Continue with Google</a></div></div>; }
+function Topbar({ session, isAdmin, elevated, loading, onRefresh }: { session: FriendSession; isAdmin: boolean; elevated: boolean; loading: boolean; onRefresh: () => void }) { return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context">{elevated ? "Admin capability active" : isAdmin ? "Admin identity · controls locked" : "Member workspace"}<strong>{elevated ? "Gateway administration" : isAdmin ? "Administration requires MFA" : "Gateway workspace"}</strong></div><div className="topbar-tools">{isAdmin ? <span className={`identity-badge ${elevated ? "elevated" : "locked"}`}>{elevated ? "Admin elevated" : "Admin locked"}</span> : <span className="identity-badge">Member</span>}<span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>; }
+function Sidebar({ route, isAdmin, elevated, onNavigate, onSignOut, email }: { route: string; isAdmin: boolean; elevated: boolean; onNavigate: (path: AppRoute) => void; onSignOut: () => void; email: string }) {
+  const member = [["/", "Home", "⌂"], ["/models", "Models", "◇"], ["/usage", "Usage", "▥"], ["/setup", "Setup", "↗"], ["/profile", "Profile", "●"]] as const;
+  const admin = [["/admin/connections", "Connections", "⇄"], ["/admin/members", "Members", "◎"], ["/admin/system", "System", "⚙"]] as const;
+  return <aside className="new-sidebar"><div className="sidebar-section"><span className="section-label">Workspace</span>{member.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div>{isAdmin ? <div className={`sidebar-section admin-nav ${elevated ? "elevated" : "locked"}`}><span className="section-label">Administration <em>{elevated ? "MFA active" : "MFA locked"}</em></span>{admin.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} locked={!elevated} />)}</div> : null}<div className="sidebar-bottom"><span className="signed-in-identity"><span className="avatar">{email.slice(0, 2).toUpperCase()}</span><small>{email}</small></span><button className="signout-link" onClick={onSignOut}>Sign out</button></div></aside>;
 }
-
-function Topbar({ session, operator, loading, onRefresh }: { session: FriendSession; operator: boolean; loading: boolean; onRefresh: () => void }) {
-  return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context"><span className="live-dot" />{operator ? "Operations" : "Workspace"}<strong>{operator ? "Live gateway monitor" : "Gateway overview"}</strong></div><div className="topbar-tools"><span className="live-label"><span className="live-dot" />Live</span><span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>;
-}
-
-function Sidebar({ route, operator, onNavigate, onSignOut, email }: { route: string; operator: boolean; onNavigate: (path: AppRoute) => void; onSignOut: () => void; email: string }) {
-  const member = [["/", "Overview", "⌂"], ["/models", "Models", "◇"], ["/setup", "Setup", "↗"], ["/usage", "My usage", "▥"]] as const;
-  const ops = [["/operator/monitor", "Monitor", "⌁"], ["/operator/connections", "Connections", "⇄"], ["/operator/routes", "Model routes", "⑂"], ["/operator/usage", "Usage & economics", "◫"], ["/operator/members", "Members", "◎"], ["/operator/system", "System", "⚙"]] as const;
-  return <aside className="new-sidebar"><div className="sidebar-section"><span className="section-label">Workspace</span>{member.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div>{operator && <div className="sidebar-section operator-nav"><span className="section-label">Operations</span>{ops.map(([path, label, icon]) => <NavButton key={path} path={path} current={route} label={label} icon={icon} onNavigate={onNavigate} />)}</div>}<div className="sidebar-bottom"><button className="profile-link" onClick={() => onNavigate("/profile")}><span className="avatar">{email.slice(0, 2).toUpperCase()}</span><span><b>Profile</b><small>{email}</small></span></button><button className="signout-link" onClick={onSignOut}>Sign out</button></div></aside>;
-}
-
-function NavButton({ path, current, label, icon, onNavigate }: { path: string; current: string; label: string; icon: string; onNavigate: (path: AppRoute) => void }) {
-  return <button className={`new-nav-link ${current === path ? "active" : ""}`} onClick={() => onNavigate(path as AppRoute)} aria-current={current === path ? "page" : undefined}><span>{icon}</span>{label}</button>;
-}
+function NavButton({ path, current, label, icon, onNavigate, locked = false }: { path: string; current: string; label: string; icon: string; onNavigate: (path: AppRoute) => void; locked?: boolean }) { return <button className={`new-nav-link ${current === path ? "active" : ""} ${locked ? "locked" : ""}`} onClick={() => onNavigate(path as AppRoute)} aria-current={current === path ? "page" : undefined}><span>{icon}</span>{label}{locked ? <small aria-label="MFA locked">🔒</small> : null}</button>; }

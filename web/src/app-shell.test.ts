@@ -1,20 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { initialRoute, routeForPath } from "./routes";
+import { ROUTES, routeForPath } from "./routes";
 
-describe("Phase 9 shell contract", () => {
-  it("has stable member and operator workspace entry routes", () => {
-    expect(routeForPath("/").operatorOnly).not.toBe(true);
-    expect(routeForPath("/operator").operatorOnly).toBe(true);
-    expect(routeForPath("/operator/monitor").view).toBe("insights");
+describe("single inherited shell contract", () => {
+  it("keeps shared resources common to members and Admins", () => {
+    for (const path of ["/", "/models", "/usage", "/setup", "/profile"]) {
+      expect(routeForPath(path).adminOnly).not.toBe(true);
+    }
   });
 
-  it("selects the compact operator monitor entry without changing member entry", () => {
-    expect(initialRoute(true, true)).toMatchObject({ path: "/operator/monitor", operatorOnly: true });
-    expect(initialRoute(false, true)).toMatchObject({ path: "/", view: "pulse" });
+  it("has exactly three Admin-only destinations", () => {
+    expect(ROUTES.filter(route => route.adminOnly).map(route => route.path)).toEqual([
+      "/admin/connections",
+      "/admin/members",
+      "/admin/system",
+    ]);
   });
 
-  it("keeps route adapters explicit while feature migration is incomplete", () => {
-    expect(routeForPath("/operator/connections")).toMatchObject({ view: "accounts", operatorOnly: true });
-    expect(routeForPath("/operator/routes")).toMatchObject({ view: "models", operatorOnly: true });
+  it("does not register Monitor or duplicate Models and Usage routes", () => {
+    const paths = ROUTES.map(route => route.path);
+    expect(paths.some(path => path.includes("monitor"))).toBe(false);
+    expect(paths).not.toContain("/admin/routes");
+    expect(paths).not.toContain("/admin/usage");
   });
 });

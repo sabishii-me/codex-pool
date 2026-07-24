@@ -189,6 +189,29 @@ func serveNoopCodexAppsMCP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func isFrontendNavigationPath(path string) bool {
+	path = normalizeNoopPath(path)
+	switch path {
+	case "/", "/models", "/usage", "/setup", "/profile",
+		"/admin/connections", "/admin/members", "/admin/system":
+		return true
+	}
+	// Discarded development routes still receive the SPA shell so React can
+	// render its explicit not-found page. They are not aliases or redirects.
+	return strings.HasPrefix(path, "/operator") ||
+		path == "/admin/routes" || path == "/admin/usage" || path == "/admin/monitor"
+}
+
+func isFrontendNavigationRequest(r *http.Request) bool {
+	if r == nil || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		return false
+	}
+	if !strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/html") {
+		return false
+	}
+	return isFrontendNavigationPath(r.URL.Path)
+}
+
 // ServeHTTP routes incoming requests to the appropriate handler.
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqID := randomID()
@@ -220,6 +243,14 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.systemAdminAPIService().TryServe(w, r) {
+		return
+	}
+
+	// Browser navigation is a separate boundary from API and model-proxy
+	// routing. Canonical product routes serve the embedded SPA directly,
+	// including signed-out deep links and page reloads.
+	if isFrontendNavigationRequest(r) {
+		h.serveFriendLanding(w, r)
 		return
 	}
 

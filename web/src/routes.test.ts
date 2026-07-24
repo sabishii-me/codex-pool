@@ -1,36 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { initialRoute, routeForPath, routeForView, routeIsAllowed } from "./routes";
+import { capabilityPending, initialCapability, isElevated, routeForPath } from "./routes";
 
-describe("production route adapters", () => {
-  it("maps member URLs to existing view implementations", () => {
-    expect(routeForPath("/").view).toBe("pulse");
+describe("current product routes", () => {
+  it("maps the five shared member resources", () => {
+    expect(routeForPath("/").view).toBe("home");
     expect(routeForPath("/models").view).toBe("models");
-    expect(routeForPath("/setup").view).toBe("setup");
     expect(routeForPath("/usage").view).toBe("usage");
+    expect(routeForPath("/setup").view).toBe("setup");
     expect(routeForPath("/profile").view).toBe("profile");
   });
 
-  it("keeps unknown paths on the member dashboard", () => {
-    expect(routeForPath("/not-a-route").path).toBe("/");
-    expect(routeForPath("/not-a-route").view).toBe("pulse");
+  it("contains only the three additional Admin resources", () => {
+    expect(routeForPath("/admin/connections")).toMatchObject({ view: "admin-connections", adminOnly: true });
+    expect(routeForPath("/admin/members")).toMatchObject({ view: "admin-members", adminOnly: true });
+    expect(routeForPath("/admin/system")).toMatchObject({ view: "admin-system", adminOnly: true });
   });
 
-  it("marks operator routes and never treats them as member routes", () => {
-    const monitor = routeForPath("/operator/monitor");
-    expect(monitor.operatorOnly).toBe(true);
-    expect(routeIsAllowed(monitor, false)).toBe(false);
-    expect(routeIsAllowed(monitor, true)).toBe(true);
+  it.each(["/operator", "/operator/monitor", "/operator/routes", "/operator/usage", "/admin/routes", "/admin/usage", "/admin/monitor", "/unknown"])("treats %s as not found without a compatibility fallback", path => {
+    expect(routeForPath(path)).toMatchObject({ path: "/not-found", view: "not-found", notFound: true });
+  });
+});
+
+describe("capability progression", () => {
+  it("resolves a member without Admin elevation", () => {
+    const capability = initialCapability(false);
+    expect(capabilityPending(capability)).toBe(false);
+    expect(isElevated(capability)).toBe(false);
   });
 
-  it("defaults compact operators to Monitor while members remain on Dashboard", () => {
-    expect(initialRoute(true, true).path).toBe("/operator/monitor");
-    expect(initialRoute(false, true).path).toBe("/");
-    expect(initialRoute(true, false).path).toBe("/operator");
+  it("keeps Admin identity unresolved until backend MFA status arrives", () => {
+    const capability = initialCapability(true);
+    expect(capabilityPending(capability)).toBe(true);
+    expect(isElevated(capability)).toBe(false);
   });
 
-  it("adapts existing operator views behind stable routes", () => {
-    expect(routeForView("accounts", true).path).toBe("/operator/connections");
-    expect(routeForView("insights", true).path).toBe("/operator/monitor");
-    expect(routeForView("models", false).path).toBe("/models");
+  it("requires resolved backend elevation", () => {
+    expect(isElevated({ status: "resolved", enrolled: true, elevated: false, recoveryCodesRemaining: 8 })).toBe(false);
+    expect(isElevated({ status: "resolved", enrolled: true, elevated: true, recoveryCodesRemaining: 8 })).toBe(true);
   });
 });

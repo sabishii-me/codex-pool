@@ -1,74 +1,69 @@
-export type View = "pulse" | "insights" | "usage" | "accounts" | "models" | "setup" | "profile";
+export type View =
+  | "home"
+  | "models"
+  | "usage"
+  | "setup"
+  | "profile"
+  | "admin-connections"
+  | "admin-members"
+  | "admin-system"
+  | "not-found";
 
 export type AppRoute =
   | "/"
   | "/models"
-  | "/setup"
   | "/usage"
+  | "/setup"
   | "/profile"
-  | "/insights"
-  | "/accounts"
-  | "/operator"
-  | "/operator/monitor"
-  | "/operator/connections"
-  | "/operator/routes"
-  | "/operator/usage"
-  | "/operator/members"
-  | "/operator/system";
+  | "/admin/connections"
+  | "/admin/members"
+  | "/admin/system"
+  | "/not-found";
 
 export type RouteTarget = {
   path: AppRoute;
   view: View;
-  operatorOnly?: boolean;
+  adminOnly?: boolean;
+  notFound?: boolean;
 };
 
 export const ROUTES: readonly RouteTarget[] = [
-  { path: "/", view: "pulse" },
+  { path: "/", view: "home" },
   { path: "/models", view: "models" },
-  { path: "/setup", view: "setup" },
   { path: "/usage", view: "usage" },
+  { path: "/setup", view: "setup" },
   { path: "/profile", view: "profile" },
-  // Legacy aliases remain visible during migration so the compatibility
-  // baseline keeps working while new operator URLs are introduced.
-  { path: "/insights", view: "insights" },
-  { path: "/accounts", view: "accounts" },
-  { path: "/operator", view: "pulse", operatorOnly: true },
-  // These adapters keep the existing feature implementations reachable while
-  // the replacement operator pages are migrated incrementally.
-  { path: "/operator/monitor", view: "insights", operatorOnly: true },
-  { path: "/operator/connections", view: "accounts", operatorOnly: true },
-  { path: "/operator/routes", view: "models", operatorOnly: true },
-  { path: "/operator/usage", view: "usage", operatorOnly: true },
-  { path: "/operator/members", view: "accounts", operatorOnly: true },
-  { path: "/operator/system", view: "insights", operatorOnly: true },
+  { path: "/admin/connections", view: "admin-connections", adminOnly: true },
+  { path: "/admin/members", view: "admin-members", adminOnly: true },
+  { path: "/admin/system", view: "admin-system", adminOnly: true },
+  { path: "/not-found", view: "not-found", notFound: true },
 ];
 
-const byPath = new Map(ROUTES.map((route) => [route.path, route]));
-const byView = new Map(ROUTES.filter((route) => !route.operatorOnly).map((route) => [route.view, route]));
+const byPath = new Map(ROUTES.map(route => [route.path, route]));
+const NOT_FOUND: RouteTarget = { path: "/not-found", view: "not-found", notFound: true };
 
 export function routeForPath(pathname: string): RouteTarget {
-  return byPath.get(pathname as AppRoute) ?? byPath.get("/")!;
+  return byPath.get(pathname as AppRoute) ?? NOT_FOUND;
 }
 
-export function routeForView(view: View, operator = false): RouteTarget {
-  if (operator) {
-    const operatorRoute = ROUTES.find((route) => route.operatorOnly && route.view === view);
-    if (operatorRoute) return operatorRoute;
-  }
-  return byView.get(view) ?? byPath.get("/")!;
+export type CapabilityStatus =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "resolved"; enrolled: boolean; elevated: boolean; recoveryCodesRemaining: number }
+  | { status: "error"; message: string };
+
+export function initialCapability(isAdmin: boolean): CapabilityStatus {
+  return isAdmin
+    ? { status: "idle" }
+    : { status: "resolved", enrolled: false, elevated: false, recoveryCodesRemaining: 0 };
 }
 
-export function initialRoute(isOperator: boolean, compact: boolean): RouteTarget {
-  if (compact && isOperator) return routeForPath("/operator/monitor");
-  return routeForPath(isOperator ? "/operator" : "/");
+export function isElevated(capability: CapabilityStatus): boolean {
+  return capability.status === "resolved" && capability.elevated;
 }
 
-export function routeIsAllowed(route: RouteTarget, isOperator: boolean): boolean {
-  return !route.operatorOnly || isOperator;
-}
-
-export function isCompactViewport(): boolean {
-  return window.matchMedia("(max-width: 760px)").matches;
+export function capabilityPending(capability: CapabilityStatus): boolean {
+  return capability.status === "idle" || capability.status === "checking";
 }
 
 export function currentRoute(): RouteTarget {
@@ -76,7 +71,6 @@ export function currentRoute(): RouteTarget {
 }
 
 export function navigateTo(route: RouteTarget, replace = false): void {
-  const method = replace ? "replaceState" : "pushState";
-  window.history[method]({}, "", route.path);
+  window.history[replace ? "replaceState" : "pushState"]({}, "", route.path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }

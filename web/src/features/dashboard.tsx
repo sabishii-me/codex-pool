@@ -1,22 +1,62 @@
 import type { AppRoute } from "../routes";
-import type { ModelDescriptor, PoolStats, SignalAnalytics } from "../types";
-import { CardHeader, Metric, PageFrame, SplineChart, StatusBadge, compact } from "../components/ui";
+import type { ModelDescriptor, OperatorProviderConnectionV2, PoolStats } from "../types";
+import type { ResourceState } from "../resource-state";
+import { CardHeader, PageFrame, StatusBadge } from "../components/ui";
 
-export function DashboardPage({ stats, signal, models, operator, originId, onNavigate }: { stats: PoolStats | null; signal: SignalAnalytics | null; models: ModelDescriptor[]; operator: boolean; originId: string; onNavigate: (path: AppRoute) => void }) {
-  const accounts = stats?.accounts ?? [];
-  const healthy = accounts.filter(a => a.status === "healthy").length;
-  const latest = signal?.hourly.slice(-24) ?? [];
+export function DashboardPage({ stats, models, connections, isElevated, onNavigate }: {
+  stats: PoolStats | null;
+  models: ModelDescriptor[];
+  connections: ResourceState<OperatorProviderConnectionV2[]>;
+  isElevated: boolean;
+  onNavigate: (path: AppRoute) => void;
+}) {
   const availableModels = models.filter(model => model.available_now).length;
-  const latestEconomics = signal?.economics.at(-1);
-  const byOrigin = new Map<string, { tokens: number; requests: number }>();
-  for (const row of signal?.origin_weekly ?? []) { const current = byOrigin.get(row.origin_id) ?? { tokens: 0, requests: 0 }; current.tokens += row.billable_tokens; current.requests += row.request_count; byOrigin.set(row.origin_id, current); }
-  const selectedOrigin = byOrigin.has(originId) ? originId : [...byOrigin.entries()].sort((a, b) => b[1].tokens - a[1].tokens)[0]?.[0];
-  const memberHistory = signal?.origin_weekly.filter(row => row.origin_id === selectedOrigin) ?? [];
-  const memberTokens = memberHistory.reduce((sum, row) => sum + row.billable_tokens, 0);
-  const memberRequests = memberHistory.reduce((sum, row) => sum + row.request_count, 0);
-  return <PageFrame kicker={operator ? "Operations overview" : "Workspace overview"} title={operator ? "Gateway overview" : "Good afternoon"} description={operator ? "The current state of routing, capacity, and usage." : "Here is what matters across your gateway right now."} action={<button className="primary-button" onClick={() => onNavigate("/setup")}>Configure a client</button>}>
-    <section className="status-banner"><span className="status-symbol">✓</span><div><div className="status-title">Gateway operational <StatusBadge tone="success">Healthy</StatusBadge></div><p>Requests are routing normally across available providers.</p></div><div className="status-facts"><b>{stats ? `${stats.active_accounts} / ${stats.total_accounts}` : "—"}</b><small>Healthy connections</small></div></section>
-    <section className="metric-grid"><Metric label={operator ? "Pool tokens" : (selectedOrigin === originId ? "Your tokens" : "Snapshot tokens")} value={operator ? (stats ? stats.last_24h_tokens.toLocaleString() : "—") : (memberHistory.length ? compact(memberTokens) : "—")} note={operator ? "Last 24 hours" : (selectedOrigin === originId ? "Measured origin history" : "Production snapshot origin")} /><Metric label={operator ? "Processed tokens" : (selectedOrigin === originId ? "Your requests" : "Snapshot requests")} value={operator ? (stats ? compact(stats.aggregate.total_billable_tokens) : "—") : (memberHistory.length ? memberRequests.toLocaleString() : "—")} note={operator ? "Measured" : (selectedOrigin === originId ? "Measured origin history" : "Production snapshot origin")} /><Metric label="Models available" value={models.length ? `${availableModels} / ${models.length}` : "—"} note="Live catalog" /><Metric label="Provider health" value={`${healthy} / ${accounts.length || "—"}`} note="Current state" /></section>
-    <div className="bento-grid"><section className="bento-card chart-card"><CardHeader title="Request activity" subtitle="Rolling activity and comparison" action={<span className="chart-legend"><i className="red-key" />Current <i className="yellow-key" />Prior</span>} /><SplineChart values={latest.map(x => x.request_count)} /></section><section className="bento-card attention-card"><CardHeader title="Attention required" subtitle="Only actionable conditions" /><div className="empty-state"><span className="status-symbol small">✓</span><b>No action required</b><p>There are no active member-facing incidents.</p></div></section><section className="bento-card provider-card"><CardHeader title="Provider health" subtitle="Availability by provider" action={<button className="text-button" onClick={() => onNavigate("/operator/connections")}>View details →</button>} />{accounts.length ? accounts.slice(0, 5).map(a => <div className="provider-summary" key={a.id}><span className="provider-dot" /><b>{a.display_name || a.type}</b><span>{a.status}</span><small>{a.secondary_window_available ? `${a.secondary_window_used_pct.toFixed(0)}% used` : "Capacity unknown"}</small></div>) : <div className="empty-state"><b>Provider data unavailable</b><p>Refresh to retrieve the current connection state.</p></div>}</section><section className="bento-card quick-card"><CardHeader title="Economics" subtitle="Measured gateway value" /><div className="economic-summary"><b>{latestEconomics ? `$${latestEconomics.daily_api_value.toFixed(2)}` : "—"}</b><span>Latest daily API value</span><b>{stats ? `${stats.aggregate.overall_roi.toFixed(1)}x` : "—"}</b><span>Overall ROI</span></div><button className="action-row" onClick={() => onNavigate("/usage")}>View usage & economics <span>→</span></button></section></div>
+  const constrainedModels = models.filter(model => !model.available_now);
+
+  return <PageFrame
+    kicker="Workspace"
+    title="Home"
+    description="Start here, confirm what is available, and move to the resource that owns the detail."
+    action={<button className="primary-button" onClick={() => onNavigate("/setup")}>Configure a client</button>}
+  >
+    <section className="home-orientation">
+      <div className="home-welcome">
+        <span className="home-eyebrow">Ready to use</span>
+        <h2>{models.length ? `${availableModels} models are currently available` : "Model availability is loading"}</h2>
+        <p>Use Models to choose a model, Setup to configure a client, and Usage to inspect measured activity.</p>
+        <div className="home-actions">
+          <button className="primary-button" onClick={() => onNavigate("/models")}>Browse models</button>
+          <button className="secondary-button" onClick={() => onNavigate("/usage")}>Open usage</button>
+        </div>
+      </div>
+      <div className="home-facts" aria-label="Workspace summary">
+        <div><span>Catalog</span><b>{models.length ? `${availableModels} / ${models.length}` : "Unavailable"}</b><small>Models available now</small></div>
+        <div><span>Pool projection</span><b>{stats ? "Loaded" : "Unavailable"}</b><small>{stats ? `Updated ${new Date(stats.generated_at).toLocaleTimeString()}` : "No pool statistics loaded"}</small></div>
+      </div>
+    </section>
+
+    <section className="home-resource-grid">
+      <button className="home-resource-card" onClick={() => onNavigate("/models")}>
+        <span>Models</span><b>Choose a model</b><p>Browse identities, capabilities, limits, and member-facing availability.</p><em>Open Models →</em>
+      </button>
+      <button className="home-resource-card" onClick={() => onNavigate("/setup")}>
+        <span>Setup</span><b>Connect a client</b><p>Generate configuration from your authenticated gateway session.</p><em>Open Setup →</em>
+      </button>
+      <button className="home-resource-card" onClick={() => onNavigate("/usage")}>
+        <span>Usage</span><b>Inspect activity</b><p>Usage owns measured totals, history, charts, scopes, and economics.</p><em>Open Usage →</em>
+      </button>
+    </section>
+
+    {isElevated && <section className="bento-card admin-attention">
+      <CardHeader title="Admin attention" subtitle="Concise conditions that need an owning-resource follow-up" />
+      <div className="attention-list">
+        {connections.status === "loading" || connections.status === "idle" ? <div><StatusBadge tone="warning">Loading</StatusBadge><span>Provider connection projection is not ready.</span></div> : null}
+        {connections.status === "error" ? <div><StatusBadge tone="warning">Unavailable</StatusBadge><span>{connections.message}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
+        {connections.status === "empty" ? <div><StatusBadge tone="warning">Action</StatusBadge><span>No provider connections are configured.</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
+        {connections.status === "ready" && connections.data.filter(c => c.dead || c.disabled || c.health_error).map(connection => <div key={connection.id}><StatusBadge tone="warning">Connection</StatusBadge><span>{connection.identity.display_name || connection.provider_id}: {connection.dead ? "dead" : connection.disabled ? "disabled" : connection.health_error}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div>)}
+        {connections.status === "ready" && !connections.data.some(c => c.dead || c.disabled || c.health_error) && constrainedModels.length === 0 ? <div><StatusBadge tone="success">Clear</StatusBadge><span>No degraded connections or constrained models in the loaded projections.</span></div> : null}
+        {constrainedModels.slice(0, 3).map(model => <div key={model.id}><StatusBadge tone="warning">Model</StatusBadge><span>{model.name || model.id} is currently limited.</span><button onClick={() => onNavigate("/models")}>Models →</button></div>)}
+      </div>
+    </section>}
   </PageFrame>;
 }

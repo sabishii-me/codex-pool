@@ -1,19 +1,70 @@
+import { useEffect, useState } from "react";
 import type { PoolStats, SignalAnalytics } from "../types";
 import { CardHeader, Metric, PageFrame, SplineChart, compact } from "../components/ui";
 
-export function UsagePage({ stats, signal, operator, originId }: { stats: PoolStats | null; signal: SignalAnalytics | null; operator: boolean; originId: string }) {
-  const economics = signal?.economics ?? [];
-  const latest = economics.at(-1);
-  const previous = economics.at(-2);
-  const change = latest && previous ? ((latest.daily_api_value - previous.daily_api_value) / Math.max(previous.daily_api_value, 0.01)) * 100 : null;
-  const memberRows = signal?.origin_weekly.filter(row => row.origin_id === originId).length ? signal.origin_weekly.filter(row => row.origin_id === originId) : [...(signal?.origin_weekly ?? [])].sort((a, b) => b.billable_tokens - a.billable_tokens);
-  const member = memberRows.reduce((total, row) => ({ tokens: total.tokens + row.billable_tokens, requests: total.requests + row.request_count, input: total.input + row.input_tokens, output: total.output + row.output_tokens }), { tokens: 0, requests: 0, input: 0, output: 0 });
-  const snapshot = memberRows.length > 0 && !signal?.origin_weekly.some(row => row.origin_id === originId);
-  const tokens = operator ? stats?.aggregate.total_billable_tokens ?? 0 : member.tokens;
-  const requests = operator ? signal?.hourly.reduce((n, x) => n + x.request_count, 0) ?? 0 : member.requests;
-  return <PageFrame kicker={operator ? "Operations" : "Member workspace"} title={operator ? "Usage & economics" : "My usage"} description={operator ? "Pool-wide usage and economics with evidence state." : "Your measured gateway activity."}>
-    <section className="metric-grid"><Metric label="Processed tokens" value={tokens ? compact(tokens) : "—"} note={operator ? "Pool measured" : (snapshot ? "Production snapshot origin" : "Origin measured")} /><Metric label="Requests" value={requests ? requests.toLocaleString() : "—"} note={snapshot ? "Production snapshot origin" : "Available data"} /><Metric label="API value" value={operator && latest ? `$${latest.daily_api_value.toFixed(2)}` : "—"} note={operator ? "Latest measured day" : "Not calculated per member"} /><Metric label="Day-over-day" value={operator && change !== null ? `${change >= 0 ? "+" : ""}${change.toFixed(1)}%` : "—"} note="Daily API value" /></section>
-    <section className="metric-grid"><Metric label="Input tokens" value={compact(operator ? stats?.aggregate.total_input_tokens ?? 0 : member.input)} note="Measured" /><Metric label="Cached tokens" value={operator ? compact(stats?.aggregate.total_cached_tokens ?? 0) : "—"} note={operator ? `${stats?.aggregate.overall_cache_hit_rate_pct.toFixed(1) ?? "—"}% cache hit rate` : "Pool-only metric"} /><Metric label="Output tokens" value={compact(operator ? stats?.aggregate.total_output_tokens ?? 0 : member.output)} note="Measured" /><Metric label="ROI" value={operator && stats ? `${stats.aggregate.overall_roi.toFixed(1)}x` : "—"} note={operator ? "Measured economics" : "Pool-only metric"} /></section>
-    <section className="bento-card chart-card"><CardHeader title={operator ? "Pool activity" : "Your activity"} subtitle={operator ? "Measured request volume" : "Measured origin request volume"} /><SplineChart values={operator ? signal?.hourly.slice(-30).map(x => x.request_count) ?? [] : memberRows.map(x => x.request_count)} /></section>
+type UsageScope = "me" | "pool";
+
+export function UsagePage({ stats, signal, originId, isElevated }: {
+  stats: PoolStats | null;
+  signal: SignalAnalytics | null;
+  originId: string;
+  isElevated: boolean;
+}) {
+  const [scope, setScope] = useState<UsageScope>("me");
+  useEffect(() => { if (!isElevated) setScope("me"); }, [isElevated]);
+  const effectiveScope: UsageScope = isElevated ? scope : "me";
+  const isPool = effectiveScope === "pool";
+
+  const personalRows = signal?.origin_weekly.filter(row => row.origin_id === originId) ?? [];
+  const personal = personalRows.reduce((total, row) => ({
+    tokens: total.tokens + row.billable_tokens,
+    requests: total.requests + row.request_count,
+    input: total.input + row.input_tokens,
+    output: total.output + row.output_tokens,
+  }), { tokens: 0, requests: 0, input: 0, output: 0 });
+  const hasPersonal = personalRows.length > 0;
+  const latestEconomics = signal?.economics.at(-1);
+  const priorEconomics = signal?.economics.at(-2);
+  const dayChange = latestEconomics && priorEconomics
+    ? ((latestEconomics.daily_api_value - priorEconomics.daily_api_value) / Math.max(priorEconomics.daily_api_value, 0.01)) * 100
+    : null;
+
+  return <PageFrame kicker="Activity" title="Usage" description="Measured activity, historical context, and backend-authorized scope.">
+    {isElevated && <div className="scope-bar" aria-label="Usage scope">
+      <button className={scope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>
+      <button className={scope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button>
+    </div>}
+
+    {!isPool && !hasPersonal ? <section className="usage-unavailable">
+      <span>Personal scope</span><h2>Personal usage is unavailable for this session</h2>
+      <p>The copied production history has no canonical record for this authenticated session origin. No other origin is substituted.</p>
+    </section> : null}
+
+    {!isPool && hasPersonal ? <>
+      <section className="metric-grid usage-metrics">
+        <Metric label="Billable tokens" value={compact(personal.tokens)} note="Canonical session origin" />
+        <Metric label="Requests" value={personal.requests.toLocaleString()} note="Canonical session origin" />
+        <Metric label="Input tokens" value={compact(personal.input)} note="Measured aggregate" />
+        <Metric label="Output tokens" value={compact(personal.output)} note="Measured aggregate" />
+      </section>
+      <section className="usage-unavailable compact-state"><span>History</span><h2>Personal time series is unavailable</h2><p>The backend exposes weekly categorical origin totals, not a canonical continuous personal request series.</p></section>
+    </> : null}
+
+    {isPool ? <>
+      <section className="metric-grid usage-metrics">
+        <Metric label="Billable tokens" value={stats ? compact(stats.aggregate.total_billable_tokens) : "—"} note="Pool projection" />
+        <Metric label="Input tokens" value={stats ? compact(stats.aggregate.total_input_tokens) : "—"} note="Pool projection" />
+        <Metric label="Output tokens" value={stats ? compact(stats.aggregate.total_output_tokens) : "—"} note="Pool projection" />
+        <Metric label="Requests in series" value={(signal?.hourly.reduce((sum, row) => sum + row.request_count, 0) ?? 0).toLocaleString()} note="Loaded hourly range" />
+      </section>
+      <section className="usage-chart bento-card">
+        <CardHeader title="Pool request history" subtitle={signal ? `Projection generated ${new Date(signal.generated_at).toLocaleString()}` : "Hourly projection unavailable"} />
+        <SplineChart values={signal?.hourly.slice(-48).map(row => row.request_count) ?? []} />
+      </section>
+      <section className="usage-breakdown-grid">
+        <div className="bento-card"><CardHeader title="Token composition" subtitle="Cumulative measured pool totals" /><div className="breakdown-list"><div><span>Input</span><b>{stats ? compact(stats.aggregate.total_input_tokens) : "—"}</b></div><div><span>Cached</span><b>{stats ? compact(stats.aggregate.total_cached_tokens) : "—"}</b></div><div><span>Output</span><b>{stats ? compact(stats.aggregate.total_output_tokens) : "—"}</b></div><div><span>Reasoning</span><b>{stats ? compact(stats.aggregate.total_reasoning_tokens) : "—"}</b></div></div></div>
+        <div className="bento-card"><CardHeader title="Economics" subtitle="Pool scope only" /><div className="breakdown-list"><div><span>Latest daily API value</span><b>{latestEconomics ? `$${latestEconomics.daily_api_value.toFixed(2)}` : "—"}</b></div><div><span>Day over day</span><b>{dayChange === null ? "—" : `${dayChange >= 0 ? "+" : ""}${dayChange.toFixed(1)}%`}</b></div><div><span>Cumulative API value</span><b>{latestEconomics ? `$${latestEconomics.cumulative_api_value.toFixed(2)}` : "—"}</b></div><div><span>Subscription spend</span><b>{latestEconomics ? `$${latestEconomics.cumulative_subscription_spend.toFixed(2)}` : "—"}</b></div></div></div>
+      </section>
+    </> : null}
   </PageFrame>;
 }

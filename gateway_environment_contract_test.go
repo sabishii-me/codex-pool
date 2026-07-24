@@ -24,7 +24,7 @@ func TestStagingAndDevelopmentComposeStayIsolated(t *testing.T) {
 	if strings.Contains(staging, "build:") || strings.Contains(staging, "codex-pool:dev") || strings.Contains(staging, "./dev/") {
 		t.Fatal("staging Compose can be rebuilt or shares active development resources")
 	}
-	for _, required := range []string{"codex-pool:dev", "127.0.0.2:18991:8989", "./dev/pool:/app/pool", "./dev/data:/app/data", "${DEV_"} {
+	for _, required := range []string{"codex-pool:dev", "127.0.0.1:18991:8989", "./dev/pool:/app/pool", "./dev/data:/app/data", "${DEV_"} {
 		if !strings.Contains(development, required) {
 			t.Errorf("development Compose lacks %q", required)
 		}

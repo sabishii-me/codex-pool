@@ -19,8 +19,9 @@ try {
     $date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     docker build --build-arg BUILD_VERSION="staging-$($commit.Substring(0,7))" --build-arg BUILD_COMMIT=$commit --build-arg BUILD_DATE=$date -t $Tag .
     if ($LASTEXITCODE) { throw "Docker build failed" }
-    $inspect = docker image inspect $Tag --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
-    if ($inspect.Trim() -ne $commit) { throw "Image revision label mismatch: $inspect" }
+    $inspectJSON = docker image inspect $Tag | ConvertFrom-Json
+    $inspect = $inspectJSON[0].Config.Labels.'org.opencontainers.image.revision'
+    if ($inspect -ne $commit) { throw "Image revision label mismatch: $inspect" }
     Write-Host "Built immutable staging candidate: $Tag"
     Write-Host "Run beside pinned staging:"
     Write-Host "  `$env:STAGING_CANDIDATE_IMAGE='$Tag'; docker compose -p codex-pool-staging-candidate -f docker-compose.staging-candidate.yml up -d"

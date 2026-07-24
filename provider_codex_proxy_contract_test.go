@@ -83,6 +83,44 @@ func TestCodexToAnthropicStreamFinalizesUnterminatedCompletedEvent(t *testing.T)
 	}
 }
 
+func TestCodexProxyCanonicalizesSSEContentTypeForImageTool(t *testing.T) {
+	t.Setenv("POOL_JWT_SECRET", "contract-secret")
+	sseBody := []byte("event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"item\":{\"id\":\"ig_1\",\"type\":\"image_generation_call\",\"status\":\"in_progress\"}}\n\n" +
+		"event: response.image_generation_call.completed\ndata: {\"type\":\"response.image_generation_call.completed\",\"item_id\":\"ig_1\",\"result\":\"AAAA\"}\n\n" +
+		"event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_image\",\"model\":\"gpt-5.6-sol\",\"status\":\"completed\",\"usage\":{\"input_tokens\":7,\"output_tokens\":5}}}\n\n")
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// This matches the observed Codex image-tool response: valid SSE bytes
+		// with a generic media type.
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write(sseBody)
+	}))
+	defer upstream.Close()
+	base, _ := url.Parse(upstream.URL)
+	connection := &ProviderConnection{Type: AccountTypeCodex, ID: "codex_image", AccessToken: "contract-key", PlanType: "plus"}
+	handler := &proxyHandler{
+		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true},
+		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}, false),
+		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		metrics:  newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
+	}
+	body := `{"model":"gpt-5.6-sol","instructions":"use image tool","input":"draw a square","tools":[{"type":"image_generation"}],"tool_choice":{"type":"image_generation"},"stream":true}`
+	request := httptest.NewRequest(http.MethodPost, "/v1/responses", strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Accept", "text/event-stream")
+	request.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("contract-secret", "contract-user"))
+	response := httptest.NewRecorder()
+	handler.proxyRequest(response, request, "codex-image-tool-contract")
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("Content-Type=%q, want text/event-stream", got)
+	}
+	if !bytes.Equal(response.Body.Bytes(), sseBody) {
+		t.Fatal("image tool event stream changed")
+	}
+}
+
 func TestCodexProxyRejectsLargeNativeResponsesBeforeUpstream(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "contract-secret")
 	var forwarded []byte

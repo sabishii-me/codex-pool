@@ -2391,6 +2391,12 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		flusher, _ := w.(http.Flusher)
 		respContentType := resp.Header.Get("Content-Type")
 		isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
+		// Codex image-tool responses are SSE even when the upstream labels the
+		// response text/plain. Unlike ordinary text streaming, image clients
+		// must parse response.image_generation_call events to recover bytes.
+		if accountType == AccountTypeCodex && resp.StatusCode < 400 && isCodexResponsesPath(r.URL.Path) && requestHasImageGenerationTool(bodyBytes) {
+			isSSE = true
+		}
 		if accountType == AccountTypeCodex && !isSSE && resp.StatusCode < 400 {
 			if filterErr := filterHostedMCPHTTPResponse(resp, h.cfg.maxInMemoryBodyBytes); filterErr != nil {
 				h.recent.add(filterErr.Error())
@@ -2431,6 +2437,13 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 		}
 		if isSSE {
+			// The Codex upstream can label a valid Responses event stream as
+			// text/plain. Text-only consumers often tolerate that, but clients
+			// that activate hosted tools (notably Sol image generation) use the
+			// media type to decide whether to parse tool events. The provider's
+			// SSE detector has already established stream semantics, so publish
+			// the canonical type at the gateway boundary.
+			w.Header().Set("Content-Type", "text/event-stream")
 			applyStreamingResponseHeaders(w.Header())
 		}
 		if h.cfg.debug.Load() {

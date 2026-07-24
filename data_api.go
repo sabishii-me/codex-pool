@@ -24,6 +24,7 @@ type DataAPI struct {
 	modelCatalog        http.HandlerFunc
 	usageV2             http.HandlerFunc
 	usageEconomicsV2    http.HandlerFunc
+	modelRouting        http.HandlerFunc
 	providerConnections func(http.ResponseWriter)
 	legacyConnections   func(http.ResponseWriter)
 }
@@ -33,6 +34,17 @@ type DataAPI struct {
 func (api *DataAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	if api == nil || r == nil {
 		return false
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/api/v2/models/") && strings.HasSuffix(r.URL.Path, "/routing") {
+		if !api.authorizeAdmin(w, r) {
+			return true
+		}
+		if !requireMethod(w, r, http.MethodGet) {
+			return true
+		}
+		api.modelRouting(w, r)
+		return true
 	}
 
 	switch r.URL.Path {
@@ -136,6 +148,7 @@ func (h *proxyHandler) dataAPIService() *DataAPI {
 		},
 		usageV2:             h.handleUsageV2,
 		usageEconomicsV2:    h.handleUsageEconomicsV2,
+		modelRouting:        h.serveModelRouting,
 		providerConnections: h.serveProviderConnectionsV2,
 		legacyConnections:   h.serveAccounts,
 	}

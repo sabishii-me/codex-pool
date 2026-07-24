@@ -362,15 +362,28 @@ Status: complete. The existing Signal Room remains the stable control client for
 
 Keep this baseline available in parallel with Phase 9 until the replacement UI matches its route coverage, reliability, setup workflows, provider contribution paths, and operator recovery behavior.
 
-### Phase 9 — UI/UX redesign
+### Phase 9 — Functional product implementation
 
-Status: active — Product Design Harness Step 0 is selected and frozen at `f0d30d5`; production implementation is prepared in [`ui-implementation-handoff.md`](ui-implementation-handoff.md) but has not started. See the durable [`Phase 9 UI redesign plan`](ui-redesign-plan.md), the detailed [`UI/UX review`](ui-ux-review.md), and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1) for broader progress and exit criteria.
+Status: **active — feature-completeness checkpoint after `452d8d7`**.
 
-Phase 9 will first establish a conventional, maintainable dashboard-and-monitor baseline with stable routes, member/operator separation, normalized backend view models, reusable components, responsive behavior, and accessibility foundations. The existing Signal Room identity will be retained as a theme over the shared UX structure rather than defining navigation and workflow behavior.
+The historical Product Design Harness artifact and separate member/operator workspace plan are superseded by [`frontend-product-architecture.md`](frontend-product-architecture.md). The current implementation is one inherited Member → Admin → MFA-elevated product with canonical routes `/`, `/models`, `/usage`, `/setup`, `/profile`, `/admin/connections`, `/admin/members`, and `/admin/system`. Browser/API route separation, real OAuth dev isolation, one MFA gate, scoped Usage, detailed model/provider/connection attribution, measured per-model curves, Connections operations, Members lifecycle operations, System projections, MFA enrollment, no-fake-data enforcement, and accessible product dialogs are implemented.
 
-The front page will be a concise overview of gateway status, important activity, provider/model availability, actionable incidents, and next actions. Detailed diagnosis belongs in Monitor; provider connections, model routes, members, and system configuration remain explicit operator destinations.
+Current functional checkpoint:
 
-The UI should organize around users, providers, provider connections, models, usage, and system health—not the current overloaded account abstraction. Pinned staging remains the legacy compatibility client until the replacement satisfies workflow parity and soak reliability.
+- **Complete:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, and backend-owned selected-model routing context.
+- **In progress:** functional Profile security rotation/recovery operations.
+- **Deferred to Phase 10:** validation hardening, duplicate/member policy hardening, broad copy/visual polish, performance optimization, and release tuning.
+
+Phase 9 must prioritize real workflows and backend-owned contracts. It must not display future-work cards, fabricated trends, example inventory, inferred routing order, or nonfunctional controls.
+
+Exit criterion: every active route performs its unique product job with real authorized data and working operations; selected-model routing and Profile security workflows are functionally complete; Setup remains frozen for its separate replan.
+
+### Phase 10 — Product hardening and polish
+
+Status: planned, not active.
+
+After Phase 9 feature completeness, perform validation and policy hardening, accessibility refinement, responsive/visual polish, performance work, reliability soak, and release preparation. Do not interrupt Phase 9 feature delivery for non-blocking polish.
+
 
 ## First engineering milestone
 

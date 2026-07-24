@@ -1,4 +1,4 @@
-import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
+import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, ModelRoutingProjection, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
@@ -81,6 +81,10 @@ export async function loadSignalAnalytics(): Promise<SignalAnalytics> {
     reset_observations: signal.reset_observations ?? [],
     quota_generated_at: signal.quota_generated_at,
   };
+}
+
+export async function loadModelRouting(modelID: string): Promise<ModelRoutingProjection> {
+  return decode(await fetch(`/api/v2/models/${encodeURIComponent(modelID)}/routing`, { cache: "no-store" }));
 }
 
 export async function loadModelCatalog(): Promise<ModelCatalog> {

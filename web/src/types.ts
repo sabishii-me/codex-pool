@@ -141,6 +141,25 @@ export interface PoolStats {
   generated_at: string;
 }
 
+export interface ModelRoutingConnection {
+  public_id: string;
+  display_name: string;
+  plan_type?: string;
+  inflight: number;
+  primary: boolean;
+  reason?: string;
+}
+
+export interface ModelRoutingProjection {
+  requested_model: string;
+  canonical_model: string;
+  provider_id: string;
+  selection_mode: "request_time";
+  eligible_connections: ModelRoutingConnection[];
+  excluded_connections: ModelRoutingConnection[];
+  evidence: { kind: "runtime"; source: string; generated_at: string };
+}
+
 export interface ModelDescriptor {
   id: string;
   name?: string;

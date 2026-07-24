@@ -1,6 +1,8 @@
 # Frontend Acceptance and E2E Recovery Plan
 
-Status: required before the next human review
+Status: active functional acceptance gate; the original recovery blockers are complete.
+
+Current checkpoint: truthful scoped Usage, model/provider/connection attribution, measured per-model curves, Connections/Members/System baselines, Profile MFA enrollment, one MFA gate, and accessible dialogs are implemented. The next active feature is backend-owned selected-model routing. Broad hardening and polish follow feature completeness.
 
 Source of product truth: `docs/frontend-product-architecture.md`
 
@@ -53,7 +55,7 @@ In the same product shell, navigation visibly gains exactly:
 Shared resources visibly gain Admin context:
 
 - Home: operational attention and links to owning Admin resources.
-- Models: selected-model Admin routing context or a precise routing-projection-unavailable state.
+- Models: selected-model Admin routing context from the dedicated backend projection.
 - Usage: pool scope and economics.
 - Profile: elevated state and recovery status.
 
@@ -175,9 +177,12 @@ Run every applicable state at:
 
 5. `models.spec.ts`
    - Shared inventory for Member and Admin.
-   - Member selected detail contains only public metadata.
-   - Elevated Admin selected detail shows routing unavailable until a real routing projection exists.
-   - No catalog aggregate is labeled as selected routing state.
+   - Member selected detail contains only public metadata and never requests routing detail.
+   - Elevated Admin selected detail requests `/api/v2/models/:id/routing`.
+   - Known model renders backend-owned provider, canonical model, selection mode, eligible connections, exclusions, and evidence.
+   - Alias and declarative-provider resolution are covered.
+   - Unknown model and authorization-expiry failures remain localized.
+   - No selected connection or fallback order is displayed unless the backend explicitly owns that fact.
 
 6. `responsive-navigation.spec.ts`
    - Member navigation remains usable on mobile.

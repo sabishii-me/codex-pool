@@ -257,7 +257,53 @@ Every projection must preserve:
 - localized partial failures;
 - backend authorization.
 
-## Implementation order after plan approval
+## Current checkpoints
+
+Updated: 2026-07-25
+
+| Checkpoint | Status | Evidence |
+|---|---|---|
+| One inherited capability-aware product shell | Complete | Member, locked Admin, and elevated Admin browser matrix |
+| Canonical frontend/API routing boundary | Complete | Direct-load/reload and API-boundary Go/Playwright contracts |
+| No fake data, placeholder cards, or browser-owned dialogs | Complete | `product-truth.test.ts`, browser text gate, Radix alert dialogs |
+| Scoped Usage with real detail | Complete | personal/pool/member scopes; model/provider/connection totals; measured model curves |
+| Connections administration | Complete baseline | detail, rename, refresh, enable, disable, recover |
+| Members administration | Complete baseline | real identities, create, one-time token, enable, disable |
+| System administration | Complete baseline | measured runtime, persistence, registry, maintenance controls |
+| Profile security | Partial | enrollment/confirmation/recovery display complete; rotation operations remain |
+| Selected-model routing | Complete baseline | backend-owned runtime provider, eligibility, exclusions, and evidence on `/models` |
+| Setup | Frozen | separate replan |
+
+The current phase is feature/function delivery. Validation hardening and broad visual polish are deferred to the following phase unless required to make a feature safe or operable.
+
+### Selected-model routing checkpoint
+
+Completed baseline: `GET /api/v2/models/:id/routing` is an elevated-Admin read projection returning backend-owned requested/canonical model identity, provider, request-time selection mode, eligible connections, excluded connections with exact reasons, and evidence time. It does not claim a deterministic selected connection or fallback order because selection happens per request.
+
+The frontend keeps routing detail inside `/models`; no `/admin/routes` route exists. Members never request protected routing data.
+
+## Phase ordering
+
+### Current functional phase
+
+1. ~~Remove discarded routes and duplicate workspace.~~
+2. ~~Establish inherited capability shell and one MFA gate.~~
+3. ~~Implement truthful scoped/detailed Usage.~~
+4. ~~Implement Connections, Members, and System functional baselines.~~
+5. ~~Implement backend-owned selected-model routing context.~~
+6. **Complete Profile security rotation/recovery operations.**
+7. Replan Setup separately.
+
+### Following hardening/polish phase
+
+- member validation and policy hardening;
+- authorization-expiry/retry refinements;
+- full accessibility audit;
+- visual and responsive polish;
+- performance and request-concurrency tuning;
+- soak/release preparation.
+
+## Historical implementation order after plan approval
 
 1. Remove the discarded `/operator/*` route and navigation implementation with no compatibility layer.
 2. Restore one inherited capability-aware shell.

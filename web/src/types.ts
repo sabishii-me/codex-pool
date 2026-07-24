@@ -17,7 +17,7 @@ export interface FriendSession {
 
 export interface SystemProjection {
   evidence: { kind: "measured"; source: string; generated_at: string };
-  runtime: { status: string; started_at: string; uptime_seconds: number };
+  runtime: { status: string; version: string; commit: string; build_date: string; started_at: string; uptime_seconds: number };
   capacity: { connections_total: number; connections_active: number; connections_dead: number; connections_disabled: number; providers_registered: number; declarative_providers: number };
   persistence: Array<{ name: string; configured: boolean; healthy: boolean; detail: string }>;
 }

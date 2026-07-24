@@ -1,0 +1,36 @@
+services:
+  codex-pool-staging-candidate:
+    image: ${STAGING_CANDIDATE_IMAGE:?set STAGING_CANDIDATE_IMAGE to an immutable codex-pool:staging-<commit> tag}
+    ports:
+      - "127.0.0.1:${STAGING_CANDIDATE_PORT:-18992}:8989"
+    volumes:
+      - ./staging-candidate/pool:/app/pool
+      - ./staging-candidate/data:/app/data
+      - ./staging-candidate/provider-specs:/app/provider-specs
+    environment:
+      POOL_DIR: /app/pool
+      PROVIDER_SPECS_DIR: /app/provider-specs
+      PROXY_DB_PATH: /app/data/proxy.db
+      POOL_USERS_PATH: /app/data/pool_users.json
+      ADMIN_MFA_PATH: /app/data/admin_mfa.json
+      CODEX_FINGERPRINT_STATE_PATH: /app/data/codex_fingerprint.json
+      PROXY_LISTEN_ADDR: 0.0.0.0:8989
+      PROXY_MAX_ATTEMPTS: ${STAGING_CANDIDATE_PROXY_MAX_ATTEMPTS:-1}
+      PROXY_USAGE_REFRESH_SECONDS: ${STAGING_CANDIDATE_USAGE_REFRESH_SECONDS:-300}
+      PROXY_DISABLE_REFRESH: ${STAGING_CANDIDATE_DISABLE_REFRESH:-true}
+      PUBLIC_URL: ${STAGING_CANDIDATE_PUBLIC_URL:-http://127.0.0.1:18992}
+      LOCAL_DEV_SESSION: ${STAGING_CANDIDATE_LOCAL_SESSION:-true}
+      FRIEND_NAME: ${STAGING_CANDIDATE_FRIEND_NAME:-Codex Pool Staging Candidate}
+      POOL_JWT_SECRET: ${STAGING_CANDIDATE_POOL_JWT_SECRET:-staging-candidate-only-change-before-sharing}
+      OAUTH_GOOGLE_CLIENT_ID: ${STAGING_CANDIDATE_OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${STAGING_CANDIDATE_OAUTH_GOOGLE_CLIENT_SECRET:-}
+      OAUTH_GOOGLE_REDIRECT_URI: ${STAGING_CANDIDATE_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.1:18992/auth/callback/google}
+      ALLOWED_EMAILS: ${STAGING_CANDIDATE_ALLOWED_EMAILS:-}
+      ADMIN_EMAILS: ${STAGING_CANDIDATE_ADMIN_EMAILS:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    restart: unless-stopped

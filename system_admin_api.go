@@ -22,6 +22,9 @@ type systemProjection struct {
 	} `json:"evidence"`
 	Runtime struct {
 		Status        string    `json:"status"`
+		Version       string    `json:"version"`
+		Commit        string    `json:"commit"`
+		BuildDate     string    `json:"build_date"`
 		StartedAt     time.Time `json:"started_at"`
 		UptimeSeconds int64     `json:"uptime_seconds"`
 	} `json:"runtime"`
@@ -47,7 +50,7 @@ func (h *proxyHandler) serveSystemProjection(w http.ResponseWriter, _ *http.Requ
 	now := time.Now().UTC()
 	projection := systemProjection{}
 	projection.Evidence.Kind, projection.Evidence.Source, projection.Evidence.GeneratedAt = "measured", "gateway runtime", now
-	projection.Runtime.Status, projection.Runtime.StartedAt = "ok", h.startTime.UTC()
+	projection.Runtime.Status, projection.Runtime.Version, projection.Runtime.Commit, projection.Runtime.BuildDate, projection.Runtime.StartedAt = "ok", effectiveBuildVersion(), buildCommit, buildDate, h.startTime.UTC()
 	projection.Runtime.UptimeSeconds = int64(time.Since(h.startTime).Seconds())
 	for _, connection := range h.pool.allAccounts() {
 		projection.Capacity.ConnectionsTotal++

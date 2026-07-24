@@ -47,6 +47,25 @@ POOL_LOCAL_DEV_BASELINE=1 POOL_BASE_URL=http://127.0.0.1:18990 npm run test:e2e:
 
 To promote a newly validated baseline, use an immutable tag containing its commit, update `STAGING_IMAGE`, and migrate staging deliberately. Never point staging at `codex-pool:dev` or `codex-pool:latest`.
 
+## Staging candidate promotion
+
+The next feature-phase goal is an immutable build that can be deployed to staging without replacing the pinned legacy control prematurely. Build a candidate from a clean commit:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-staging-candidate.ps1
+```
+
+This runs frontend tests/type/build, restores generated source, runs Go tests, and creates `codex-pool:staging-<commit>` with OCI revision/version/date labels. Candidate images are never tagged `dev` or `latest`.
+
+Exercise it beside pinned staging with independent candidate state and port `18992`:
+
+```powershell
+$env:STAGING_CANDIDATE_IMAGE="codex-pool:staging-<commit>"
+docker compose -p codex-pool-staging-candidate -f docker-compose.staging-candidate.yml up -d
+```
+
+Only after candidate browser acceptance should `STAGING_IMAGE` in the pinned staging deployment be changed deliberately. The candidate Compose contract has no `build` section and never mounts `staging/*`, `dev/*`, or production state.
+
 ## Active development
 
 Optionally copy `.env.dev.example` to ignored `.env.dev`, then start/rebuild:

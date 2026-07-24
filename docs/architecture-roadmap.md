@@ -371,12 +371,13 @@ The historical Product Design Harness artifact and separate member/operator work
 Current functional checkpoint:
 
 - **Complete:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, and backend-owned selected-model routing context.
-- **In progress:** functional Profile security rotation/recovery operations.
+- **In progress:** staging-deployable immutable build and candidate deployment gate.
+- **Next functional work after that gate:** Profile security rotation/recovery operations.
 - **Deferred to Phase 10:** validation hardening, duplicate/member policy hardening, broad copy/visual polish, performance optimization, and release tuning.
 
 Phase 9 must prioritize real workflows and backend-owned contracts. It must not display future-work cards, fabricated trends, example inventory, inferred routing order, or nonfunctional controls.
 
-Exit criterion: every active route performs its unique product job with real authorized data and working operations; selected-model routing and Profile security workflows are functionally complete; Setup remains frozen for its separate replan.
+Exit criterion: every active route performs its unique product job with real authorized data and working operations; selected-model routing and Profile security workflows are functionally complete; an immutable staging candidate passes the isolated candidate gate; Setup remains frozen for its separate replan.
 
 ### Phase 10 — Product hardening and polish
 

@@ -1196,11 +1196,10 @@ func translateClaudeToResponsesRequest(body []byte) ([]byte, error) {
 							switch blockType {
 							case "tool_result":
 								callID, _ := block["tool_use_id"].(string)
-								resultContent := extractToolResultContent(block["content"])
 								input = append(input, map[string]any{
 									"type":    "function_call_output",
 									"call_id": callID,
-									"output":  resultContent,
+									"output":  convertClaudeToolResultToResponsesOutput(block["content"]),
 								})
 							case "text":
 								if t, ok := block["text"].(string); ok && t != "" {
@@ -1390,6 +1389,57 @@ func numericAny(v any) float64 {
 	}
 }
 
+func convertClaudeToolResultToResponsesOutput(content any) any {
+	if text, ok := content.(string); ok {
+		return text
+	}
+	blocks, ok := content.([]any)
+	if !ok {
+		return ""
+	}
+	output := make([]any, 0, len(blocks))
+	for _, raw := range blocks {
+		block, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		switch blockType, _ := block["type"].(string); blockType {
+		case "text":
+			if text, _ := block["text"].(string); text != "" {
+				output = append(output, map[string]any{"type": "input_text", "text": text})
+			}
+		case "image":
+			if image := claudeImageToResponsesInput(block); image != nil {
+				output = append(output, image)
+			}
+		}
+	}
+	if len(output) == 0 {
+		return ""
+	}
+	return output
+}
+
+func claudeImageToResponsesInput(block map[string]any) map[string]any {
+	source, _ := block["source"].(map[string]any)
+	if source == nil {
+		return nil
+	}
+	switch sourceType, _ := source["type"].(string); sourceType {
+	case "base64":
+		mediaType, _ := source["media_type"].(string)
+		data, _ := source["data"].(string)
+		if mediaType != "" && data != "" {
+			return map[string]any{"type": "input_image", "image_url": "data:" + mediaType + ";base64," + data}
+		}
+	case "url":
+		if imageURL, _ := source["url"].(string); imageURL != "" {
+			return map[string]any{"type": "input_image", "image_url": imageURL}
+		}
+	}
+	return nil
+}
+
 // convertClaudeContentToResponsesInput converts Claude message content
 // (string or content blocks) to Responses API input content format.
 func convertClaudeContentToResponsesInput(content any) []any {
@@ -1411,26 +1461,8 @@ func convertClaudeContentToResponsesInput(content any) []any {
 				text, _ := p["text"].(string)
 				result = append(result, map[string]any{"type": "input_text", "text": text})
 			case "image":
-				// Convert Claude base64 image to Responses API format
-				if source, ok := p["source"].(map[string]any); ok {
-					sourceType, _ := source["type"].(string)
-					if sourceType == "base64" {
-						mediaType, _ := source["media_type"].(string)
-						data, _ := source["data"].(string)
-						if mediaType != "" && data != "" {
-							dataURL := "data:" + mediaType + ";base64," + data
-							result = append(result, map[string]any{
-								"type":      "input_image",
-								"image_url": dataURL,
-							})
-						}
-					} else if sourceType == "url" {
-						url, _ := source["url"].(string)
-						result = append(result, map[string]any{
-							"type":      "input_image",
-							"image_url": url,
-						})
-					}
+				if image := claudeImageToResponsesInput(p); image != nil {
+					result = append(result, image)
 				}
 			case "tool_result":
 				// tool_result blocks are handled separately in the caller

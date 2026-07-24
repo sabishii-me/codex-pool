@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export function PageFrame({ kicker, title, description, action, children }: { kicker: string; title: string; description: string; action?: ReactNode; children: ReactNode }) {
-  return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}</div>;
+  return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}<div className="data-provenance" role="note"><span className="provenance-dot" />Dev review data: analytics snapshot from production · runtime and provider state isolated to dev</div></div>;
 }
 
 export function CardHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {

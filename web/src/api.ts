@@ -1,4 +1,4 @@
-import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics } from "./types";
+import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, UsageEconomicsProjection, UsageProjection } from "./types";
 
 async function decode<T>(response: Response): Promise<T> {
   const text = await response.text();
@@ -91,6 +91,18 @@ export async function loadDashboardResources(): Promise<DashboardResources> {
       ...(catalog.status === "rejected" ? [rejectionMessage("model catalog", catalog)] : []),
     ],
   };
+}
+
+export async function loadUsageProjection(scope: "me" | "pool" | "member", options?: { memberId?: string; hours?: number; days?: number }): Promise<UsageProjection> {
+  const query = new URLSearchParams({ scope });
+  if (options?.memberId) query.set("member_id", options.memberId);
+  if (options?.hours) query.set("hours", String(options.hours));
+  if (options?.days) query.set("days", String(options.days));
+  return decode(await fetch(`/api/v2/usage?${query}`, { cache: "no-store" }));
+}
+
+export async function loadUsageEconomics(): Promise<UsageEconomicsProjection> {
+  return decode(await fetch("/api/v2/usage/economics?scope=pool", { cache: "no-store" }));
 }
 
 export async function loadLivePiModels(downloadToken: string): Promise<string> {

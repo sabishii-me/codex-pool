@@ -24,7 +24,7 @@ export function Page({ route, stats, signal, models, connections, users, health,
 }) {
   if (route === "/") return <DashboardPage stats={stats} models={models} connections={connections} isElevated={isElevated} onNavigate={onNavigate} />;
   if (route === "/models") return <ModelsPage models={models} isElevated={isElevated} />;
-  if (route === "/usage") return <UsagePage stats={stats} signal={signal} originId={session.origin_id} isElevated={isElevated} />;
+  if (route === "/usage") return <UsagePage isElevated={isElevated} members={users} />;
   if (route === "/setup") return <SetupPage session={session} />;
   if (route === "/profile") return <ProfilePage session={session} capability={capability} onCapabilityRefresh={onCapabilityRefresh} />;
   if (route === "/admin/connections") return capability.status === "idle" || capability.status === "checking" ? <AdminCapabilityCheckingPage resource="Connections" /> : isElevated ? <ConnectionsPage state={connections} /> : <AdminLockedPage resource="Connections" onUnlock={() => onNavigate("/profile")} />;

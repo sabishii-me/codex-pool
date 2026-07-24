@@ -249,6 +249,33 @@ export interface SignalAnalytics {
   quota_generated_at?: string;
 }
 
+export interface UsageProjection {
+  scope: "me" | "pool" | "member";
+  subject_id?: string;
+  evidence: { kind: "measured" | "estimated" | "inferred"; source: string; generated_at: string; data_since?: string };
+  totals: {
+    user_id?: string;
+    total_input_tokens: number;
+    total_cached_tokens: number;
+    total_output_tokens: number;
+    total_reasoning_tokens: number;
+    total_billable_tokens: number;
+    request_count: number;
+    first_seen?: string;
+    last_seen?: string;
+  };
+  hourly: HourlyUsage[];
+  daily: Array<{ date: string; billable_tokens: number; input_tokens: number; output_tokens: number; cached_tokens: number; reasoning_tokens: number; request_count: number }>;
+  economics?: SignalEconomicsPoint[];
+  partial_failures: string[];
+}
+
+export interface UsageEconomicsProjection {
+  scope: "pool";
+  evidence: { kind: string; source: string; generated_at: string };
+  points: SignalEconomicsPoint[];
+}
+
 export type { ProviderConnectionIdentity, OperatorProviderConnectionV2 } from "./generated/provider-connections-v2";
 
 export interface OperatorProviderConnection {

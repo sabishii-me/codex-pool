@@ -1,70 +1,48 @@
-import { useEffect, useState } from "react";
-import type { PoolStats, SignalAnalytics } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import { loadUsageProjection } from "../api";
+import type { PoolUserStats, UsageProjection } from "../types";
+import type { ResourceState } from "../resource-state";
 import { CardHeader, Metric, PageFrame, SplineChart, compact } from "../components/ui";
 
-type UsageScope = "me" | "pool";
+type UsageScope = "me" | "pool" | "member";
+type Range = "24h" | "7d" | "30d";
+const ranges: Record<Range, { hours: number; days: number; label: string }> = { "24h": { hours: 24, days: 1, label: "24 hours" }, "7d": { hours: 168, days: 7, label: "7 days" }, "30d": { hours: 720, days: 30, label: "30 days" } };
 
-export function UsagePage({ stats, signal, originId, isElevated }: {
-  stats: PoolStats | null;
-  signal: SignalAnalytics | null;
-  originId: string;
-  isElevated: boolean;
-}) {
-  const [scope, setScope] = useState<UsageScope>("me");
-  useEffect(() => { if (!isElevated) setScope("me"); }, [isElevated]);
+export function UsagePage({ isElevated, members }: { isElevated: boolean; members: ResourceState<PoolUserStats[]> }) {
+  const initial = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
+  const requestedScope = initial.get("scope") as UsageScope | null;
+  const [scope, setScope] = useState<UsageScope>(isElevated && requestedScope && ["pool", "member"].includes(requestedScope) ? requestedScope : "me");
+  const [memberID, setMemberID] = useState(initial.get("member") ?? "");
+  const [range, setRange] = useState<Range>("7d");
+  const [state, setState] = useState<ResourceState<UsageProjection>>({ status: "loading" });
   const effectiveScope: UsageScope = isElevated ? scope : "me";
-  const isPool = effectiveScope === "pool";
 
-  const personalRows = signal?.origin_weekly.filter(row => row.origin_id === originId) ?? [];
-  const personal = personalRows.reduce((total, row) => ({
-    tokens: total.tokens + row.billable_tokens,
-    requests: total.requests + row.request_count,
-    input: total.input + row.input_tokens,
-    output: total.output + row.output_tokens,
-  }), { tokens: 0, requests: 0, input: 0, output: 0 });
-  const hasPersonal = personalRows.length > 0;
-  const latestEconomics = signal?.economics.at(-1);
-  const priorEconomics = signal?.economics.at(-2);
-  const dayChange = latestEconomics && priorEconomics
-    ? ((latestEconomics.daily_api_value - priorEconomics.daily_api_value) / Math.max(priorEconomics.daily_api_value, 0.01)) * 100
-    : null;
+  useEffect(() => { if (!isElevated && scope !== "me") setScope("me"); }, [isElevated, scope]);
+  useEffect(() => {
+    const query = new URLSearchParams(); if (effectiveScope !== "me") query.set("scope", effectiveScope); if (effectiveScope === "member" && memberID) query.set("member", memberID);
+    if (typeof window !== "undefined") window.history.replaceState({}, "", `${window.location.pathname}${query.size ? `?${query}` : ""}`);
+    if (effectiveScope === "member" && !memberID) { setState({ status: "idle" }); return; }
+    let cancelled = false; setState({ status: "loading" });
+    loadUsageProjection(effectiveScope, { memberId: effectiveScope === "member" ? memberID : undefined, ...ranges[range] }).then(data => { if (!cancelled) setState({ status: "ready", data }); }).catch(error => { if (!cancelled) setState({ status: "error", message: error instanceof Error ? error.message : "Usage unavailable" }); });
+    return () => { cancelled = true; };
+  }, [effectiveScope, memberID, range]);
 
-  return <PageFrame kicker="Activity" title="Usage" description="Measured activity, historical context, and backend-authorized scope.">
-    {isElevated && <div className="scope-bar" aria-label="Usage scope">
-      <button className={scope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>
-      <button className={scope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button>
-    </div>}
+  const projection = state.status === "ready" ? state.data : null;
+  const history = useMemo(() => projection?.hourly?.map(row => row.request_count) ?? [], [projection]);
+  const economics = projection?.economics?.at(-1);
 
-    {!isPool && !hasPersonal ? <section className="usage-unavailable">
-      <span>Personal scope</span><h2>Personal usage is unavailable for this session</h2>
-      <p>The copied production history has no canonical record for this authenticated session origin. No other origin is substituted.</p>
-    </section> : null}
-
-    {!isPool && hasPersonal ? <>
-      <section className="metric-grid usage-metrics">
-        <Metric label="Billable tokens" value={compact(personal.tokens)} note="Canonical session origin" />
-        <Metric label="Requests" value={personal.requests.toLocaleString()} note="Canonical session origin" />
-        <Metric label="Input tokens" value={compact(personal.input)} note="Measured aggregate" />
-        <Metric label="Output tokens" value={compact(personal.output)} note="Measured aggregate" />
-      </section>
-      <section className="usage-unavailable compact-state"><span>History</span><h2>Personal time series is unavailable</h2><p>The backend exposes weekly categorical origin totals, not a canonical continuous personal request series.</p></section>
-    </> : null}
-
-    {isPool ? <>
-      <section className="metric-grid usage-metrics">
-        <Metric label="Billable tokens" value={stats ? compact(stats.aggregate.total_billable_tokens) : "—"} note="Pool projection" />
-        <Metric label="Input tokens" value={stats ? compact(stats.aggregate.total_input_tokens) : "—"} note="Pool projection" />
-        <Metric label="Output tokens" value={stats ? compact(stats.aggregate.total_output_tokens) : "—"} note="Pool projection" />
-        <Metric label="Requests in series" value={(signal?.hourly.reduce((sum, row) => sum + row.request_count, 0) ?? 0).toLocaleString()} note="Loaded hourly range" />
-      </section>
-      <section className="usage-chart bento-card">
-        <CardHeader title="Pool request history" subtitle={signal ? `Projection generated ${new Date(signal.generated_at).toLocaleString()}` : "Hourly projection unavailable"} />
-        <SplineChart values={signal?.hourly.slice(-48).map(row => row.request_count) ?? []} />
-      </section>
-      <section className="usage-breakdown-grid">
-        <div className="bento-card"><CardHeader title="Token composition" subtitle="Cumulative measured pool totals" /><div className="breakdown-list"><div><span>Input</span><b>{stats ? compact(stats.aggregate.total_input_tokens) : "—"}</b></div><div><span>Cached</span><b>{stats ? compact(stats.aggregate.total_cached_tokens) : "—"}</b></div><div><span>Output</span><b>{stats ? compact(stats.aggregate.total_output_tokens) : "—"}</b></div><div><span>Reasoning</span><b>{stats ? compact(stats.aggregate.total_reasoning_tokens) : "—"}</b></div></div></div>
-        <div className="bento-card"><CardHeader title="Economics" subtitle="Pool scope only" /><div className="breakdown-list"><div><span>Latest daily API value</span><b>{latestEconomics ? `$${latestEconomics.daily_api_value.toFixed(2)}` : "—"}</b></div><div><span>Day over day</span><b>{dayChange === null ? "—" : `${dayChange >= 0 ? "+" : ""}${dayChange.toFixed(1)}%`}</b></div><div><span>Cumulative API value</span><b>{latestEconomics ? `$${latestEconomics.cumulative_api_value.toFixed(2)}` : "—"}</b></div><div><span>Subscription spend</span><b>{latestEconomics ? `$${latestEconomics.cumulative_subscription_spend.toFixed(2)}` : "—"}</b></div></div></div>
-      </section>
+  return <PageFrame kicker="Activity" title="Usage" description="Measured usage with backend-authorized subject, range, evidence, and economics scope.">
+    <div className="usage-controls"><div className="scope-bar" aria-label="Usage scope"><button className={effectiveScope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>{isElevated ? <><button className={effectiveScope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button><button className={effectiveScope === "member" ? "active" : ""} onClick={() => setScope("member")}>Member usage</button></> : null}</div><div className="range-bar">{(Object.keys(ranges) as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value}</button>)}</div></div>
+    {effectiveScope === "member" ? <label className="member-scope-select"><span>Member</span><select value={memberID} onChange={event => setMemberID(event.target.value)}><option value="">Select a member</option>{members.status === "ready" ? members.data.map(member => <option key={member.user_id} value={member.user_id}>{member.user_id}</option>) : null}</select></label> : null}
+    {state.status === "loading" ? <section className="usage-unavailable"><span>{effectiveScope} scope</span><h2>Loading measured usage</h2><p>Querying the canonical usage projection.</p></section> : null}
+    {state.status === "idle" ? <section className="usage-unavailable"><span>Member scope</span><h2>Select a member</h2><p>Choose an authorized member identity to load its measured history.</p></section> : null}
+    {state.status === "error" ? <section className="usage-unavailable"><span>Projection unavailable</span><h2>Usage could not be loaded</h2><p>{state.message}</p></section> : null}
+    {projection ? <>
+      <div className="evidence-strip"><span>{projection.evidence.kind}</span><b>{projection.evidence.source.replaceAll("_", " ")}</b><small>Generated {new Date(projection.evidence.generated_at).toLocaleString()} · Range {ranges[range].label}</small></div>
+      <section className="metric-grid usage-metrics"><Metric label="Billable tokens" value={compact(projection.totals.total_billable_tokens)} note={`${projection.scope} measured`} /><Metric label="Requests" value={projection.totals.request_count.toLocaleString()} note={`${projection.scope} measured`} /><Metric label="Input tokens" value={compact(projection.totals.total_input_tokens)} note="Measured" /><Metric label="Output tokens" value={compact(projection.totals.total_output_tokens)} note="Measured" /></section>
+      <section className="usage-chart bento-card"><CardHeader title={`${projection.scope === "pool" ? "Pool" : projection.scope === "member" ? "Member" : "Personal"} request history`} subtitle={`${projection.hourly?.length ?? 0} hourly projection rows`} /><SplineChart values={history} /></section>
+      <section className="usage-breakdown-grid"><div className="bento-card"><CardHeader title="Token composition" subtitle="Measured selected-scope totals" /><div className="breakdown-list"><div><span>Input</span><b>{compact(projection.totals.total_input_tokens)}</b></div><div><span>Cached</span><b>{compact(projection.totals.total_cached_tokens)}</b></div><div><span>Output</span><b>{compact(projection.totals.total_output_tokens)}</b></div><div><span>Reasoning</span><b>{compact(projection.totals.total_reasoning_tokens)}</b></div></div></div>{projection.scope === "pool" ? <div className="bento-card"><CardHeader title="Economics" subtitle="Estimated pool context" /><div className="breakdown-list"><div><span>Latest daily API value</span><b>{economics ? `$${economics.daily_api_value.toFixed(2)}` : "—"}</b></div><div><span>Cumulative API value</span><b>{economics ? `$${economics.cumulative_api_value.toFixed(2)}` : "—"}</b></div><div><span>Subscription spend</span><b>{economics ? `$${economics.cumulative_subscription_spend.toFixed(2)}` : "—"}</b></div></div></div> : null}</section>
+      {projection.partial_failures?.length ? <div className="resource-message error"><b>Partial projection</b><p>{projection.partial_failures.join(" · ")}</p></div> : null}
     </> : null}
   </PageFrame>;
 }

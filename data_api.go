@@ -22,6 +22,8 @@ type DataAPI struct {
 	userDaily           http.HandlerFunc
 	userHourly          http.HandlerFunc
 	modelCatalog        http.HandlerFunc
+	usageV2             http.HandlerFunc
+	usageEconomicsV2    http.HandlerFunc
 	providerConnections func(http.ResponseWriter)
 	legacyConnections   func(http.ResponseWriter)
 }
@@ -57,6 +59,12 @@ func (api *DataAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 		api.modelCatalog(w, r)
+		return true
+	case "/api/v2/usage/economics":
+		api.usageEconomicsV2(w, r)
+		return true
+	case "/api/v2/usage":
+		api.usageV2(w, r)
 		return true
 	case "/api/v2/provider-connections":
 		if !api.authorizeAdmin(w, r) {
@@ -126,6 +134,8 @@ func (h *proxyHandler) dataAPIService() *DataAPI {
 		modelCatalog: func(w http.ResponseWriter, _ *http.Request) {
 			servePoolModelsWithRegistry(w, h.pool, h.registry)
 		},
+		usageV2:             h.handleUsageV2,
+		usageEconomicsV2:    h.handleUsageEconomicsV2,
 		providerConnections: h.serveProviderConnectionsV2,
 		legacyConnections:   h.serveAccounts,
 	}

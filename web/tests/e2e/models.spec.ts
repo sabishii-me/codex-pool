@@ -11,8 +11,8 @@ test("Member sees shared model inventory without routing context", async ({ page
   await expect(page.getByText("Routing projection unavailable")).toHaveCount(0);
 });
 
-test("Elevated Admin selected model gets precise unavailable routing context", async ({ page }) => {
+test("Elevated Admin sees only routing context backed by the model catalog", async ({ page }) => {
   await loginAs(page, "admin-elevated"); await page.goto("/models"); await selectFirstModel(page);
-  await expect(page.getByText("Routing projection unavailable")).toBeVisible();
-  await expect(page.getByText(/Eligible connections, selected connection, fallback order/)).toBeVisible();
+  await expect(page.getByText("Routing projection unavailable")).toHaveCount(0);
+  await expect(page.getByText(/Eligible connections, selected connection, fallback order/)).toHaveCount(0);
 });

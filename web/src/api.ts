@@ -1,4 +1,4 @@
-import type { GatewayHealth, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
+import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
@@ -48,6 +48,18 @@ export async function runSystemOperation(action: "reload-connections" | "clear-r
 export async function loadGatewayHealth(): Promise<GatewayHealth> {
   return decode(await fetch("/healthz", { cache: "no-store" }));
 }
+export async function loadGatewayMembers(): Promise<{ users: GatewayMember[]; count: number }> {
+  return decode(await fetch("/admin/pool-users", { cache: "no-store" }));
+}
+
+export async function createGatewayMember(email: string, planType: string): Promise<{ user: GatewayMember; token: string }> {
+  return decode(await fetch("/admin/pool-users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, plan_type: planType }) }));
+}
+
+export async function setGatewayMemberEnabled(id: string, enabled: boolean) {
+  return decode<Record<string, unknown>>(await fetch(`/admin/pool-users/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }));
+}
+
 export async function loadPoolUsers(): Promise<{ users: PoolUserStats[]; total_users: number }> {
   return decode(await fetch("/api/pool/users", { cache: "no-store" }));
 }

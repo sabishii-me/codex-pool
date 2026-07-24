@@ -30,8 +30,8 @@ export function DashboardPage({ stats, models, connections, isElevated, onNaviga
         </div>
       </div>
       <div className="home-facts" aria-label="Workspace summary">
-        <div><span>Catalog</span><b>{models.length ? `${availableModels} / ${models.length}` : "Unavailable"}</b><small>Models available now</small></div>
-        <div><span>Pool projection</span><b>{stats ? "Loaded" : "Unavailable"}</b><small>{stats ? `Updated ${new Date(stats.generated_at).toLocaleTimeString()}` : "No pool statistics loaded"}</small></div>
+        <div><span>Models online</span><b>{models.length ? `${availableModels} / ${models.length}` : "Loading"}</b><small>Currently available</small></div>
+        {stats ? <><div><span>Active connections</span><b>{stats.active_accounts} / {stats.total_accounts}</b><small>Serving gateway traffic</small></div><div><span>Last 24 hours</span><b>{stats.last_24h_tokens.toLocaleString()}</b><small>Billable tokens</small></div></> : null}
       </div>
     </section>
 
@@ -50,7 +50,6 @@ export function DashboardPage({ stats, models, connections, isElevated, onNaviga
     {isElevated && <section className="bento-card admin-attention">
       <CardHeader title="Admin attention" subtitle="Concise conditions that need an owning-resource follow-up" />
       <div className="attention-list">
-        {connections.status === "loading" || connections.status === "idle" ? <div><StatusBadge tone="warning">Loading</StatusBadge><span>Provider connection projection is not ready.</span></div> : null}
         {connections.status === "error" ? <div><StatusBadge tone="warning">Unavailable</StatusBadge><span>{connections.message}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
         {connections.status === "empty" ? <div><StatusBadge tone="warning">Action</StatusBadge><span>No provider connections are configured.</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
         {connections.status === "ready" && connections.data.filter(c => c.dead || c.disabled || c.health_error).map(connection => <div key={connection.id}><StatusBadge tone="warning">Connection</StatusBadge><span>{connection.identity.display_name || connection.provider_id}: {connection.dead ? "dead" : connection.disabled ? "disabled" : connection.health_error}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div>)}

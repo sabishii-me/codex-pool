@@ -3,7 +3,7 @@ import { loginAs } from "./helpers/acceptance";
 
 const resources = [
   ["/admin/connections", "Connections", "Credentialed upstream capacity"],
-  ["/admin/members", "Members", "Gateway user identities"],
+  ["/admin/members", "Members", "People authorized"],
   ["/admin/system", "System", "Measured runtime"],
 ] as const;
 
@@ -47,6 +47,24 @@ test("Connections renders localized error and empty states", async ({ page }) =>
   await page.unroute("**/api/v2/provider-connections");
   await page.route("**/api/v2/provider-connections", route => route.fulfill({ status: 200, contentType: "application/json", body: "[]" }));
   await page.reload(); await expect(page.getByText("No provider connections are configured")).toBeVisible();
+});
+
+test("Members renders real identities, plans, state, and working administration", async ({ page }) => {
+  await loginAs(page, "admin-elevated"); await page.goto("/admin/members");
+  await expect(page.locator(".member-row").first()).toContainText("@");
+  await expect(page.getByText("Administration projection is limited")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add member" }).click();
+  await expect(page.getByRole("heading", { name: "Grant gateway access" })).toBeVisible();
+  await expect(page.getByLabel("Email")).toBeVisible();
+});
+
+test("No active product page advertises missing future implementation", async ({ page }) => {
+  await loginAs(page, "admin-elevated");
+  for (const route of ["/", "/models", "/usage", "/profile", "/admin/connections", "/admin/members", "/admin/system"]) {
+    await page.goto(route);
+    const text = await page.locator("main").innerText();
+    expect(text).not.toMatch(/not yet exposed|projection is limited|projection pending|shell is ready|no backend projection|routing projection unavailable/i);
+  }
 });
 
 test("System renders measured runtime, persistence, registry, and working operations", async ({ page }) => {

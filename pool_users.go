@@ -132,15 +132,18 @@ func (s *GatewayUserStore) GetByEmail(email string) *GatewayUser {
 	return nil
 }
 
-func (s *GatewayUserStore) Disable(id string) error {
+func (s *GatewayUserStore) setDisabled(id string, disabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if u, ok := s.users[id]; ok {
-		u.Disabled = true
+		u.Disabled = disabled
 		return s.save()
 	}
 	return fmt.Errorf("user not found: %s", id)
 }
+
+func (s *GatewayUserStore) Disable(id string) error { return s.setDisabled(id, true) }
+func (s *GatewayUserStore) Enable(id string) error  { return s.setDisabled(id, false) }
 
 // JWT generation
 

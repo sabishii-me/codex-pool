@@ -82,6 +82,14 @@ export interface ProviderConnectionStats {
 /** @deprecated Use ProviderConnectionStats. */
 export type AccountStats = ProviderConnectionStats;
 
+export interface GatewayMember {
+  id: string;
+  email: string;
+  plan_type: string;
+  created_at: string;
+  disabled: boolean;
+}
+
 export interface PoolUserStats {
   user_id: string;
   total_billable_tokens: number;

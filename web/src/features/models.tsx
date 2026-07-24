@@ -19,7 +19,7 @@ export function ModelsPage({ models, isElevated }: { models: ModelDescriptor[]; 
     {detail ? <section className="model-detail-panel">
       <header><div><span>Selected model</span><h2>{detail.name || detail.id}</h2><code>{detail.id}</code></div><StatusBadge tone={detail.available_now ? "success" : "warning"}>{detail.available_now ? "Available" : "Limited"}</StatusBadge></header>
       <div className="model-detail-grid"><div><span>Provider</span><b>{detail.provider}</b></div><div><span>Protocol</span><b>{detail.protocol}</b></div><div><span>Context window</span><b>{detail.contextWindow ? detail.contextWindow.toLocaleString() : "Unavailable"}</b></div><div><span>Maximum output</span><b>{detail.max_output_tokens ? detail.max_output_tokens.toLocaleString() : "Unavailable"}</b></div></div>
-      {isElevated ? <div className="routing-unavailable"><b>Routing projection unavailable</b><p>Upstream mapping: {detail.upstream_id || "unavailable"}. Eligible connections, selected connection, fallback order, exclusions, evidence, and freshness are not exposed by a dedicated backend projection.</p></div> : null}
+      {isElevated && detail.upstream_id && detail.upstream_id !== detail.id ? <div className="model-route-context"><span>Upstream model</span><b>{detail.upstream_id}</b></div> : null}
     </section> : null}
   </PageFrame>;
 }

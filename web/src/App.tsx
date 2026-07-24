@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { checkMFAStatus, loadDashboardResources, loadPoolUsers, loadProviderConnectionsV2, loadSession, loadSystemProjection, logout, verifyMFA } from "./api";
-import type { FriendSession, GatewayHealth, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "./types";
+import { checkMFAStatus, loadDashboardResources, loadGatewayMembers, loadPoolUsers, loadProviderConnectionsV2, loadSession, loadSystemProjection, logout, verifyMFA } from "./api";
+import type { FriendSession, GatewayMember, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "./types";
 import type { ResourceState } from "./resource-state";
 import { capabilityPending, currentRoute, initialCapability, isElevated, navigateTo, routeForPath, type AppRoute, type CapabilityStatus } from "./routes";
 import { Page } from "./features/pages";
@@ -20,6 +20,7 @@ export function App() {
   const [models, setModels] = useState<ModelDescriptor[]>([]);
   const [connections, setConnections] = useState<ResourceState<OperatorProviderConnectionV2[]>>({ status: "idle" });
   const [users, setUsers] = useState<ResourceState<PoolUserStats[]>>({ status: "idle" });
+  const [members, setMembers] = useState<ResourceState<GatewayMember[]>>({ status: "idle" });
   const [health, setHealth] = useState<ResourceState<SystemProjection>>({ status: "idle" });
   const [capability, setCapability] = useState<CapabilityStatus>({ status: "idle" });
   const [loading, setLoading] = useState(false);
@@ -29,7 +30,7 @@ export function App() {
   const capabilityGeneration = useRef(0);
 
   const elevated = isElevated(capability);
-  const clearProtected = useCallback(() => { setConnections({ status: "idle" }); setUsers({ status: "idle" }); setHealth({ status: "idle" }); }, []);
+  const clearProtected = useCallback(() => { setConnections({ status: "idle" }); setUsers({ status: "idle" }); setMembers({ status: "idle" }); setHealth({ status: "idle" }); }, []);
   const refreshCapability = useCallback(async (initial = false): Promise<boolean> => {
     if (!session?.is_admin) return false;
     const generation = ++capabilityGeneration.current;
@@ -57,11 +58,12 @@ export function App() {
       if (dashboard.catalog) setModels(dashboard.catalog.models);
       setErrors(dashboard.errors);
       if (!elevated) { clearProtected(); return; }
-      setConnections({ status: "loading" }); setUsers({ status: "loading" }); setHealth({ status: "loading" });
-      const [connectionResult, userResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadSystemProjection()]);
+      setConnections({ status: "loading" }); setUsers({ status: "loading" }); setMembers({ status: "loading" }); setHealth({ status: "loading" });
+      const [connectionResult, userResult, memberResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadGatewayMembers(), loadSystemProjection()]);
       setConnections(connectionResult.status === "fulfilled" ? (connectionResult.value.length ? { status: "ready", data: connectionResult.value } : { status: "empty" }) : { status: "error", message: connectionResult.reason instanceof Error ? connectionResult.reason.message : "Connections unavailable" });
-      setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Members unavailable" });
-      setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "Runtime health unavailable" });
+      setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Usage identities unavailable" });
+      setMembers(memberResult.status === "fulfilled" ? (memberResult.value.users.length ? { status: "ready", data: memberResult.value.users } : { status: "empty" }) : { status: "error", message: memberResult.reason instanceof Error ? memberResult.reason.message : "Members unavailable" });
+      setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "System unavailable" });
     } finally { setLoading(false); }
   }, [elevated, clearProtected]);
 
@@ -81,6 +83,12 @@ export function App() {
     setMFAChallengeOpen(true);
     void refreshCapability(true);
   }, [clearProtected, refreshCapability, route.path]);
+
+  const refreshMembers = useCallback(async () => {
+    setMembers({ status: "loading" });
+    try { const data = await loadGatewayMembers(); setMembers(data.users.length ? { status: "ready", data: data.users } : { status: "empty" }); }
+    catch (error) { setMembers({ status: "error", message: error instanceof Error ? error.message : "Members unavailable" }); throw error; }
+  }, []);
 
   useEffect(() => { loadSession().then(setSession).catch(() => setSession(null)).finally(() => setBooting(false)); }, []);
   useEffect(() => {
@@ -134,7 +142,7 @@ export function App() {
     <div className="new-layout"><Sidebar route={renderedRoute} isAdmin={session.is_admin} onNavigate={go} onSignOut={signOut} email={session.email} />
       <main className="new-main" id="main-content" tabIndex={-1}>
         {errors.length ? <div className="new-alert" role="alert"><b>Some projections are unavailable</b><span>{errors.join(" · ")}</span></div> : null}
-        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} health={health} session={session} capability={capability} isElevated={elevated} onConnectionsRefresh={refreshConnections} onAuthorizationLost={authorizationLost} onNavigate={go} />
+        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} members={members} health={health} session={session} capability={capability} isElevated={elevated} onConnectionsRefresh={refreshConnections} onMembersRefresh={refreshMembers} onCapabilityRefresh={async () => { await refreshCapability(); }} onAuthorizationLost={authorizationLost} onNavigate={go} />
       </main>
     </div>
     {mfaChallengeOpen ? <MFAChallenge capability={capability} destination={pendingAdminRoute} onCancel={closeMFAChallenge} onVerified={completeMFAChallenge} /> : null}

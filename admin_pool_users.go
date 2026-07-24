@@ -28,17 +28,20 @@ func (h *proxyHandler) servePoolUsersAdmin(w http.ResponseWriter, r *http.Reques
 	case path == "/" && r.Method == http.MethodPost:
 		h.handlePoolUsersCreate(w, r)
 
+	case strings.HasSuffix(path, "/enable") && r.Method == http.MethodPost:
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/enable")
+		h.handlePoolUserEnable(w, id)
+
+	case strings.HasSuffix(path, "/disable") && r.Method == http.MethodPost:
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/"), "/disable")
+		h.handlePoolUserDelete(w, r, id)
+
 	case strings.HasPrefix(path, "/") && r.Method == http.MethodDelete:
 		id := strings.TrimPrefix(path, "/")
 		id = strings.TrimSuffix(id, "/")
 		h.handlePoolUserDelete(w, r, id)
 
 	// Support POST with /disable suffix for backwards compatibility
-	case strings.HasSuffix(path, "/disable") && r.Method == http.MethodPost:
-		id := strings.TrimPrefix(path, "/")
-		id = strings.TrimSuffix(id, "/disable")
-		h.handlePoolUserDelete(w, r, id)
-
 	default:
 		http.NotFound(w, r)
 	}
@@ -143,6 +146,14 @@ func (h *proxyHandler) handlePoolUserDelete(w http.ResponseWriter, r *http.Reque
 		"success": true,
 		"id":      id,
 	})
+}
+
+func (h *proxyHandler) handlePoolUserEnable(w http.ResponseWriter, id string) {
+	if err := h.poolUsers.Enable(id); err != nil {
+		respondJSONError(w, http.StatusNotFound, err.Error())
+		return
+	}
+	respondJSON(w, map[string]any{"success": true, "id": id, "disabled": false})
 }
 
 // Config download endpoints (no auth - token IS the auth)

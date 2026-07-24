@@ -49,6 +49,29 @@ func newTestSessionCookie(t *testing.T, secret string, user *GatewayUser) *http.
 	return &http.Cookie{Name: sessionCookieName, Value: token}
 }
 
+func TestGatewayUserStoreEnableReactivatesMember(t *testing.T) {
+	store, err := newGatewayUserStore(filepath.Join(t.TempDir(), "pool_users.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := &GatewayUser{ID: "member", Token: "token", Email: "member@example.com", CreatedAt: time.Now()}
+	if err := store.Create(user); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Disable(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if !store.Get(user.ID).Disabled {
+		t.Fatal("member was not disabled")
+	}
+	if err := store.Enable(user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if store.Get(user.ID).Disabled {
+		t.Fatal("member was not enabled")
+	}
+}
+
 func TestSessionAuthRejectsMissingOrInvalidCookie(t *testing.T) {
 	h, _, _ := newTestHandlerWithSession(t)
 

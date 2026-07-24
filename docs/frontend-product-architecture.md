@@ -272,6 +272,7 @@ Updated: 2026-07-25
 | System administration | Complete baseline | measured runtime, persistence, registry, maintenance controls |
 | Profile security | Partial | enrollment/confirmation/recovery display complete; rotation operations remain |
 | Selected-model routing | Complete baseline | backend-owned runtime provider, eligibility, exclusions, and evidence on `/models` |
+| Immutable staging candidate | Complete baseline | commit-tagged OCI image, isolated candidate Compose contract, build script and metadata |
 | Setup | Frozen | separate replan |
 
 The current phase is feature/function delivery. Validation hardening and broad visual polish are deferred to the following phase unless required to make a feature safe or operable.
@@ -292,7 +293,8 @@ The frontend keeps routing detail inside `/models`; no `/admin/routes` route exi
 4. ~~Implement Connections, Members, and System functional baselines.~~
 5. ~~Implement backend-owned selected-model routing context.~~
 6. **Complete Profile security rotation/recovery operations.**
-7. Replan Setup separately.
+7. Produce and validate an immutable staging candidate before promotion.
+8. Replan Setup separately.
 
 ### Following hardening/polish phase
 

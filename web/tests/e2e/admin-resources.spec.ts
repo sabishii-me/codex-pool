@@ -26,9 +26,11 @@ test("Connections inventory opens provider-neutral detail and uses canonical ope
   await detail.getByLabel("Display name").fill("Renamed Codex");
   const rename = page.waitForRequest(request => request.url().endsWith("/api/v2/provider-connections/stable-1/identity") && request.method() === "PATCH");
   await detail.getByRole("button", { name: "Save name" }).click(); await rename;
-  page.on("dialog", dialog => dialog.accept());
+  await detail.getByRole("button", { name: "Disable" }).click();
+  const confirmation = page.getByRole("alertdialog", { name: "Disable connection?" });
+  await expect(confirmation).toBeVisible();
   const disable = page.waitForRequest(request => request.url().endsWith("/api/v2/provider-connections/stable-1/disable") && request.method() === "POST");
-  await detail.getByRole("button", { name: "Disable" }).click(); await disable;
+  await confirmation.getByRole("button", { name: "Disable connection" }).click(); await disable;
 });
 
 test("Connections operation failure remains localized", async ({ page }) => {
@@ -56,6 +58,16 @@ test("Members renders real identities, plans, state, and working administration"
   await page.getByRole("button", { name: "Add member" }).click();
   await expect(page.getByRole("heading", { name: "Grant gateway access" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
+});
+
+test("destructive controls use accessible product dialogs, never browser dialogs", async ({ page }) => {
+  await loginAs(page, "admin-elevated"); await page.goto("/admin/members");
+  await page.locator(".member-row").filter({ has: page.getByRole("button", { name: "Disable" }) }).first().getByRole("button", { name: "Disable" }).click();
+  const dialog = page.getByRole("alertdialog", { name: "Disable member?" });
+  await expect(dialog).toBeVisible(); await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+  await dialog.getByRole("button", { name: "Cancel" }).click(); await expect(dialog).toHaveCount(0);
+  await page.goto("/admin/system"); await page.getByRole("button", { name: "Clear rate limits" }).click();
+  await expect(page.getByRole("alertdialog", { name: "Clear active rate limits?" })).toBeVisible();
 });
 
 test("No active product page advertises missing future implementation", async ({ page }) => {

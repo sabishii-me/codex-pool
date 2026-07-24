@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createGatewayMember, isAuthorizationError, mutateProviderConnection, renameProviderConnection, runSystemOperation, setGatewayMemberEnabled } from "../api";
 import type { ResourceState } from "../resource-state";
 import type { GatewayMember, OperatorProviderConnectionV2, SystemProjection } from "../types";
+import { ConfirmDialog } from "../components/confirm-dialog";
 import { PageFrame, StatusBadge } from "../components/ui";
 
 export function AdminCapabilityCheckingPage({ resource }: { resource: "Connections" | "Members" | "System" }) {
@@ -43,6 +44,7 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
 
 function ConnectionDetail({ connection, operation, onClose, onRun }: { connection: OperatorProviderConnectionV2; operation: string | null; onClose: () => void; onRun: (label: string, task: () => Promise<unknown>) => Promise<void> }) {
   const [editing, setEditing] = useState(false);
+  const [confirmDisable, setConfirmDisable] = useState(false);
   const [name, setName] = useState(connection.identity.display_name);
   useEffect(() => { setName(connection.identity.display_name); }, [connection.id, connection.identity.display_name]);
   const busy = operation !== null;
@@ -56,7 +58,7 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
     {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Provider identity</h3>{connection.identity.external_subject ? <Fact label="External subject" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={value} />)}</section> : null}
     <section><h3>Measured totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
     {Object.keys(connection.usage).length ? <section><h3>Provider usage</h3><div className="connection-totals">{Object.entries(connection.usage).filter(([, value]) => typeof value === "number" || typeof value === "boolean" || typeof value === "string").slice(0, 8).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={String(value)} />)}</div></section> : null}
-    <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <button className="danger-action" disabled={busy} onClick={() => { if (window.confirm(`Disable ${connection.identity.display_name || connection.provider_id}? It will stop receiving traffic.`)) void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")); }}>Disable</button>}</footer>
+    <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
   </aside>;
 }
 function Fact({ label, value }: { label: string; value: string }) { return <div className="connection-fact"><span>{label}</span><b>{value}</b></div>; }
@@ -69,6 +71,7 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
   const [busy, setBusy] = useState<string | null>(null);
   const [issuedToken, setIssuedToken] = useState("");
   const [error, setError] = useState("");
+  const [confirmMember, setConfirmMember] = useState<GatewayMember | null>(null);
   const create = async () => {
     if (!email.trim() || busy) return;
     setBusy("create"); setError(""); setIssuedToken("");
@@ -76,11 +79,11 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
     catch (failure) { setError(failure instanceof Error ? failure.message : "Member creation failed"); }
     finally { setBusy(null); }
   };
-  const toggle = async (member: GatewayMember) => {
-    if (busy) return;
+  const toggle = async (member: GatewayMember): Promise<boolean> => {
+    if (busy) return false;
     setBusy(member.id); setError("");
-    try { await setGatewayMemberEnabled(member.id, member.disabled); await onRefresh(); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : "Member update failed"); }
+    try { await setGatewayMemberEnabled(member.id, member.disabled); await onRefresh(); return true; }
+    catch (failure) { setError(failure instanceof Error ? failure.message : "Member update failed"); return false; }
     finally { setBusy(null); }
   };
   return <PageFrame kicker="Administration" title="Members" description="People authorized to sign in and use this gateway." action={<button className="primary-button" onClick={() => setCreating(true)}>Add member</button>}>
@@ -88,24 +91,26 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
     {creating ? <section className="member-create"><div><span>New gateway member</span><h2>Grant gateway access</h2></div><label><span>Email</span><input autoFocus type="email" value={email} onChange={event => setEmail(event.target.value)} /></label><label><span>Plan</span><select value={plan} onChange={event => setPlan(event.target.value)}><option value="pro">Pro</option><option value="team">Team</option><option value="plus">Plus</option></select></label><div><button className="secondary-button" onClick={() => setCreating(false)}>Cancel</button><button className="primary-button" disabled={!email.trim() || busy !== null} onClick={() => void create()}>{busy === "create" ? "Creating…" : "Create member"}</button></div></section> : null}
     {issuedToken ? <section className="issued-token" role="status"><div><b>Member created</b><p>Copy this setup token now. It is only returned by the creation operation.</p></div><code>{issuedToken}</code><button onClick={() => void navigator.clipboard.writeText(issuedToken)}>Copy token</button></section> : null}
     {error ? <div className="operation-feedback error" role="alert">{error}</div> : null}
-    {state.status === "ready" ? <section className="admin-table member-list" aria-label="Gateway members">{state.data.map(member => <article className="member-row" key={member.id}><div className="member-avatar">{member.email.slice(0, 2).toUpperCase()}</div><div><b>{member.email}</b><small>Joined {new Date(member.created_at).toLocaleDateString()} · ID {member.id.slice(0, 8)}</small></div><span>{member.plan_type || "Member"}</span><StatusBadge tone={member.disabled ? "warning" : "success"}>{member.disabled ? "Disabled" : "Active"}</StatusBadge><button className={member.disabled ? "" : "danger-action"} disabled={busy !== null} onClick={() => { if (member.disabled || window.confirm(`Disable ${member.email}? Their gateway credentials will stop working.`)) void toggle(member); }}>{busy === member.id ? "Saving…" : member.disabled ? "Enable" : "Disable"}</button></article>)}</section> : null}
+    {state.status === "ready" ? <section className="admin-table member-list" aria-label="Gateway members">{state.data.map(member => <article className="member-row" key={member.id}><div className="member-avatar">{member.email.slice(0, 2).toUpperCase()}</div><div><b>{member.email}</b><small>Joined {new Date(member.created_at).toLocaleDateString()} · ID {member.id.slice(0, 8)}</small></div><span>{member.plan_type || "Member"}</span><StatusBadge tone={member.disabled ? "warning" : "success"}>{member.disabled ? "Disabled" : "Active"}</StatusBadge>{member.disabled ? <button disabled={busy !== null} onClick={() => void toggle(member)}>{busy === member.id ? "Saving…" : "Enable"}</button> : <button className="danger-action" disabled={busy !== null} onClick={() => setConfirmMember(member)}>Disable</button>}</article>)}</section> : null}
+    <ConfirmDialog open={confirmMember !== null} onOpenChange={open => { if (!open) setConfirmMember(null); }} title="Disable member?" description={`${confirmMember?.email ?? "This member"} will lose gateway access and existing generated credentials will stop working.`} confirmLabel="Disable member" busy={confirmMember ? busy === confirmMember.id : false} onConfirm={() => { if (confirmMember) void toggle(confirmMember).then(success => { if (success) setConfirmMember(null); }); }} />
   </PageFrame>;
 }
 
 export function SystemPage({ state }: { state: ResourceState<SystemProjection> }) {
   const [operation, setOperation] = useState<string | null>(null);
   const [message, setMessage] = useState("");
-  const run = async (label: string, action: "reload-connections" | "clear-rate-limits") => {
-    if (operation) return;
+  const [confirmClear, setConfirmClear] = useState(false);
+  const run = async (label: string, action: "reload-connections" | "clear-rate-limits"): Promise<boolean> => {
+    if (operation) return false;
     setOperation(label); setMessage("");
-    try { const result = await runSystemOperation(action); setMessage(action === "clear-rate-limits" ? `${Number(result.cleared ?? 0)} active rate limits cleared.` : "Provider connections reloaded."); }
-    catch (error) { setMessage(error instanceof Error ? error.message : `${label} failed`); }
+    try { const result = await runSystemOperation(action); setMessage(action === "clear-rate-limits" ? `${Number(result.cleared ?? 0)} active rate limits cleared.` : "Provider connections reloaded."); return true; }
+    catch (error) { setMessage(error instanceof Error ? error.message : `${label} failed`); return false; }
     finally { setOperation(null); }
   };
   return <PageFrame kicker="Administration" title="System" description="Measured runtime, persistence, and registry state owned by the gateway."><ResourceMessage state={state} loading="Loading system projection" empty="System projection is unavailable" />{state.status === "ready" ? <>
     <div className="evidence-strip"><span>{state.data.evidence.kind}</span><b>{state.data.evidence.source}</b><small>Generated {new Date(state.data.evidence.generated_at).toLocaleString()}</small></div>
     <section className="system-grid"><div className="system-card"><span>Gateway runtime</span><b>{state.data.runtime.status}</b><small>Started {new Date(state.data.runtime.started_at).toLocaleString()} · {formatUptime(state.data.runtime.uptime_seconds)}</small></div><div className="system-card"><span>Connection capacity</span><b>{state.data.capacity.connections_active} active</b><small>{state.data.capacity.connections_total} total · {state.data.capacity.connections_disabled} disabled · {state.data.capacity.connections_dead} dead</small></div><div className="system-card"><span>Provider registry</span><b>{state.data.capacity.providers_registered} providers</b><small>{state.data.capacity.declarative_providers} declarative specifications active</small></div>{state.data.persistence.map(item => <div className={`system-card ${item.healthy ? "" : "unavailable"}`} key={item.name}><span>{item.name}</span><b>{item.healthy ? "Healthy" : item.configured ? "Unavailable" : "Not configured"}</b><small>{item.detail}</small></div>)}</section>
-    <section className="system-operations"><div><span>Operational controls</span><h2>Gateway maintenance</h2><p>These actions use current backend operations and do not imply persistence or recovery guarantees beyond their response.</p></div><div><button disabled={operation !== null} onClick={() => void run("Reload", "reload-connections")}>{operation === "Reload" ? "Reloading…" : "Reload connections"}</button><button disabled={operation !== null} onClick={() => { if (window.confirm("Clear all active provider rate-limit cooldowns?")) void run("Clear", "clear-rate-limits"); }}>{operation === "Clear" ? "Clearing…" : "Clear rate limits"}</button></div>{message ? <p role="status">{message}</p> : null}</section>
+    <section className="system-operations"><div><span>Operational controls</span><h2>Gateway maintenance</h2><p>These actions use current backend operations and do not imply persistence or recovery guarantees beyond their response.</p></div><div><button disabled={operation !== null} onClick={() => void run("Reload", "reload-connections")}>{operation === "Reload" ? "Reloading…" : "Reload connections"}</button><button disabled={operation !== null} onClick={() => setConfirmClear(true)}>{operation === "Clear" ? "Clearing…" : "Clear rate limits"}</button></div>{message ? <p role="status">{message}</p> : null}</section><ConfirmDialog open={confirmClear} onOpenChange={setConfirmClear} title="Clear active rate limits?" description="All provider cooldowns currently tracked by this gateway will be cleared. New upstream rate limits can be applied again immediately." confirmLabel="Clear rate limits" busy={operation === "Clear"} onConfirm={() => void run("Clear", "clear-rate-limits").then(success => { if (success) setConfirmClear(false); })} />
   </> : null}</PageFrame>;
 }
 function formatUptime(seconds: number) { const days = Math.floor(seconds / 86400); const hours = Math.floor(seconds % 86400 / 3600); const minutes = Math.floor(seconds % 3600 / 60); return `Uptime ${days ? `${days}d ` : ""}${hours}h ${minutes}m`; }

@@ -20,6 +20,10 @@ test("Usage owns pool history, composition, and economics", async ({ page }) => 
   await expect(page.getByText("Pool request history")).toBeVisible();
   await expect(page.getByText("Token composition")).toBeVisible();
   await expect(page.getByText("Economics", { exact: true })).toBeVisible();
+  await expect(page.getByText("Usage by model")).toBeVisible();
+  await expect(page.getByText("Usage by provider")).toBeVisible();
+  await expect(page.getByText("Usage by connection")).toBeVisible();
+  await expect(page.locator(".usage-dimension-list article").count()).resolves.toBeGreaterThan(1);
   expectClean(runtime);
 });
 

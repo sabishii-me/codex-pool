@@ -281,8 +281,23 @@ export interface UsageProjection {
   };
   hourly: HourlyUsage[];
   daily: Array<{ date: string; billable_tokens: number; input_tokens: number; output_tokens: number; cached_tokens: number; reasoning_tokens: number; request_count: number }>;
+  by_model: UsageDimension[];
+  by_provider: UsageDimension[];
+  by_connection?: UsageDimension[];
   economics?: SignalEconomicsPoint[];
   partial_failures: string[];
+}
+
+export interface UsageDimension {
+  id: string;
+  provider_id?: string;
+  requests: number;
+  input_tokens: number;
+  cached_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  billable_tokens: number;
+  cost_usd: number;
 }
 
 export interface UsageEconomicsProjection {

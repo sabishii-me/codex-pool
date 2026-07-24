@@ -15,6 +15,18 @@ type UsageEvidence struct {
 	DataSince   time.Time `json:"data_since,omitempty"`
 }
 
+type UsageDimension struct {
+	ID              string  `json:"id"`
+	ProviderID      string  `json:"provider_id,omitempty"`
+	Requests        int64   `json:"requests"`
+	InputTokens     int64   `json:"input_tokens"`
+	CachedTokens    int64   `json:"cached_tokens"`
+	OutputTokens    int64   `json:"output_tokens"`
+	ReasoningTokens int64   `json:"reasoning_tokens"`
+	BillableTokens  int64   `json:"billable_tokens"`
+	CostUSD         float64 `json:"cost_usd"`
+}
+
 type UsageProjection struct {
 	Scope           string                 `json:"scope"`
 	SubjectID       string                 `json:"subject_id,omitempty"`
@@ -22,6 +34,9 @@ type UsageProjection struct {
 	Totals          UserUsage              `json:"totals"`
 	Hourly          []UserHourlyUsage      `json:"hourly"`
 	Daily           []UserDailyUsage       `json:"daily"`
+	ByModel         []UsageDimension       `json:"by_model"`
+	ByProvider      []UsageDimension       `json:"by_provider"`
+	ByConnection    []UsageDimension       `json:"by_connection,omitempty"`
 	Economics       []SignalEconomicsPoint `json:"economics,omitempty"`
 	PartialFailures []string               `json:"partial_failures"`
 }
@@ -59,7 +74,7 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hours, days := parseUsageRange(r)
-	projection := UsageProjection{Scope: scope, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, PartialFailures: []string{}}
+	projection := UsageProjection{Scope: scope, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, ByModel: []UsageDimension{}, ByProvider: []UsageDimension{}, ByConnection: []UsageDimension{}, PartialFailures: []string{}}
 	var subjectID string
 	switch scope {
 	case "me":
@@ -87,6 +102,10 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 			addUserUsage(&projection.Totals, totals)
 		}
 		if h.analyticsStore != nil {
+			projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", days, true)
+			if err != nil {
+				projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
+			}
 			economics, err := h.buildSignalEconomics(projection.Evidence.GeneratedAt)
 			if err != nil {
 				projection.PartialFailures = append(projection.PartialFailures, "economics unavailable")
@@ -115,6 +134,12 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "failed to load daily usage")
 		return
+	}
+	if h.analyticsStore != nil {
+		projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, days, false)
+		if err != nil {
+			projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
+		}
 	}
 	respondJSON(w, projection)
 }

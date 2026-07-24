@@ -2523,6 +2523,14 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 
 			result := bufWriter.Result()
+			if _, message, failed := bufWriter.Failure(); failed {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write(result)
+				if h.cfg.debug.Load() {
+					log.Printf("[%s] buffered Responses failure preserved as Anthropic error: %s", reqID, message)
+				}
+				return
+			}
 			w.WriteHeader(resp.StatusCode)
 			w.Write(result)
 		} else if clientWantsNonStreaming && isSSE && translateDir == TranslateImagesToResponses {

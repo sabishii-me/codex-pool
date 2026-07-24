@@ -1299,6 +1299,82 @@ func (bw *responsesToChatCompletionsBufferingWriter) Result() []byte {
 	return b
 }
 
+type anthropicUsageProjection struct {
+	InputTokens         int64
+	CacheReadTokens     int64
+	CacheCreationTokens int64
+	OutputTokens        int64
+}
+
+func anthropicUsageFromResponses(usage map[string]any) anthropicUsageProjection {
+	if usage == nil {
+		return anthropicUsageProjection{}
+	}
+	totalInput := toInt64(usage["input_tokens"])
+	cacheRead := toInt64(usage["cache_read_input_tokens"])
+	cacheCreation := toInt64(usage["cache_creation_input_tokens"])
+	if details, _ := usage["input_tokens_details"].(map[string]any); details != nil {
+		if cacheRead == 0 {
+			cacheRead = toInt64(details["cached_tokens"])
+		}
+		if cacheCreation == 0 {
+			cacheCreation = toInt64(details["cache_creation_tokens"])
+		}
+	}
+	return anthropicUsageProjection{
+		InputTokens:         clampNonNegative(totalInput - cacheRead - cacheCreation),
+		CacheReadTokens:     cacheRead,
+		CacheCreationTokens: cacheCreation,
+		OutputTokens:        toInt64(usage["output_tokens"]),
+	}
+}
+
+func anthropicUsageMapFromResponses(usage map[string]any, includeOutput bool) map[string]any {
+	projected := anthropicUsageFromResponses(usage)
+	out := map[string]any{
+		"input_tokens":                projected.InputTokens,
+		"cache_read_input_tokens":     projected.CacheReadTokens,
+		"cache_creation_input_tokens": projected.CacheCreationTokens,
+	}
+	if includeOutput {
+		out["output_tokens"] = projected.OutputTokens
+	} else {
+		out["output_tokens"] = int64(0)
+	}
+	return out
+}
+
+func responsesFailure(resp map[string]any) (string, string) {
+	errorType := "api_error"
+	message := "response failed"
+	if resp == nil {
+		return errorType, message
+	}
+	errorObject, _ := resp["error"].(map[string]any)
+	if errorObject == nil {
+		return errorType, message
+	}
+	if value, _ := errorObject["message"].(string); strings.TrimSpace(value) != "" {
+		message = value
+	}
+	code, _ := errorObject["code"].(string)
+	upstreamType, _ := errorObject["type"].(string)
+	lower := strings.ToLower(message + " " + code + " " + upstreamType)
+	if strings.Contains(lower, "context") && (strings.Contains(lower, "window") || strings.Contains(lower, "length") || strings.Contains(lower, "too large")) {
+		errorType = "invalid_request_error"
+	} else if upstreamType == "invalid_request_error" || strings.Contains(code, "invalid_request") {
+		errorType = "invalid_request_error"
+	} else if upstreamType != "" {
+		errorType = mapOAIErrorTypeToClaude(upstreamType)
+	}
+	return errorType, message
+}
+
+func anthropicErrorJSON(errorType, message string) []byte {
+	body, _ := json.Marshal(map[string]any{"type": "error", "error": map[string]any{"type": errorType, "message": message}})
+	return body
+}
+
 // responsesToClaudeBufferingWriter buffers Responses API SSE events into a
 // non-streaming Claude Messages API response.
 type responsesToClaudeBufferingWriter struct {
@@ -1307,16 +1383,19 @@ type responsesToClaudeBufferingWriter struct {
 	debug    bool
 	reqID    string
 
-	id           string
-	model        string
-	contentText  string
-	toolUses     []map[string]any
-	toolIndex    map[string]int
-	itemToCallID map[string]string
-	inputTokens  int64
-	outputTokens int64
-	stopReason   string
-	errMsg       string
+	id                  string
+	model               string
+	contentText         string
+	toolUses            []map[string]any
+	toolIndex           map[string]int
+	itemToCallID        map[string]string
+	inputTokens         int64
+	cacheReadTokens     int64
+	cacheCreationTokens int64
+	outputTokens        int64
+	stopReason          string
+	errType             string
+	errMsg              string
 }
 
 func (bw *responsesToClaudeBufferingWriter) Write(p []byte) (int, error) {
@@ -1377,7 +1456,10 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 				bw.model = model
 			}
 			if usage, ok := resp["usage"].(map[string]any); ok {
-				bw.inputTokens = toInt64(usage["input_tokens"])
+				projected := anthropicUsageFromResponses(usage)
+				bw.inputTokens = projected.InputTokens
+				bw.cacheReadTokens = projected.CacheReadTokens
+				bw.cacheCreationTokens = projected.CacheCreationTokens
 			}
 		}
 	case "response.output_text.delta":
@@ -1430,8 +1512,11 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 				bw.model = model
 			}
 			if usage, ok := resp["usage"].(map[string]any); ok {
-				bw.inputTokens = toInt64(usage["input_tokens"])
-				bw.outputTokens = toInt64(usage["output_tokens"])
+				projected := anthropicUsageFromResponses(usage)
+				bw.inputTokens = projected.InputTokens
+				bw.cacheReadTokens = projected.CacheReadTokens
+				bw.cacheCreationTokens = projected.CacheCreationTokens
+				bw.outputTokens = projected.OutputTokens
 			}
 			if status, ok := resp["status"].(string); ok && status == "incomplete" {
 				bw.stopReason = "max_tokens"
@@ -1443,17 +1528,12 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 		if len(bw.toolUses) > 0 {
 			bw.stopReason = "tool_use"
 		}
-	case "response.failed":
+	case "response.failed", "error":
 		resp, _ := obj["response"].(map[string]any)
-		bw.errMsg = "response failed"
-		if resp != nil {
-			if e, ok := resp["error"].(map[string]any); ok {
-				if msg, _ := e["message"].(string); msg != "" {
-					bw.errMsg = msg
-				}
-			}
+		if resp == nil && eventType == "error" {
+			resp = map[string]any{"error": obj["error"]}
 		}
-		bw.stopReason = "end_turn"
+		bw.errType, bw.errMsg = responsesFailure(resp)
 	}
 }
 
@@ -1492,7 +1572,14 @@ func (bw *responsesToClaudeBufferingWriter) finishToolUse(index int) {
 	}
 }
 
+func (bw *responsesToClaudeBufferingWriter) Failure() (string, string, bool) {
+	return bw.errType, bw.errMsg, bw.errMsg != ""
+}
+
 func (bw *responsesToClaudeBufferingWriter) Result() []byte {
+	if bw.errMsg != "" {
+		return anthropicErrorJSON(bw.errType, bw.errMsg)
+	}
 	for i := range bw.toolUses {
 		args, _ := bw.toolUses[i]["_args"].(string)
 		if args != "" {
@@ -1506,9 +1593,6 @@ func (bw *responsesToClaudeBufferingWriter) Result() []byte {
 
 	content := make([]any, 0, 1+len(bw.toolUses))
 	text := bw.contentText
-	if bw.errMsg != "" {
-		text = "[Error: " + bw.errMsg + "]"
-	}
 	if text != "" {
 		content = append(content, map[string]any{"type": "text", "text": text})
 	}
@@ -1538,8 +1622,10 @@ func (bw *responsesToClaudeBufferingWriter) Result() []byte {
 		"stop_reason":   stopReason,
 		"stop_sequence": nil,
 		"usage": map[string]any{
-			"input_tokens":  bw.inputTokens,
-			"output_tokens": bw.outputTokens,
+			"input_tokens":                bw.inputTokens,
+			"cache_read_input_tokens":     bw.cacheReadTokens,
+			"cache_creation_input_tokens": bw.cacheCreationTokens,
+			"output_tokens":               bw.outputTokens,
 		},
 	}
 	b, _ := json.Marshal(out)
@@ -1888,18 +1974,20 @@ type responsesToClaudeWriter struct {
 	reqID    string
 
 	// State
-	id                string
-	model             string
-	started           bool
-	contentBlockIndex int
-	toolCallIndex     int
-	sentText          bool // whether we've emitted a text content_block_start
-	sentThinking      bool // whether we've emitted a thinking content_block_start
-	finishReason      string
-	inputTokens       int64
-	outputTokens      int64
-	terminal          bool
-	writeErr          error
+	id                  string
+	model               string
+	started             bool
+	contentBlockIndex   int
+	toolCallIndex       int
+	sentText            bool // whether we've emitted a text content_block_start
+	sentThinking        bool // whether we've emitted a thinking content_block_start
+	finishReason        string
+	inputTokens         int64
+	cacheReadTokens     int64
+	cacheCreationTokens int64
+	outputTokens        int64
+	terminal            bool
+	writeErr            error
 }
 
 func (rw *responsesToClaudeWriter) Write(p []byte) (int, error) {
@@ -1992,7 +2080,10 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 				rw.model = m
 			}
 			if usage, ok := resp["usage"].(map[string]any); ok {
-				rw.inputTokens = toInt64(usage["input_tokens"])
+				projected := anthropicUsageFromResponses(usage)
+				rw.inputTokens = projected.InputTokens
+				rw.cacheReadTokens = projected.CacheReadTokens
+				rw.cacheCreationTokens = projected.CacheCreationTokens
 			}
 		}
 		rw.started = true
@@ -2093,8 +2184,11 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 		resp, _ := obj["response"].(map[string]any)
 		if resp != nil {
 			if usage, ok := resp["usage"].(map[string]any); ok {
-				rw.inputTokens = toInt64(usage["input_tokens"])
-				rw.outputTokens = toInt64(usage["output_tokens"])
+				projected := anthropicUsageFromResponses(usage)
+				rw.inputTokens = projected.InputTokens
+				rw.cacheReadTokens = projected.CacheReadTokens
+				rw.cacheCreationTokens = projected.CacheCreationTokens
+				rw.outputTokens = projected.OutputTokens
 			}
 		}
 		// Close any open content block
@@ -2115,38 +2209,28 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 			stopReason = "tool_use"
 		}
 		rw.finishReason = stopReason
-		// Emit message_delta and message_stop
+		usage := anthropicUsageMapFromResponses(nil, true)
+		usage["input_tokens"] = rw.inputTokens
+		usage["cache_read_input_tokens"] = rw.cacheReadTokens
+		usage["cache_creation_input_tokens"] = rw.cacheCreationTokens
+		usage["output_tokens"] = rw.outputTokens
+		usageJSON, _ := json.Marshal(usage)
+		// The Codex backend reports authoritative input/cache usage only on the
+		// terminal response. Include that complete snapshot in message_delta;
+		// consumers must not be left with the provisional zero from message_start.
 		rw.emitClaudeEvent("message_delta", fmt.Sprintf(
-			`{"type":"message_delta","delta":{"stop_reason":%s,"stop_sequence":null},"usage":{"output_tokens":%d}}`,
-			mustMarshalString(stopReason), rw.outputTokens))
+			`{"type":"message_delta","delta":{"stop_reason":%s,"stop_sequence":null},"usage":%s}`,
+			mustMarshalString(stopReason), usageJSON))
 		rw.emitClaudeEvent("message_stop", `{"type":"message_stop"}`)
 
-	case "response.failed":
+	case "response.failed", "error":
 		rw.terminal = true
 		resp, _ := obj["response"].(map[string]any)
-		errMsg := "response failed"
-		if resp != nil {
-			if e, ok := resp["error"].(map[string]any); ok {
-				if m, ok := e["message"].(string); ok && m != "" {
-					errMsg = m
-				}
-			}
+		if resp == nil && eventType == "error" {
+			resp = map[string]any{"error": obj["error"]}
 		}
-		// Emit error as text content
-		if !rw.sentText {
-			rw.sentText = true
-			rw.emitClaudeEvent("content_block_start", fmt.Sprintf(
-				`{"type":"content_block_start","index":%d,"content_block":{"type":"text","text":""}}`,
-				rw.contentBlockIndex))
-		}
-		rw.emitClaudeEvent("content_block_delta", fmt.Sprintf(
-			`{"type":"content_block_delta","index":%d,"delta":{"type":"text_delta","text":%s}}`,
-			rw.contentBlockIndex, mustMarshalString("[Error: "+errMsg+"]")))
-		rw.emitClaudeEvent("content_block_stop", fmt.Sprintf(
-			`{"type":"content_block_stop","index":%d}`, rw.contentBlockIndex))
-		rw.emitClaudeEvent("message_delta", fmt.Sprintf(
-			`{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":0}}`))
-		rw.emitClaudeEvent("message_stop", `{"type":"message_stop"}`)
+		errorType, message := responsesFailure(resp)
+		rw.emitClaudeEvent("error", string(anthropicErrorJSON(errorType, message)))
 
 	case "response.output_text.done", "response.content_part.done",
 		"response.content_part.added", "response.reasoning_text.done",
@@ -2170,8 +2254,12 @@ func (rw *responsesToClaudeWriter) emitClaudeMessageStart() {
 	if id == "" {
 		id = "msg_translated"
 	}
-	msg := fmt.Sprintf(`{"type":"message_start","message":{"id":%s,"type":"message","role":"assistant","model":%s,"content":[],"stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":%d,"output_tokens":0}}}`,
-		mustMarshalString(id), mustMarshalString(model), rw.inputTokens)
+	usage, _ := json.Marshal(map[string]any{
+		"input_tokens": rw.inputTokens, "cache_read_input_tokens": rw.cacheReadTokens,
+		"cache_creation_input_tokens": rw.cacheCreationTokens, "output_tokens": int64(0),
+	})
+	msg := fmt.Sprintf(`{"type":"message_start","message":{"id":%s,"type":"message","role":"assistant","model":%s,"content":[],"stop_reason":null,"stop_sequence":null,"usage":%s}}`,
+		mustMarshalString(id), mustMarshalString(model), usage)
 	rw.emitClaudeEvent("message_start", msg)
 }
 

@@ -284,8 +284,17 @@ export interface UsageProjection {
   by_model: UsageDimension[];
   by_provider: UsageDimension[];
   by_connection?: UsageDimension[];
+  model_hourly: UsageModelHourly[];
   economics?: SignalEconomicsPoint[];
   partial_failures: string[];
+}
+
+export interface UsageModelHourly {
+  hour: string;
+  model_id: string;
+  provider_id: string;
+  billable_tokens: number;
+  requests: number;
 }
 
 export interface UsageDimension {

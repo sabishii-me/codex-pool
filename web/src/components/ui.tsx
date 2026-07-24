@@ -1,5 +1,19 @@
 import type { ReactNode } from "react";
 
+const seriesColors = ["#f87171", "#facc15", "#4ade80", "#60a5fa", "#c084fc", "#fb923c", "#2dd4bf", "#f472b6", "#a3e635"];
+
+export interface ChartSeries { id: string; label: string; values: number[] }
+
+export function MultiSeriesChart({ series, ariaLabel }: { series: ChartSeries[]; ariaLabel: string }) {
+  const visible = series.filter(item => item.values.some(Number.isFinite));
+  if (!visible.length) return <div className="spline-chart chart-empty" role="img" aria-label={`No ${ariaLabel.toLowerCase()}`}><span>No measured data in this range</span></div>;
+  const count = Math.max(...visible.map(item => item.values.length));
+  const max = Math.max(...visible.flatMap(item => item.values.filter(Number.isFinite)), 1);
+  const x = (index: number) => count <= 1 ? 50 : index / (count - 1) * 100;
+  const y = (value: number) => 94 - value / max * 78;
+  return <div className="multi-series-chart" role="img" aria-label={ariaLabel}><div className="chart-legend">{visible.map((item, index) => <span key={item.id}><i style={{ background: seriesColors[index % seriesColors.length] }} />{item.label}</span>)}</div><div className="spline-chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none">{visible.map((item, seriesIndex) => { const path = item.values.map((value, index) => `${index ? "L" : "M"}${x(index)},${y(value)}`).join(" "); return item.values.length > 1 ? <path key={item.id} className="chart-line" style={{ stroke: seriesColors[seriesIndex % seriesColors.length], filter: "none" }} d={path} /> : <circle key={item.id} cx="50" cy={y(item.values[0])} r="2" fill={seriesColors[seriesIndex % seriesColors.length]} />; })}</svg></div></div>;
+}
+
 export function PageFrame({ kicker, title, description, action, children }: { kicker: string; title: string; description: string; action?: ReactNode; children: ReactNode }) {
   return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}</div>;
 }

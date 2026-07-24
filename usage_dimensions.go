@@ -6,6 +6,38 @@ import (
 	"time"
 )
 
+func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageModelHourly, error) {
+	if s == nil || s.db == nil {
+		return []UsageModelHourly{}, nil
+	}
+	if hours <= 0 {
+		hours = 24
+	}
+	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339Nano)
+	filter, args := "completed_at >= ?", []any{since}
+	if strings.TrimSpace(userID) != "" {
+		filter += " AND user_id = ?"
+		args = append(args, userID)
+	}
+	rows, err := s.db.Query(fmt.Sprintf(`SELECT substr(completed_at,1,13) || ':00:00Z', COALESCE(model_id,''), provider_id, COALESCE(SUM(billable_tokens),0), COUNT(*) FROM usage_events WHERE %s GROUP BY substr(completed_at,1,13), provider_id, model_id ORDER BY substr(completed_at,1,13), provider_id, model_id`, filter), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UsageModelHourly{}
+	for rows.Next() {
+		var value UsageModelHourly
+		if err := rows.Scan(&value.Hour, &value.ModelID, &value.ProviderID, &value.BillableTokens, &value.Requests); err != nil {
+			return nil, err
+		}
+		if value.ModelID == "" {
+			value.ModelID = "unknown"
+		}
+		out = append(out, value)
+	}
+	return out, rows.Err()
+}
+
 func (s *AnalyticsStore) getUsageDimensions(userID string, days int, includeConnections bool) (models, providers, connections []UsageDimension, err error) {
 	if s == nil || s.db == nil {
 		return []UsageDimension{}, []UsageDimension{}, []UsageDimension{}, nil

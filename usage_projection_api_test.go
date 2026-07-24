@@ -27,8 +27,12 @@ func TestUsageDimensionsPreserveModelProviderAndConnectionGrain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(models) != 2 || len(providers) != 2 || len(connections) != 2 {
-		t.Fatalf("models=%#v providers=%#v connections=%#v", models, providers, connections)
+	hourly, err := store.getUsageModelHourly("member", 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 2 || len(providers) != 2 || len(connections) != 2 || len(hourly) != 2 {
+		t.Fatalf("models=%#v providers=%#v connections=%#v hourly=%#v", models, providers, connections, hourly)
 	}
 	if models[0].BillableTokens+models[1].BillableTokens != 35 {
 		t.Fatalf("models=%#v", models)

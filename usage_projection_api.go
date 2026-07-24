@@ -27,6 +27,14 @@ type UsageDimension struct {
 	CostUSD         float64 `json:"cost_usd"`
 }
 
+type UsageModelHourly struct {
+	Hour           string `json:"hour"`
+	ModelID        string `json:"model_id"`
+	ProviderID     string `json:"provider_id"`
+	BillableTokens int64  `json:"billable_tokens"`
+	Requests       int64  `json:"requests"`
+}
+
 type UsageProjection struct {
 	Scope           string                 `json:"scope"`
 	SubjectID       string                 `json:"subject_id,omitempty"`
@@ -37,6 +45,7 @@ type UsageProjection struct {
 	ByModel         []UsageDimension       `json:"by_model"`
 	ByProvider      []UsageDimension       `json:"by_provider"`
 	ByConnection    []UsageDimension       `json:"by_connection,omitempty"`
+	ModelHourly     []UsageModelHourly     `json:"model_hourly"`
 	Economics       []SignalEconomicsPoint `json:"economics,omitempty"`
 	PartialFailures []string               `json:"partial_failures"`
 }
@@ -74,7 +83,7 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hours, days := parseUsageRange(r)
-	projection := UsageProjection{Scope: scope, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, ByModel: []UsageDimension{}, ByProvider: []UsageDimension{}, ByConnection: []UsageDimension{}, PartialFailures: []string{}}
+	projection := UsageProjection{Scope: scope, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, ByModel: []UsageDimension{}, ByProvider: []UsageDimension{}, ByConnection: []UsageDimension{}, ModelHourly: []UsageModelHourly{}, PartialFailures: []string{}}
 	var subjectID string
 	switch scope {
 	case "me":
@@ -103,6 +112,9 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		}
 		if h.analyticsStore != nil {
 			projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", days, true)
+			if err == nil {
+				projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly("", hours)
+			}
 			if err != nil {
 				projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
 			}
@@ -137,6 +149,9 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.analyticsStore != nil {
 		projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, days, false)
+		if err == nil {
+			projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly(subjectID, hours)
+		}
 		if err != nil {
 			projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
 		}

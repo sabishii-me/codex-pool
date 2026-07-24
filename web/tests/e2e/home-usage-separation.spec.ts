@@ -17,7 +17,9 @@ test("Usage owns pool history, composition, and economics", async ({ page }) => 
   await expect(page.getByText("Ready to use")).toHaveCount(0);
   await expect(page.getByText("Choose a model", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Pool usage" }).click();
-  await expect(page.getByText("Pool request history")).toBeVisible();
+  await expect(page.getByText("Tokens by model over time")).toBeVisible();
+  await expect(page.getByRole("img", { name: "Billable tokens by model over time" })).toBeVisible();
+  await expect(page.locator(".multi-series-chart .chart-line").count()).resolves.toBeGreaterThan(1);
   await expect(page.getByText("Token composition")).toBeVisible();
   await expect(page.getByText("Economics", { exact: true })).toBeVisible();
   await expect(page.getByText("Usage by model")).toBeVisible();

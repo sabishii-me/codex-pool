@@ -1,6 +1,8 @@
 # UI/UX Review and Redesign Direction
 
-Status: active — UX Phase 0 complete; implementation not started
+Status: **historical discovery input; information architecture superseded**
+
+> The role/job findings remain useful, but the proposed separate Operator workspace is discarded. Use [`frontend-product-architecture.md`](frontend-product-architecture.md) for current routes, capability inheritance, and resource ownership.
 
 Implementation plan: [`ui-redesign-plan.md`](ui-redesign-plan.md)
 

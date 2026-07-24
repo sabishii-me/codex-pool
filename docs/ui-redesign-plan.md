@@ -1,6 +1,8 @@
 # Phase 9 UI Redesign Plan
 
-Status: accepted and frozen — production implementation is prepared but has not started
+Status: **superseded for production information architecture**
+
+> Historical redesign record. The separate member/operator workspace and `/operator/*` route plan are discarded with no compatibility layer. Use [`frontend-product-architecture.md`](frontend-product-architecture.md) as the approved source of truth.
 
 Branch: `feat/ui-ux-redesign`
 

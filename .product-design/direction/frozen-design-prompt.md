@@ -1,6 +1,8 @@
 # Frozen design prompt
 
-Status: frozen
+Status: **superseded for production information architecture**
+
+> Historical design-reference record only. The separate member/operator workspace and route inventory below are not current implementation constraints. The approved source of truth is [`../../docs/frontend-product-architecture.md`](../../docs/frontend-product-architecture.md). The visual direction may remain reference input; route and workspace decisions are superseded.
 
 Frozen on: 2026-07-23
 

@@ -1,6 +1,8 @@
 # Phase 9 Production UI Implementation Handoff
 
-Status: ready for implementation
+Status: **superseded for production information architecture**
+
+> Historical implementation handoff. Do not implement its separate member/operator workspace or `/operator/*` routes. No compatibility layer is required for those unfinished development routes. The approved source of truth is [`frontend-product-architecture.md`](frontend-product-architecture.md).
 
 Frozen design checkpoint: `f0d30d5`
 

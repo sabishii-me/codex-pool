@@ -1,6 +1,8 @@
 # Codex Pool product truth
 
-Status: draft for Step 0 owner review
+Status: **superseded for production information architecture**
+
+> Historical Step 0 product/design input. Its separate member/operator workspace inventory is superseded by [`../../docs/frontend-product-architecture.md`](../../docs/frontend-product-architecture.md).
 
 ## Product
 

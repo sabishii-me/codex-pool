@@ -65,13 +65,10 @@ var poolModels = []ModelRoute{
 
 	{ProviderID: AccountTypeQwen, ID: "qwen3.6-plus", DisplayName: "Qwen3.6-Plus", Description: "Alibaba's flagship agentic coding model (Coding Plan).", ContextWindow: 1000000, MaxTokens: 65536, Reasoning: true, Input: []string{"text"}, Aliases: []string{"qwen", "qwen-coder", "qwen3-coder"}},
 
-	// OpenRouter and NVIDIA are aggregators with no fixed catalog - any
-	// "openrouter/<vendor>/<model>" or "nvidia/<vendor>/<model>" slug routes
-	// to a pooled account of that type, prefix stripped before forwarding
-	// upstream (see isOpenRouterModel/isNvidiaModel). These entries exist only
-	// so the Models tab shows a discoverable, working example of each.
-	{ProviderID: AccountTypeOpenRouter, ID: "openrouter/anthropic/claude-haiku-4.5", DisplayName: "OpenRouter: Claude Haiku 4.5", Description: "Example only - any \"openrouter/<vendor>/<model>\" slug routes to a pooled OpenRouter account.", ContextWindow: 200000, MaxTokens: 64000, Reasoning: true, Input: []string{"text", "image"}},
-	{ProviderID: AccountTypeNvidia, ID: "nvidia/meta/llama-3.3-70b-instruct", DisplayName: "NVIDIA: Llama 3.3 70B Instruct", Description: "Example only - any \"nvidia/<vendor>/<model>\" slug routes to a pooled NVIDIA account.", ContextWindow: 128000, MaxTokens: 8192, Reasoning: false, Input: []string{"text"}},
+	// Aggregator catalogs are open-ended and cannot be represented honestly by
+	// a made-up inventory row. Runtime-prefixed slugs still route through the
+	// provider matchers, but the UI lists only models discovered or explicitly
+	// declared by a provider contract.
 }
 
 func modelsForProvider(providerID ProviderID) []ModelRoute {

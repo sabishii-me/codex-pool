@@ -4,11 +4,25 @@ import { DashboardPage } from "./features/dashboard";
 import { UsagePage } from "./features/usage";
 import type { ResourceState } from "./resource-state";
 import { ModelsPage } from "./features/models";
+import { SplineChart } from "./components/ui";
 import type { ModelDescriptor, PoolUserStats } from "./types";
 
 const model: ModelDescriptor = { id: "model-1", name: "Model One", provider: "provider", protocol: "openai", available_now: true, capabilities: { tools: true } };
 
 describe("route-level page jobs", () => {
+  it("never invents activity when the measured series is empty", () => {
+    const html = renderToStaticMarkup(<SplineChart values={[]} />);
+    expect(html).toContain("No requests in this range");
+    expect(html).not.toContain("chart-line");
+    expect(html).not.toContain("chart-area");
+  });
+
+  it("renders one measured point without manufacturing a trend", () => {
+    const html = renderToStaticMarkup(<SplineChart values={[7]} />);
+    expect(html).toContain("1 measured point");
+    expect(html).toContain("chart-point");
+    expect(html).not.toContain("chart-line");
+  });
   it("Home is orientation and does not render usage analytics", () => {
     const html = renderToStaticMarkup(<DashboardPage stats={null} models={[model]} connections={{ status: "idle" }} isElevated={false} onNavigate={() => {}} />);
     expect(html).toContain("Ready to use");

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export function PageFrame({ kicker, title, description, action, children }: { kicker: string; title: string; description: string; action?: ReactNode; children: ReactNode }) {
-  return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}<div className="data-provenance" role="note"><span className="provenance-dot" />Dev review data: analytics snapshot from production · runtime and provider state isolated to dev</div></div>;
+  return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}</div>;
 }
 
 export function CardHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
@@ -21,11 +21,11 @@ export function compact(value: number) {
 }
 
 export function SplineChart({ values }: { values: number[] }) {
-  const normalized = values.map(value => Number.isFinite(value) ? value : 0);
-  const points = normalized.length > 1 ? normalized : [12, 18, 14, 23, 20, 29, 25, 35, 31, 40, 37, 46];
+  const points = values.filter(Number.isFinite);
+  if (points.length === 0) return <div className="spline-chart chart-empty" role="img" aria-label="No request activity in this range"><span>No requests in this range</span></div>;
   const max = Math.max(...points, 1);
   const coordinate = (value: number) => 94 - (value / max) * 78;
-  const path = points.map((value, i) => `${i ? "L" : "M"}${(i / (points.length - 1)) * 100},${coordinate(value)}`).join(" ");
-  const comparison = points.map((value, i) => `${i ? "L" : "M"}${(i / (points.length - 1)) * 100},${coordinate(Math.max(1, value * .68))}`).join(" ");
-  return <div className="spline-chart" role="img" aria-label="Request activity trend chart"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="red-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--color-accent-primary)" stopOpacity=".28" /><stop offset="1" stopColor="var(--color-accent-primary)" stopOpacity="0" /></linearGradient></defs><path className="chart-area" d={`${path} L100,100 L0,100 Z`} /><path className="chart-line comparison" d={comparison} /><path className="chart-line" d={path} /></svg></div>;
+  const x = (index: number) => points.length === 1 ? 50 : (index / (points.length - 1)) * 100;
+  const path = points.map((value, index) => `${index ? "L" : "M"}${x(index)},${coordinate(value)}`).join(" ");
+  return <div className="spline-chart" role="img" aria-label={`Request activity trend, ${points.length} measured ${points.length === 1 ? "point" : "points"}`}><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="red-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--color-accent-primary)" stopOpacity=".28" /><stop offset="1" stopColor="var(--color-accent-primary)" stopOpacity="0" /></linearGradient></defs>{points.length > 1 ? <><path className="chart-area" d={`${path} L100,100 L0,100 Z`} /><path className="chart-line" d={path} /></> : <circle className="chart-point" cx="50" cy={coordinate(points[0])} r="2.5" />}</svg></div>;
 }

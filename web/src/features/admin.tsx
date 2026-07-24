@@ -50,16 +50,36 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
   const busy = operation !== null;
   const lifecycle = connection.dead ? "Dead" : connection.disabled ? "Disabled" : connection.health_error ? "Degraded" : "Enabled";
   const total = (key: string) => Number(connection.totals[key] ?? 0).toLocaleString();
+  const usageFacts = providerUsageFacts(connection.usage);
   return <aside className="connection-detail" aria-label="Connection detail">
     <header><div><span>Connection detail</span><h2>{connection.identity.display_name || connection.provider_id}</h2><code>{connection.public_id}</code></div><button className="icon-button" aria-label="Close connection detail" onClick={onClose}>×</button></header>
     {editing ? <form className="connection-rename" onSubmit={event => { event.preventDefault(); void onRun("Rename", () => renameProviderConnection(connection.id, name)).then(() => setEditing(false)); }}><label><span>Display name</span><input autoFocus maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><div><button type="button" className="secondary-button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()}>Save name</button></div></form> : <button className="text-action" onClick={() => setEditing(true)}>Rename connection</button>}
-    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} /><Fact label="Plan" value={connection.plan_type || "—"} /><Fact label="Lifecycle" value={lifecycle} /><Fact label="In flight" value={String(connection.inflight)} /><Fact label="Primary" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Provider verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Last refresh" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Credential expiry" value={formatTimestamp(connection.expires_at)} /> : null}</div>
+    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} />{connection.plan_type ? <Fact label="Plan" value={connection.plan_type} /> : null}<Fact label="Lifecycle" value={lifecycle} /><Fact label="In flight" value={String(connection.inflight)} /><Fact label="Primary" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Provider verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Last refresh" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Credential expiry" value={formatTimestamp(connection.expires_at)} /> : null}</div>
     {connection.health_error ? <div className="connection-health-error"><b>Current health error</b><p>{connection.health_error}</p></div> : null}
     {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Provider identity</h3>{connection.identity.external_subject ? <Fact label="External subject" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={value} />)}</section> : null}
     <section><h3>Measured totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
-    {Object.keys(connection.usage).length ? <section><h3>Provider usage</h3><div className="connection-totals">{Object.entries(connection.usage).filter(([, value]) => typeof value === "number" || typeof value === "boolean" || typeof value === "string").slice(0, 8).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={String(value)} />)}</div></section> : null}
+    {usageFacts.length ? <section><h3>Provider usage</h3><div className="connection-totals">{usageFacts.map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section> : null}
     <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
   </aside>;
+}
+function providerUsageFacts(usage: Record<string, unknown>): Array<{ label: string; value: string }> {
+  const number = (...keys: string[]) => { for (const key of keys) if (typeof usage[key] === "number") return usage[key] as number; return null; };
+  const text = (...keys: string[]) => { for (const key of keys) if (typeof usage[key] === "string" && usage[key]) return usage[key] as string; return ""; };
+  const facts: Array<{ label: string; value: string }> = [];
+  const primaryWindow = number("primary_window_minutes", "PrimaryWindowMinutes");
+  const secondaryWindow = number("secondary_window_minutes", "SecondaryWindowMinutes");
+  const primaryUsed = number("primary_used_percent", "PrimaryUsedPercent", "primary_used", "PrimaryUsed");
+  const secondaryUsed = number("secondary_used_percent", "SecondaryUsedPercent", "secondary_used", "SecondaryUsed");
+  if (primaryWindow && primaryUsed !== null) facts.push({ label: `${primaryWindow}m window used`, value: `${primaryUsed.toFixed(1)}%` });
+  if (secondaryWindow && secondaryUsed !== null) facts.push({ label: `${secondaryWindow}m window used`, value: `${secondaryUsed.toFixed(1)}%` });
+  const credits = number("credits_balance", "CreditsBalance");
+  const hasCredits = usage.has_credits === true || usage.HasCredits === true;
+  if (hasCredits && credits !== null) facts.push({ label: "Credits", value: credits.toLocaleString() });
+  const source = text("source", "Source");
+  if (source) facts.push({ label: "Source", value: source });
+  const retrieved = text("retrieved_at", "RetrievedAt");
+  if (retrieved && !retrieved.startsWith("0001-")) facts.push({ label: "Retrieved", value: formatTimestamp(retrieved) });
+  return facts;
 }
 function Fact({ label, value }: { label: string; value: string }) { return <div className="connection-fact"><span>{label}</span><b>{value}</b></div>; }
 function formatTimestamp(value: string) { const date = new Date(value); return date.toLocaleString(); }

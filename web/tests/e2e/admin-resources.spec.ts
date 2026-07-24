@@ -36,7 +36,7 @@ test("Connections inventory opens provider-neutral detail and uses canonical ope
 test("Connections operation failure remains localized", async ({ page }) => {
   await loginAs(page, "admin-elevated"); await page.goto("/admin/connections");
   const first = page.locator(".connection-row").first(); await first.click();
-  await page.route("**/api/v2/provider-connections/*/refresh", route => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "injected refresh failure" }) }));
+  await page.route("**/api/v2/provider-connections/*/refresh", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "injected refresh failure" }) }));
   await page.getByLabel("Connection detail").getByRole("button", { name: "Refresh credentials" }).click();
   await expect(page.getByRole("alert")).toContainText("injected refresh failure");
   await expect(page).toHaveURL(/\/admin\/connections$/);
@@ -55,6 +55,7 @@ test("Members renders real identities, plans, state, and working administration"
   await loginAs(page, "admin-elevated"); await page.goto("/admin/members");
   await expect(page.locator(".member-row").first()).toContainText("@");
   await expect(page.getByText("Administration projection is limited")).toHaveCount(0);
+  await expect(page.getByText(/Dev review data/)).toHaveCount(0);
   await page.getByRole("button", { name: "Add member" }).click();
   await expect(page.getByRole("heading", { name: "Grant gateway access" })).toBeVisible();
   await expect(page.getByLabel("Email")).toBeVisible();
@@ -75,7 +76,7 @@ test("No active product page advertises missing future implementation", async ({
   for (const route of ["/", "/models", "/usage", "/profile", "/admin/connections", "/admin/members", "/admin/system"]) {
     await page.goto(route);
     const text = await page.locator("main").innerText();
-    expect(text).not.toMatch(/not yet exposed|projection is limited|projection pending|shell is ready|no backend projection|routing projection unavailable/i);
+    expect(text).not.toMatch(/not yet exposed|projection is limited|projection pending|shell is ready|no backend projection|routing projection unavailable|dev review data/i);
   }
 });
 

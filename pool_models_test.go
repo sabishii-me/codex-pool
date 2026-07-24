@@ -4,9 +4,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestPoolModelDescriptorsDoNotFabricateAggregatorInventory(t *testing.T) {
+	for _, descriptor := range poolModelDescriptors() {
+		if strings.HasPrefix(descriptor.ID, "openrouter/") || strings.HasPrefix(descriptor.ID, "nvidia/") {
+			t.Fatalf("fabricated aggregator catalog row %q", descriptor.ID)
+		}
+	}
+}
 
 func TestPoolModelDescriptorsCoverEveryProvider(t *testing.T) {
 	t.Parallel()

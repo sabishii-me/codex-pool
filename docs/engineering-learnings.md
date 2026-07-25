@@ -96,13 +96,16 @@ Never persist the authorization code. Use a 15-minute expiry and an exactly-once
 - Keep generated Pi configuration, Codex model injection, and executable catalog tests synchronized.
 - Structured overflow errors still let Pi compact and retry, but correct metadata prevents overflow recovery from becoming the normal compaction path.
 
-## Isolated development deployment
+## Three-environment deployment
 
-- Staging freezes the validated legacy UI at image `codex-pool:staging-a91560b`, endpoint `127.0.0.1:18990`, and separate `staging/pool`, `staging/data`, and `staging/provider-specs` mounts. Its Compose file has no build section.
-- Active development uses image `codex-pool:dev`, endpoint `127.0.0.2:18991`, and separate `dev/pool`, `dev/data`, and `dev/provider-specs` mounts. A different loopback IP—not merely a different port—is required because browser cookies are host-scoped.
-- Use `127.0.0.1` for development and `localhost` for production to prevent host-only browser cookies from colliding across ports.
-- Development Compose interpolation variables use a `DEV_` prefix so the root production `.env` cannot be imported accidentally.
-- Never mount or copy live OAuth credentials into both instances; refresh-token rotation can race and corrupt state.
+- Runtime environments are exactly Test (`127.0.0.1:18991`), Staging (`127.0.0.1:18990`), and Production (`localhost:8989`). Do not create a fourth candidate runtime; immutable images are artifacts.
+- Test uses image `codex-pool:dev` and isolated `dev/pool`, `dev/data`, and `dev/provider-specs` mounts. Synthetic local sessions are Test-only.
+- Staging receives an explicit immutable image promoted from Test and keeps isolated `staging/pool`, `staging/data`, and `staging/provider-specs` mounts. It uses real authentication and is not permanently pinned.
+- Browser cookies are hostname-scoped, so Test and Staging sessions can collide on `127.0.0.1`; do not assume port isolation. Use separate browser contexts or clear cookies during cross-environment review.
+- Compose interpolation variables use `DEV_` and `STAGING_` prefixes so root Production settings cannot be imported accidentally.
+- Deployment changes code and runs destination migrations in place; it does not copy entire data directories.
+- Never share writable OAuth/provider state between environments; refresh-token rotation can race and corrupt credentials.
+- Host-side migration can change bind-mount ownership. Normalize ownership before starting the unprivileged runtime and verify SQLite can create WAL/SHM files.
 
 ## UI/data contract
 

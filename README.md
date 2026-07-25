@@ -89,19 +89,19 @@ pool/
 go build && ./codex-pool
 ```
 
-### Isolated staging and development
+### Test and Staging
 
-When the main gateway is in active use, keep a pinned staging baseline and a separate active-development project. See [Staging and Development Gateways](docs/development-instance.md).
+Use exactly three environments: Test (`18991`), Staging (`18990`), and Production (`8989`). See [Test, Staging, and Production](docs/development-instance.md).
 
 ```bash
-# Stable legacy UI baseline (no build)
-docker compose -p codex-pool-staging -f docker-compose.staging.yml up -d
+# Test: active source checkout
+docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml up -d --build
 
-# Active source checkout
-docker compose -p codex-pool-dev -f docker-compose.dev.yml up -d --build
+# Staging: exact immutable image promoted from Test
+docker compose --env-file .env.staging.local -p codex-pool-staging -f docker-compose.staging.yml up -d
 ```
 
-Staging is `http://127.0.0.1:18990`; active development is `http://127.0.0.2:18991`. Each has separate provider, database, user, session, and specification directories, and neither mounts production `pool/` or `data/`.
+Test and Staging retain separate provider, database, user, session, and specification directories. Promotion changes the image and migrates destination data in place; it never copies an entire environment data directory. There is no additional candidate runtime or port.
 
 ### 3. Point your CLI
 

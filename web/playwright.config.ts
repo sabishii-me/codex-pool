@@ -5,7 +5,6 @@ import { defineConfig } from "@playwright/test";
 // since the pool needs real provider config/secrets to be meaningful.
 export default defineConfig({
   testDir: "./tests/e2e",
-  testIgnore: ["**/legacy-baseline.spec.ts"],
   timeout: 30_000,
   fullyParallel: true,
   reporter: [

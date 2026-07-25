@@ -219,7 +219,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[%s] incoming %s %s", reqID, r.Method, r.URL.Path)
 	}
 
-	// Fingerprinted signal-room assets are embedded by the Go binary.
+	// Fingerprinted frontend assets are embedded by the Go binary.
 	if strings.HasPrefix(r.URL.Path, "/assets/") {
 		h.serveSignalRoomAsset(w, r)
 		return

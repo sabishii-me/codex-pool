@@ -356,27 +356,27 @@ Gateway → durable usage events → usage/analytics service → data API → UI
 
 Do not split deployment merely to compensate for unclear package boundaries.
 
-### Pre-Phase 9 — Legacy UI compatibility baseline
+### Pre-Phase 9 — Historical compatibility checkpoint
 
-Status: complete. The existing Signal Room remains the stable control client for long daily-use testing while a future UI is developed separately. It is served by a pinned staging gateway (`codex-pool:staging-a91560b`, `127.0.0.1:18990`, `staging/*`) whose Compose contract has no build section. Active source development runs independently at `127.0.0.2:18991` with image `codex-pool:dev` and fresh `dev/*` state; distinct loopback hosts prevent cookie collisions. This was a compatibility pass, not a redesign: primary navigation, labels, workflows, and visual structure remain unchanged. Dashboard resources now refresh independently so a transient analytics or catalog failure does not discard fresh/last-known-good pool data; plain-text backend errors remain actionable; startup no longer issues a duplicate resource refresh. The live loopback baseline exercises every existing view, canonical v2 provider identities including unknown runtime providers, refresh degradation, repeated sync cycles, JavaScript/console/network failures, and application-shell uniqueness against staging. Setup/config downloads were verified against the live staging session. Repeatable daily and soak commands plus incident classification are documented in `docs/legacy-ui-baseline.md`.
+Status: superseded by the current unified React product and three-environment promotion workflow. The former pinned legacy-control strategy was useful during the initial refactor, but it is no longer an active deployment model. Staging now receives explicitly promoted immutable Test images and retains production-like authentication and isolated durable state. Current soak evidence and incident classification live in [`staging-soak-checkpoint.md`](staging-soak-checkpoint.md).
 
-Keep this baseline available in parallel with Phase 9 until the replacement UI matches its route coverage, reliability, setup workflows, provider contribution paths, and operator recovery behavior.
+Historical compatibility findings remain useful: independently refreshed dashboard resources, actionable backend errors, canonical provider identities, unknown-provider handling, and repeatable runtime/error checks remain release requirements.
 
 ### Phase 9 — Functional product implementation
 
-Status: **active — feature-completeness checkpoint after `452d8d7`**.
+Status: **active — Staging long-soak checkpoint after `cc25f3f`**.
 
 The historical Product Design Harness artifact and separate member/operator workspace plan are superseded by [`frontend-product-architecture.md`](frontend-product-architecture.md). The current implementation is one inherited Member → Admin → MFA-elevated product with canonical routes `/`, `/models`, `/usage`, `/setup`, `/profile`, `/admin/connections`, `/admin/members`, and `/admin/system`. Browser/API route separation, real OAuth dev isolation, one MFA gate, scoped Usage, detailed model/provider/connection attribution, measured per-model curves, Connections operations, Members lifecycle operations, System projections, MFA enrollment, no-fake-data enforcement, and accessible product dialogs are implemented.
 
 Current functional checkpoint:
 
-- **Complete:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, backend-owned selected-model routing context, and an immutable isolated staging-candidate build/deployment path.
-- **In progress:** candidate browser acceptance and functional Profile security rotation/recovery operations.
-- **Deferred to Phase 10:** validation hardening, duplicate/member policy hardening, broad copy/visual polish, performance optimization, and release tuning.
+- **Complete:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, backend-owned selected-model routing context, backend-driven Setup, typed Anthropic overflow/complete usage, image generation/read translation, immutable release images, explicit Test → Staging promotion, real-auth Staging, and conflict-safe usage migration/recovery.
+- **In progress:** Staging-specific authenticated browser acceptance, long-soak evidence, and functional Profile security rotation/recovery operations.
+- **Deferred to Phase 10:** broad accessibility, responsive/visual polish, performance optimization, and release tuning that does not block operation or truthfulness.
 
 Phase 9 must prioritize real workflows and backend-owned contracts. It must not display future-work cards, fabricated trends, example inventory, inferred routing order, or nonfunctional controls.
 
-Exit criterion: every active route performs its unique product job with real authorized data and working operations; selected-model routing and Profile security workflows are functionally complete; an immutable staging candidate passes the isolated candidate gate; Setup remains frozen for its separate replan.
+Exit criterion: every active route performs its unique product job with real authorized data and working operations; Profile security workflows are functionally complete; the Staging-specific browser matrix and long soak pass against the exact immutable image intended for Production; canonical usage and projections reconcile after restart; no release-blocking incident remains.
 
 ### Phase 10 — Product hardening and polish
 

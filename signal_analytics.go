@@ -31,7 +31,7 @@ type SignalAnalyticsResponse struct {
 }
 
 // handleSignalAnalytics returns chart-ready time series that preserve the
-// attribution boundaries needed by the signal-room UI. It intentionally keeps
+// attribution boundaries needed by the product UI. It intentionally keeps
 // account identifiers hashed; raw origin metadata remains admin-only.
 func (h *proxyHandler) handleSignalAnalytics(w http.ResponseWriter, r *http.Request) {
 	weeks := 6

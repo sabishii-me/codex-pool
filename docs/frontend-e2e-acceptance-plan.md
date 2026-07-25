@@ -253,7 +253,7 @@ Do not request human review unless:
 - Home/Usage separation assertions pass;
 - direct route reloads pass;
 - Admin navigation/context assertions pass;
-- production and pinned staging remain untouched.
+- production remains untouched until explicit promotion; Staging evidence is collected only after an explicit Test → Staging promotion.
 
 The final human review receives only:
 

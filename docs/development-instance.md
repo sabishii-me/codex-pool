@@ -1,146 +1,118 @@
-# Isolated Staging and Development Gateways
+# Test, Staging, and Production
 
-Keep three independent gateways:
+There are exactly three runtime environments:
 
-| Resource | Production | Staging baseline | Active development |
-|---|---|---|---|
-| Compose project | current/default | `codex-pool-staging` | `codex-pool-dev` |
-| Compose file | `docker-compose.yml` | `docker-compose.staging.yml` | `docker-compose.dev.yml` |
-| Image | `codex-pool:latest` | pinned `codex-pool:staging-a91560b` | mutable `codex-pool:dev` |
-| Endpoint | `localhost:8989` | `127.0.0.1:18990` | `127.0.0.2:18991` |
-| Provider state | `./pool` | `./staging/pool` | `./dev/pool` |
-| Provider specs | operator-defined | `./staging/provider-specs` | `./dev/provider-specs` |
-| Data/session state | `./data` | `./staging/data` | `./dev/data` |
-| Variables | production names | `STAGING_*` | `DEV_*` |
+| Environment | Purpose | Compose project | Compose file | Endpoint | Persistent state |
+|---|---|---|---|---|---|
+| Test | active development and automated acceptance | `codex-pool-dev` | `docker-compose.dev.yml` | `http://127.0.0.1:18991` | `dev/pool`, `dev/data`, `dev/provider-specs` |
+| Staging | production-like long soak and final release validation | `codex-pool-staging` | `docker-compose.staging.yml` | `http://127.0.0.1:18990` | `staging/pool`, `staging/data`, `staging/provider-specs` |
+| Production | live gateway | default/current | `docker-compose.yml` | `http://localhost:8989` | `pool`, `data` |
 
-Staging is the validated legacy-UI control client. It has no Compose `build` section, so normal source rebuilds cannot replace it. Active development is disposable and follows the current checkout.
+There is no candidate runtime and no fourth port. An immutable Docker image is a build artifact, not an environment.
 
-The gateways deliberately use different loopback IP addresses. Browser cookies are scoped by hostname, not port; using `127.0.0.1` for both would make their session and elevation cookies collide.
+## Promotion flow
 
-Neither non-production gateway mounts production databases, users, MFA, sessions, analytics, or JWT secrets. Provider credential snapshots may be copied deliberately, but they consume the same upstream quotas. Refresh is disabled by default.
-
-## Staging baseline
-
-Staging currently preserves the validated commit/image `a91560b` and the existing isolated baseline state.
-
-Start without rebuilding:
-
-```bash
-docker compose -p codex-pool-staging -f docker-compose.staging.yml up -d
+```text
+Test (18991) -> Staging (18990) -> Production (8989)
 ```
 
-Check:
+1. Develop and validate in Test.
+2. Build one immutable, commit-tagged release image.
+3. Promote that exact image to Staging without replacing Staging data.
+4. Run Staging schema/data migrations in place and complete the long soak.
+5. Promote the same accepted image to Production without replacing Production data.
 
-```bash
-docker compose -p codex-pool-staging -f docker-compose.staging.yml ps
-curl http://127.0.0.1:18990/healthz
-```
+Staging is not pinned or frozen. It changes when a Test build is promoted. It has no Compose `build` section, so promotion always names the exact immutable image explicitly.
 
-Open `http://127.0.0.1:18990`.
+## Build an immutable release image
 
-Run the compatibility baseline:
-
-```bash
-cd web
-POOL_LOCAL_DEV_BASELINE=1 POOL_BASE_URL=http://127.0.0.1:18990 npm run test:e2e:baseline
-```
-
-To promote a newly validated baseline, use an immutable tag containing its commit, update `STAGING_IMAGE`, and migrate staging deliberately. Never point staging at `codex-pool:dev` or `codex-pool:latest`.
-
-## Staging candidate promotion
-
-The next feature-phase goal is an immutable build that can be deployed to staging without replacing the pinned legacy control prematurely. Build a candidate from a clean commit:
+From a clean commit:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build-staging-candidate.ps1
+powershell -ExecutionPolicy Bypass -File scripts/build-release-image.ps1
 ```
 
-This runs frontend tests/type/build, restores generated source, runs Go tests, and creates `codex-pool:staging-<commit>` with OCI revision/version/date labels. Candidate images are never tagged `dev` or `latest`.
+The script runs frontend tests/type/build and Go tests, then creates `codex-pool:staging-<commit>` with OCI revision/version/date labels. It creates no runtime or port.
 
-Exercise it beside pinned staging with independent candidate state and port `18992`:
+## Test
 
-```powershell
-$env:STAGING_CANDIDATE_IMAGE="codex-pool:staging-<commit>"
-docker compose -p codex-pool-staging-candidate -f docker-compose.staging-candidate.yml up -d
+Copy `.env.dev.example` to ignored `.env.dev` and configure the Test OAuth callback:
+
+```text
+http://127.0.0.1:18991/auth/callback/google
 ```
 
-Only after candidate browser acceptance should `STAGING_IMAGE` in the pinned staging deployment be changed deliberately. The candidate Compose contract has no `build` section and never mounts `staging/*`, `dev/*`, or production state.
-
-## Active development
-
-Optionally copy `.env.dev.example` to ignored `.env.dev`, then start/rebuild:
+Start or rebuild Test:
 
 ```bash
 docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml up -d --build
+curl http://127.0.0.1:18991/healthz
 ```
 
-Defaults also work without an env file because all interpolation names are `DEV_*` and cannot inherit production equivalents.
+`DEV_LOCAL_SESSION=true` is allowed only in Test. It creates `developer@localhost.invalid` in Test state. That identity and its data never move to Staging or Production.
 
-Check:
+## Promote to Staging
+
+Create ignored `.env.staging.local` from `.env.staging.example`. Set `STAGING_IMAGE` to the exact image accepted in Test and provide real Staging OAuth, allowlist, Admin, and JWT settings.
 
 ```bash
-docker compose -p codex-pool-dev -f docker-compose.dev.yml ps
-curl http://127.0.0.2:18991/healthz
+docker compose --env-file .env.staging.local -p codex-pool-staging -f docker-compose.staging.yml up -d
+curl http://127.0.0.1:18990/healthz
 ```
 
-Open `http://127.0.0.2:18991`.
+Required Staging properties:
 
-`DEV_LOCAL_SESSION=true` creates an isolated `developer@localhost.invalid` member in `dev/data/pool_users.json`. It does not grant administrator elevation. The server accepts this mode only for loopback `PUBLIC_URL` and request hosts.
+- `STAGING_LOCAL_SESSION=false`;
+- real Google OAuth callback `http://127.0.0.1:18990/auth/callback/google`;
+- real allowed/Admin policy;
+- isolated Staging state;
+- no synthetic GatewayUser;
+- bind-mounted files writable by the unprivileged `codex` runtime user;
+- destination data retained and migrated in place.
 
-For real Google authentication, use a separate OAuth client and callback:
+The one-shot `staging-data-permissions` service normalizes bind-mount ownership before the gateway starts so SQLite can create WAL/SHM files.
 
-```text
-http://127.0.0.2:18991/auth/callback/google
-```
+## Data rules
 
-## State rules
+Deployment promotes code, not data directories. See [Environment data migration](environment-data-migration.md).
 
-- `staging/data` is the durable baseline history; do not mutate/delete it during ordinary development.
-- `dev/data` is disposable and must start without copied staging/production databases or users.
-- `staging/pool` and `dev/pool` may contain intentional credential snapshots, but neither may mount `./pool`.
-- Keep `PROXY_DISABLE_REFRESH=true` for shared snapshots unless a test explicitly requires refresh.
-- Keep attempts at one to avoid multiplying real quota use.
-- Do not inspect bind-mounted SQLite concurrently from Windows as proof of durability; stop the corresponding container or use its APIs.
+- Never replace destination `data/`, `pool/`, or provider specs during ordinary promotion.
+- Never merge Test usage into Staging or Production.
+- Never copy OAuth sessions or cookies.
+- Users, MFA, and provider credentials require an explicit, sanitized refresh policy; they are not generic merge inputs.
+- Merge only canonical usage events by `(connection_id, request_id)` with conflict rejection and provenance.
+- Rebuild derived analytics from canonical events.
+- Back up before every applied migration and prove idempotency.
 
-## Vite UI development
+Provider connections in all three environments can consume the same real upstream quota even though gateway state and accounting are isolated.
 
-`web/vite.config.ts` proxies to active development at `127.0.0.2:18991`.
+## Staging long soak
+
+The active checkpoint and evidence procedure are in [Staging soak checkpoint](staging-soak-checkpoint.md).
+
+Minimum recurring checks:
 
 ```bash
-cd web
-npm install
-npm run dev -- --host 127.0.0.2
+curl http://127.0.0.1:18990/healthz
+docker logs --since 24h codex-pool-staging-codex-pool-staging-1
 ```
 
-Open the printed `127.0.0.2` URL. Staging remains available independently on `127.0.0.1:18990` for comparison.
+Exercise signed-out, member, locked Admin, elevated Admin, setup clients, provider routing, typed protocol errors, image generation/read, canonical usage persistence, economics, and restart recovery. Do not use Test fixture authentication against Staging.
 
-## Codex OAuth broker
+## Promote to Production
 
-The host broker remains at `127.0.0.1:1460` and leases callback ports `1455`/`1457` only during authorization. Both gateways can request leases sequentially. The `gateway_origin` sent by the UI determines where the callback is forwarded.
+Production promotion is authorized only after the Staging checkpoint has no unresolved release blocker. Use the exact image digest accepted on Staging. Preserve Production mounts and configuration, dry-run migrations first, take rollback backups, stop only Production for apply, restart, and validate health/auth/accounting.
 
-## Stop/remove
+Do not tag or rebuild a different image during promotion.
+
+## Stop an environment
 
 ```bash
-# Active development only
-docker compose -p codex-pool-dev -f docker-compose.dev.yml down
+# Test only
+docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml down
 
 # Staging only
-docker compose -p codex-pool-staging -f docker-compose.staging.yml down
+docker compose --env-file .env.staging.local -p codex-pool-staging -f docker-compose.staging.yml down
 ```
 
-Bind-mounted state is not removed by `down --volumes`. Delete `dev/` only when a clean development reset is intended. Do not delete `staging/` without first preserving the baseline intentionally.
-
-## Guardrails
-
-- Always include the project and Compose file in commands.
-- Never run production Compose commands to validate staging/development changes.
-- Never tag an active development build as `codex-pool:latest`.
-- Never use broad Docker prune commands while any gateway is in use.
-- Render both contracts before starting:
-
-```bash
-docker compose -p codex-pool-staging -f docker-compose.staging.yml config
-docker compose -p codex-pool-dev -f docker-compose.dev.yml config
-```
-
-Resolved mounts must end in their own `staging/*` or `dev/*` directories, never production `pool/` or `data/`.
+Never use broad Docker prune commands while any environment is in use.

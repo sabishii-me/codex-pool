@@ -629,7 +629,7 @@ Use a router and a query/cache layer. Provider presentation metadata should come
 
 ### UX Phase 0 — Research and task definition
 
-Status: complete. The current documents, frontend source, pinned staging UI, and representative desktop/mobile states were reviewed. The accepted direction is a conventional dashboard-and-monitor baseline with a separate member/operator information architecture; Signal Room becomes a theme over that shared foundation. Detailed progress and exit criteria are tracked in [`ui-redesign-plan.md`](ui-redesign-plan.md) and [GitHub issue #1](https://github.com/sabishii-me/codex-pool/issues/1).
+Status: complete as a historical design review. The accepted direction has since been implemented as one capability-aware product. Current release and soak evidence is tracked in [`frontend-product-architecture.md`](frontend-product-architecture.md) and [`staging-soak-checkpoint.md`](staging-soak-checkpoint.md); Staging is an explicitly promoted environment, not a pinned UI control.
 
 - Identify standard-user and operator jobs.
 - Inventory current screens and metrics.

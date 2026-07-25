@@ -1,5 +1,5 @@
 {
-  "name": "codex-pool-signal-room",
+  "name": "codex-pool-web",
   "private": true,
   "version": "1.0.0",
   "type": "module",
@@ -9,8 +9,6 @@
     "build": "npm run generate:api-types && tsc -b && vite build",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:e2e:baseline": "playwright test tests/e2e/legacy-baseline.spec.ts",
-    "test:e2e:baseline:soak": "node scripts/run-baseline-soak.mjs",
     "design:serve": "product-design-harness serve --root ../.product-design",
     "design:doctor": "product-design-harness doctor --root ../.product-design",
     "design:validate": "product-design-harness validate --root ../.product-design",

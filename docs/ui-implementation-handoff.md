@@ -19,8 +19,8 @@ The artifact is an interaction and visual contract, not production code to copy 
 ## Non-negotiable implementation boundaries
 
 1. Keep the legacy UI available until replacement parity and soak criteria pass.
-2. Do not rebuild or restart pinned staging or production during ordinary implementation.
-3. Develop against `http://127.0.0.2:18991` and compare with staging at `http://127.0.0.1:18990`.
+2. Do not modify Production during ordinary implementation; promote accepted Test builds explicitly to Staging for soak validation.
+3. Develop against `http://127.0.0.1:18991` and validate promoted releases on Staging at `http://127.0.0.1:18990` using isolated browser contexts.
 4. Preserve existing authentication, MFA, setup downloads, contribution/OAuth, operator recovery, unknown-provider, and partial-failure behavior.
 5. Presentation state never grants operator authority; backend policy remains authoritative.
 6. Do not implement provider accounting, quota, health, evidence, or routing semantics in React.
@@ -412,7 +412,7 @@ For each migrated route:
 - unknown runtime provider fixture;
 - long labels, missing metadata, and unavailable evidence fixture.
 
-Keep the legacy baseline suite running against pinned staging throughout migration.
+Keep the Staging soak matrix running against each explicitly promoted release until Production acceptance.
 
 ## First production coding task
 

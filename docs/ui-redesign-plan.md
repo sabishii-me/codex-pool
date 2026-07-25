@@ -12,7 +12,7 @@ Related documents:
 
 - [Production UI implementation handoff](ui-implementation-handoff.md)
 - [UI/UX review and redesign direction](ui-ux-review.md)
-- [Legacy UI compatibility baseline](legacy-ui-baseline.md)
+- [Staging long-soak checkpoint](staging-soak-checkpoint.md)
 - [Architecture roadmap](architecture-roadmap.md)
 - [Development instance](development-instance.md)
 
@@ -243,11 +243,11 @@ Before promotion, the replacement must preserve or improve:
 
 ## Environment and release discipline
 
-- Pinned legacy control: `http://127.0.0.1:18990` using `codex-pool:staging-a91560b` and `staging/*` state.
-- Active redesign: `http://127.0.0.2:18991` using `codex-pool:dev` and `dev/*` state.
-- Production: `http://localhost:8989`; unchanged during ordinary Phase 9 work.
-- Do not rebuild staging or production to validate feature-branch work.
-- Compare replacement behavior with staging throughout development.
+- Staging soak: `http://127.0.0.1:18990` using the exact immutable image promoted from Test and isolated `staging/*` state.
+- Active Test development: `http://127.0.0.1:18991` using `codex-pool:dev` and isolated `dev/*` state.
+- Production: `http://localhost:8989`; unchanged until explicit promotion.
+- Staging is not pinned; promote only after Test acceptance and preserve Staging data in place.
+- Use isolated browser contexts because Test and Staging share the `127.0.0.1` cookie hostname.
 - Promotion requires an explicit release decision after parity and soak evidence; branch completion alone is insufficient.
 
 ## Progress-recording convention
@@ -259,5 +259,5 @@ When work advances:
 1. Open or link a child issue for a bounded deliverable when useful.
 2. Reference the umbrella issue in pull requests and commits.
 3. Update the phase table only when status or exit evidence changes.
-4. Record compatibility incidents using [the legacy baseline taxonomy](legacy-ui-baseline.md).
+4. Record compatibility incidents using the [Staging soak taxonomy](staging-soak-checkpoint.md).
 5. Do not mark a workflow complete based only on a visual implementation; include contract, browser, accessibility, and resilience evidence.

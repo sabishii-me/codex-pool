@@ -19,20 +19,23 @@ func TestDockerWebBuildIncludesAPISchemasAndBuildIdentity(t *testing.T) {
 	}
 }
 
-func TestStagingCandidateComposeRequiresImmutableImageAndIsolatedState(t *testing.T) {
-	data, err := os.ReadFile("docker-compose.staging-candidate.yml")
+func TestReleaseBuildScriptCreatesArtifactWithoutAnotherRuntime(t *testing.T) {
+	data, err := os.ReadFile("scripts/build-release-image.ps1")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
-	for _, fragment := range []string{"STAGING_CANDIDATE_IMAGE:?", "./staging-candidate/pool:/app/pool", "./staging-candidate/data:/app/data", "127.0.0.1:${STAGING_CANDIDATE_PORT:-18992}:8989"} {
+	for _, fragment := range []string{"Built immutable release image", "STAGING_IMAGE", "does not create another runtime or port"} {
 		if !strings.Contains(source, fragment) {
-			t.Errorf("candidate contract lacks %q", fragment)
+			t.Errorf("release build script lacks %q", fragment)
 		}
 	}
-	for _, forbidden := range []string{"build:", "codex-pool:dev", "codex-pool:latest", "./pool:/app/pool", "./data:/app/data", "./staging/pool", "./dev/pool"} {
+	for _, forbidden := range []string{"18992", "STAGING_CANDIDATE", "docker-compose.staging-candidate", "codex-pool-staging-candidate"} {
 		if strings.Contains(source, forbidden) {
-			t.Errorf("candidate contract contains forbidden %q", forbidden)
+			t.Errorf("release build script contains obsolete runtime contract %q", forbidden)
 		}
+	}
+	if _, err := os.Stat("docker-compose.staging-candidate.yml"); !os.IsNotExist(err) {
+		t.Fatalf("obsolete fourth-runtime Compose file still exists: %v", err)
 	}
 }

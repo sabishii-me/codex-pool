@@ -16,13 +16,13 @@ func TestStagingAndDevelopmentComposeStayIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	staging, development := string(stagingBytes), string(developmentBytes)
-	for _, required := range []string{"codex-pool:staging-a91560b", "127.0.0.1:18990:8989", "./staging/pool:/app/pool", "./staging/data:/app/data", "${STAGING_"} {
+	for _, required := range []string{"${STAGING_IMAGE:?set STAGING_IMAGE to the immutable image promoted from Test}", "127.0.0.1:18990:8989", "./staging/pool:/app/pool", "./staging/data:/app/data", "${STAGING_"} {
 		if !strings.Contains(staging, required) {
 			t.Errorf("staging Compose lacks %q", required)
 		}
 	}
-	if strings.Contains(staging, "build:") || strings.Contains(staging, "codex-pool:dev") || strings.Contains(staging, "./dev/") {
-		t.Fatal("staging Compose can be rebuilt or shares active development resources")
+	if strings.Contains(staging, "build:") || strings.Contains(staging, "codex-pool:dev") || strings.Contains(staging, "./dev/") || strings.Contains(staging, "STAGING_IMAGE:-") {
+		t.Fatal("staging Compose can be rebuilt, shares active development resources, or pins a default image instead of requiring promotion")
 	}
 	for _, required := range []string{"codex-pool:dev", "127.0.0.1:18991:8989", "./dev/pool:/app/pool", "./dev/data:/app/data", "${DEV_"} {
 		if !strings.Contains(development, required) {

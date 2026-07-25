@@ -36,7 +36,7 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
     <ResourceMessage state={state} loading="Loading provider connections" empty="No provider connections are configured" />
     {feedback ? <div className={`operation-feedback ${feedback.tone}`} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</div> : null}
     {state.status === "ready" ? <section className="connections-workspace">
-      <div className="admin-table connection-list" aria-label="Provider connections">{state.data.map(connection => <button className={`admin-row connection-row ${selectedID === connection.id ? "selected" : ""}`} key={connection.id} onClick={() => setSelectedID(connection.id)} aria-pressed={selectedID === connection.id}><div><b>{connection.identity.display_name || connection.provider_id}</b><small>{connection.provider_id} · {connection.plan_type || "plan unavailable"}{connection.is_primary ? " · Primary" : ""}</small></div><StatusBadge tone={connection.dead || connection.disabled || connection.health_error ? "warning" : "success"}>{connection.dead ? "Dead" : connection.disabled ? "Disabled" : connection.health_error ? "Degraded" : "Enabled"}</StatusBadge><span>{connection.health_error || `${connection.inflight} in flight`}</span></button>)}</div>
+      <div className="admin-table connection-list" aria-label="Provider connections">{state.data.map(connection => { const runtime = connectionRuntimePresentation(connection); return <button className={`admin-row connection-row ${selectedID === connection.id ? "selected" : ""}`} key={connection.id} onClick={() => setSelectedID(connection.id)} aria-pressed={selectedID === connection.id}><div><b>{connection.identity.display_name || connection.provider_id}</b><small>{connection.provider_id} · {connection.plan_type || "plan unavailable"}{connection.is_primary ? " · Primary" : ""}</small></div><StatusBadge tone={runtime.tone}>{runtime.label}</StatusBadge><span>{runtime.summary || `${connection.inflight} in flight`}</span></button>; })}</div>
       {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b><p>Inspect identity, credential lifecycle, measured usage, and available operations.</p></div>}
     </section> : null}
   </PageFrame>;
@@ -48,20 +48,49 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
   const [name, setName] = useState(connection.identity.display_name);
   useEffect(() => { setName(connection.identity.display_name); }, [connection.id, connection.identity.display_name]);
   const busy = operation !== null;
-  const lifecycle = connection.dead ? "Dead" : connection.disabled ? "Disabled" : connection.health_error ? "Degraded" : "Enabled";
+  const runtime = connectionRuntimePresentation(connection);
   const total = (key: string) => Number(connection.totals[key] ?? 0).toLocaleString();
   const usageFacts = providerUsageFacts(connection.usage);
   return <aside className="connection-detail" aria-label="Connection detail">
     <header><div><span>Connection detail</span><h2>{connection.identity.display_name || connection.provider_id}</h2><code>{connection.public_id}</code></div><button className="icon-button" aria-label="Close connection detail" onClick={onClose}>×</button></header>
     {editing ? <form className="connection-rename" onSubmit={event => { event.preventDefault(); void onRun("Rename", () => renameProviderConnection(connection.id, name)).then(() => setEditing(false)); }}><label><span>Display name</span><input autoFocus maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><div><button type="button" className="secondary-button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()}>Save name</button></div></form> : <button className="text-action" onClick={() => setEditing(true)}>Rename connection</button>}
-    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} />{connection.plan_type ? <Fact label="Plan" value={connection.plan_type} /> : null}<Fact label="Lifecycle" value={lifecycle} /><Fact label="In flight" value={String(connection.inflight)} /><Fact label="Primary" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Provider verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Last refresh" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Credential expiry" value={formatTimestamp(connection.expires_at)} /> : null}</div>
+    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} />{connection.plan_type ? <Fact label="Plan" value={connection.plan_type} /> : null}<Fact label="Runtime state" value={runtime.label} /><Fact label="Lifecycle" value={connection.disabled ? "Disabled" : "Enabled"} /><Fact label="In flight" value={String(connection.inflight)} /><Fact label="Primary" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Provider verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Last refresh" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Credential expiry" value={formatTimestamp(connection.expires_at)} /> : null}</div>
+    {connection.runtime.status_detail ? <div className={`connection-health-error ${connection.runtime.status === "healthy" ? "" : "active"}`}><b>Runtime evidence</b><p>{connection.runtime.status_detail}</p></div> : null}
     {connection.health_error ? <div className="connection-health-error"><b>Current health error</b><p>{connection.health_error}</p></div> : null}
     {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Provider identity</h3>{connection.identity.external_subject ? <Fact label="External subject" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={value} />)}</section> : null}
+    <section><h3>Runtime availability</h3><div className="connection-totals">{runtimeQuotaFacts(connection).map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section>
     <section><h3>Measured totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
     {usageFacts.length ? <section><h3>Provider usage</h3><div className="connection-totals">{usageFacts.map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section> : null}
     <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
   </aside>;
 }
+function connectionRuntimePresentation(connection: OperatorProviderConnectionV2): { label: string; tone: "success" | "warning"; summary: string } {
+  const labels: Record<string, string> = { healthy: "Healthy", degraded: "Degraded", cooldown: "Cooldown", disabled: "Disabled", dead: "Dead", verification_required: "Verify" };
+  const status = connection.runtime.status;
+  const quota = connection.runtime.secondary_used_percent ?? connection.runtime.primary_used_percent;
+  const quotaSummary = quota === undefined ? "" : `${quota.toFixed(0)}% used`;
+  const reset = status === "cooldown" ? connection.runtime.rate_limit_until ?? connection.runtime.secondary_reset_at ?? connection.runtime.primary_reset_at : undefined;
+  const resetSummary = reset ? ` · resets ${formatRelativeTimestamp(reset)}` : "";
+  return {
+    label: labels[status] ?? status,
+    tone: status === "healthy" ? "success" : "warning",
+    summary: `${connection.runtime.status_detail || quotaSummary}${resetSummary}`,
+  };
+}
+function runtimeQuotaFacts(connection: OperatorProviderConnectionV2): Array<{ label: string; value: string }> {
+  const runtime = connection.runtime;
+  const facts: Array<{ label: string; value: string }> = [{ label: "State", value: connectionRuntimePresentation(connection).label }];
+  if (runtime.primary_used_percent !== undefined) facts.push({ label: runtime.primary_window_minutes ? `${formatWindow(runtime.primary_window_minutes)} used` : "Primary used", value: `${runtime.primary_used_percent.toFixed(1)}%` });
+  if (runtime.primary_reset_at) facts.push({ label: "Primary reset", value: formatTimestamp(runtime.primary_reset_at) });
+  if (runtime.secondary_used_percent !== undefined) facts.push({ label: runtime.secondary_window_minutes ? `${formatWindow(runtime.secondary_window_minutes)} used` : "Secondary used", value: `${runtime.secondary_used_percent.toFixed(1)}%` });
+  if (runtime.secondary_reset_at) facts.push({ label: "Secondary reset", value: formatTimestamp(runtime.secondary_reset_at) });
+  if (runtime.rate_limit_until) facts.push({ label: "Cooldown until", value: formatTimestamp(runtime.rate_limit_until) });
+  if (runtime.usage_source) facts.push({ label: "Evidence source", value: runtime.usage_source });
+  if (runtime.usage_retrieved_at) facts.push({ label: "Evidence retrieved", value: formatTimestamp(runtime.usage_retrieved_at) });
+  return facts;
+}
+function formatWindow(minutes: number) { if (minutes % 10080 === 0) return `${minutes / 10080}w window`; if (minutes % 1440 === 0) return `${minutes / 1440}d window`; if (minutes % 60 === 0) return `${minutes / 60}h window`; return `${minutes}m window`; }
+function formatRelativeTimestamp(value: string) { const ms = new Date(value).getTime() - Date.now(); if (ms <= 0) return "now"; const minutes = Math.ceil(ms / 60000); if (minutes < 60) return `in ${minutes}m`; const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return `in ${hours}h${remainder ? ` ${remainder}m` : ""}`; }
 function providerUsageFacts(usage: Record<string, unknown>): Array<{ label: string; value: string }> {
   const number = (...keys: string[]) => { for (const key of keys) if (typeof usage[key] === "number") return usage[key] as number; return null; };
   const text = (...keys: string[]) => { for (const key of keys) if (typeof usage[key] === "string" && usage[key]) return usage[key] as string; return ""; };

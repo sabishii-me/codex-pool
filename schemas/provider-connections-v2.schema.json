@@ -15,10 +15,28 @@
         "attributes": { "type": "object", "additionalProperties": { "type": "string" } }
       }
     },
+    "ProviderConnectionRuntimeView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": { "type": "string", "enum": ["healthy", "degraded", "cooldown", "disabled", "dead", "verification_required"] },
+        "status_detail": { "type": "string" },
+        "rate_limit_until": { "type": "string", "format": "date-time" },
+        "primary_used_percent": { "type": "number" },
+        "primary_window_minutes": { "type": "integer" },
+        "primary_reset_at": { "type": "string", "format": "date-time" },
+        "secondary_used_percent": { "type": "number" },
+        "secondary_window_minutes": { "type": "integer" },
+        "secondary_reset_at": { "type": "string", "format": "date-time" },
+        "usage_retrieved_at": { "type": "string", "format": "date-time" },
+        "usage_source": { "type": "string" }
+      }
+    },
     "OperatorProviderConnectionV2": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "public_id", "provider_id", "identity", "disabled", "dead", "inflight", "penalty", "score", "is_primary", "usage", "totals"],
+      "required": ["id", "public_id", "provider_id", "identity", "disabled", "dead", "inflight", "penalty", "score", "is_primary", "runtime", "usage", "totals"],
       "properties": {
         "id": { "type": "string" },
         "public_id": { "type": "string" },
@@ -38,6 +56,7 @@
         "score": { "type": "number" },
         "score_tooltip": { "type": "string" },
         "is_primary": { "type": "boolean" },
+        "runtime": { "$ref": "#/$defs/ProviderConnectionRuntimeView" },
         "usage": { "type": "object", "additionalProperties": true },
         "totals": { "type": "object", "additionalProperties": { "type": "number" } }
       }

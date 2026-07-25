@@ -7,6 +7,20 @@ export interface ProviderConnectionIdentity {
   attributes?: Record<string, string>;
 }
 
+export interface ProviderConnectionRuntimeView {
+  status: string;
+  status_detail?: string;
+  rate_limit_until?: string;
+  primary_used_percent?: number;
+  primary_window_minutes?: number;
+  primary_reset_at?: string;
+  secondary_used_percent?: number;
+  secondary_window_minutes?: number;
+  secondary_reset_at?: string;
+  usage_retrieved_at?: string;
+  usage_source?: string;
+}
+
 export interface OperatorProviderConnectionV2 {
   id: string;
   public_id: string;
@@ -26,6 +40,7 @@ export interface OperatorProviderConnectionV2 {
   score: number;
   score_tooltip?: string;
   is_primary: boolean;
+  runtime: ProviderConnectionRuntimeView;
   usage: Record<string, unknown>;
   totals: Record<string, number>;
 }

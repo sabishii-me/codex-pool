@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
@@ -12,6 +13,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 		Type: AccountTypeCodex, ID: "stable", AccountID: "legacy-subject", IDTokenChatGPTAccountID: "legacy-token-subject", Email: "person@example.com",
 		Identity: ConnectionIdentity{DisplayName: "Production Codex", ExternalSubject: "subject-1", Attributes: map[string]string{"region": "us-east"}},
 		PlanType: "pro", Totals: AccountUsage{RequestCount: 2},
+		Usage: UsageSnapshot{SecondaryUsedPercent: 0.99, SecondaryWindowMinutes: 10080, SecondaryResetAt: time.Now().Add(6 * time.Hour), RetrievedAt: time.Now(), Source: "wham", secondarySet: true},
 	}
 	handler := &proxyHandler{pool: newProviderPool([]*Account{connection}, false)}
 	recorder := httptest.NewRecorder()
@@ -29,6 +31,9 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 	got := views[0]
 	if got.ID != "stable" || got.PublicID != hashAccountID("stable") || got.ProviderID != AccountTypeCodex || got.Identity.DisplayName != "Production Codex" || got.Identity.ExternalSubject != "subject-1" || got.Identity.Attributes["email"] != "person@example.com" || got.Identity.Attributes["region"] != "us-east" || got.Totals.RequestCount != 2 {
 		t.Fatalf("v2 view = %#v", got)
+	}
+	if got.Runtime.Status != "cooldown" || got.Runtime.StatusDetail != "Secondary quota is exhausted" || got.Runtime.SecondaryUsedPercent == nil || *got.Runtime.SecondaryUsedPercent != 99 || got.Runtime.SecondaryWindowMinutes == nil || *got.Runtime.SecondaryWindowMinutes != 10080 || got.Runtime.SecondaryResetAt == nil || got.Runtime.UsageRetrievedAt == nil || got.Runtime.UsageSource != "wham" {
+		t.Fatalf("runtime projection = %#v", got.Runtime)
 	}
 	body := recorder.Body.String()
 	for _, forbidden := range []string{"account_id", "account_email", "id_token_chatgpt_account_id", "upstream_account_id"} {

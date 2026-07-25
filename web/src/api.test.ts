@@ -70,6 +70,7 @@ describe("provider connection API v2", () => {
       penalty: 0,
       score: 1,
       is_primary: true,
+      runtime: { status: "healthy" },
       usage: {},
       totals: {},
     }];

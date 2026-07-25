@@ -5,29 +5,44 @@ import (
 	"time"
 )
 
+type ProviderConnectionRuntimeView struct {
+	Status                 string     `json:"status"`
+	StatusDetail           string     `json:"status_detail,omitempty"`
+	RateLimitUntil         *time.Time `json:"rate_limit_until,omitempty"`
+	PrimaryUsedPercent     *float64   `json:"primary_used_percent,omitempty"`
+	PrimaryWindowMinutes   *int       `json:"primary_window_minutes,omitempty"`
+	PrimaryResetAt         *time.Time `json:"primary_reset_at,omitempty"`
+	SecondaryUsedPercent   *float64   `json:"secondary_used_percent,omitempty"`
+	SecondaryWindowMinutes *int       `json:"secondary_window_minutes,omitempty"`
+	SecondaryResetAt       *time.Time `json:"secondary_reset_at,omitempty"`
+	UsageRetrievedAt       *time.Time `json:"usage_retrieved_at,omitempty"`
+	UsageSource            string     `json:"usage_source,omitempty"`
+}
+
 // OperatorProviderConnectionView is the canonical operator-facing connection
 // DTO. It contains no provider-specific compatibility identity fields.
 type OperatorProviderConnectionView struct {
-	ID                string             `json:"id"`
-	PublicID          string             `json:"public_id"`
-	ProviderID        ProviderID         `json:"provider_id"`
-	Identity          ConnectionIdentity `json:"identity"`
-	PlanType          string             `json:"plan_type,omitempty"`
-	Disabled          bool               `json:"disabled"`
-	Dead              bool               `json:"dead"`
-	NeedsVerification bool               `json:"needs_verification,omitempty"`
-	VerificationURL   string             `json:"verification_url,omitempty"`
-	HealthError       string             `json:"health_error,omitempty"`
-	CyberAccess       bool               `json:"cyber_access,omitempty"`
-	Inflight          int64              `json:"inflight"`
-	ExpiresAt         time.Time          `json:"expires_at,omitempty"`
-	LastRefresh       time.Time          `json:"last_refresh,omitempty"`
-	Penalty           float64            `json:"penalty"`
-	Score             float64            `json:"score"`
-	ScoreTooltip      string             `json:"score_tooltip,omitempty"`
-	IsPrimary         bool               `json:"is_primary"`
-	Usage             UsageSnapshot      `json:"usage"`
-	Totals            AccountUsage       `json:"totals"`
+	ID                string                        `json:"id"`
+	PublicID          string                        `json:"public_id"`
+	ProviderID        ProviderID                    `json:"provider_id"`
+	Identity          ConnectionIdentity            `json:"identity"`
+	PlanType          string                        `json:"plan_type,omitempty"`
+	Disabled          bool                          `json:"disabled"`
+	Dead              bool                          `json:"dead"`
+	NeedsVerification bool                          `json:"needs_verification,omitempty"`
+	VerificationURL   string                        `json:"verification_url,omitempty"`
+	HealthError       string                        `json:"health_error,omitempty"`
+	CyberAccess       bool                          `json:"cyber_access,omitempty"`
+	Inflight          int64                         `json:"inflight"`
+	ExpiresAt         time.Time                     `json:"expires_at,omitempty"`
+	LastRefresh       time.Time                     `json:"last_refresh,omitempty"`
+	Penalty           float64                       `json:"penalty"`
+	Score             float64                       `json:"score"`
+	ScoreTooltip      string                        `json:"score_tooltip,omitempty"`
+	IsPrimary         bool                          `json:"is_primary"`
+	Runtime           ProviderConnectionRuntimeView `json:"runtime"`
+	Usage             UsageSnapshot                 `json:"usage"`
+	Totals            AccountUsage                  `json:"totals"`
 }
 
 // LegacyOperatorConnectionView preserves /admin/accounts while compatibility
@@ -194,6 +209,62 @@ func markPoolStatsPrimary(snapshots []poolStatsConnectionSnapshot) {
 	}
 }
 
+func optionalTime(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	value = value.UTC()
+	return &value
+}
+
+func providerConnectionRuntimeLocked(connection *ProviderConnection, now time.Time) ProviderConnectionRuntimeView {
+	runtime := ProviderConnectionRuntimeView{Status: "healthy", UsageSource: connection.Usage.Source}
+	primaryUsed, secondaryUsed := accountPrimaryUsageLocked(connection), accountSecondaryUsageLocked(connection)
+	if usagePrimaryWindowAvailable(connection.Usage) {
+		percent := primaryUsed * 100
+		runtime.PrimaryUsedPercent = &percent
+		if connection.Usage.PrimaryWindowMinutes > 0 {
+			minutes := connection.Usage.PrimaryWindowMinutes
+			runtime.PrimaryWindowMinutes = &minutes
+		}
+		runtime.PrimaryResetAt = optionalTime(connection.Usage.PrimaryResetAt)
+	}
+	if usageSecondaryWindowAvailable(connection.Usage) {
+		percent := secondaryUsed * 100
+		runtime.SecondaryUsedPercent = &percent
+		if connection.Usage.SecondaryWindowMinutes > 0 {
+			minutes := connection.Usage.SecondaryWindowMinutes
+			runtime.SecondaryWindowMinutes = &minutes
+		}
+		runtime.SecondaryResetAt = optionalTime(connection.Usage.SecondaryResetAt)
+	}
+	runtime.UsageRetrievedAt = optionalTime(connection.Usage.RetrievedAt)
+	if connection.RateLimitUntil.After(now) {
+		runtime.RateLimitUntil = optionalTime(connection.RateLimitUntil)
+	}
+	switch {
+	case connection.Disabled:
+		runtime.Status, runtime.StatusDetail = "disabled", "Disabled by an administrator"
+	case connection.Dead:
+		runtime.Status, runtime.StatusDetail = "dead", "Credential or provider validation failed"
+	case connection.NeedsVerification:
+		runtime.Status, runtime.StatusDetail = "verification_required", "Provider verification is required"
+	case accountCoolingDownLocked(connection, now):
+		runtime.Status, runtime.StatusDetail = "cooldown", "Rate-limit cooldown is active"
+	case primaryUsed >= primaryHardExcludeThreshold && secondaryUsed >= secondaryHardExcludeThreshold:
+		runtime.Status, runtime.StatusDetail = "cooldown", "Primary and secondary quota are exhausted"
+	case primaryUsed >= primaryHardExcludeThreshold:
+		runtime.Status, runtime.StatusDetail = "cooldown", "Primary quota is exhausted"
+	case secondaryUsed >= secondaryHardExcludeThreshold:
+		runtime.Status, runtime.StatusDetail = "cooldown", "Secondary quota is exhausted"
+	case connection.HealthError != "":
+		runtime.Status, runtime.StatusDetail = "degraded", connection.HealthError
+	case connection.Penalty > 2:
+		runtime.Status, runtime.StatusDetail = "degraded", "Recent provider failures reduced routing priority"
+	}
+	return runtime
+}
+
 func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewSnapshot {
 	if service == nil || service.pool == nil {
 		return []connectionViewSnapshot{}
@@ -219,6 +290,7 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 			Inflight: atomic.LoadInt64(&connection.Inflight), ExpiresAt: connection.ExpiresAt,
 			LastRefresh: connection.LastRefresh, Penalty: connection.Penalty, Score: score,
 			ScoreTooltip: scoreTooltipFromBreakdownLocked(connection, now, breakdown),
+			Runtime:      providerConnectionRuntimeLocked(connection, now),
 			Usage:        connection.Usage, Totals: connection.Totals,
 		}
 		legacy := LegacyOperatorConnectionView{

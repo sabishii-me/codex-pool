@@ -17,11 +17,13 @@ for (const [route, heading, description] of resources) {
 
 test("Connections inventory opens provider-neutral detail and uses canonical operations", async ({ page }) => {
   await loginAs(page, "admin-elevated");
-  const connections = [{ id: "stable-1", public_id: "public-1", provider_id: "codex", identity: { display_name: "Primary Codex", external_subject: "subject-1", attributes: { email: "owner@example.com" } }, plan_type: "team", disabled: false, dead: false, inflight: 2, last_refresh: "2026-07-22T10:00:00Z", penalty: 0, score: 2, is_primary: true, usage: {}, totals: { total_input_tokens: 10, total_cached_tokens: 4, total_output_tokens: 3, total_billable_tokens: 13 } }];
+  const connections = [{ id: "stable-1", public_id: "public-1", provider_id: "codex", identity: { display_name: "Primary Codex", external_subject: "subject-1", attributes: { email: "owner@example.com" } }, plan_type: "team", disabled: false, dead: false, inflight: 2, last_refresh: "2026-07-22T10:00:00Z", penalty: 0, score: 2, is_primary: true, runtime: { status: "cooldown", status_detail: "Secondary quota is exhausted", secondary_used_percent: 99, secondary_window_minutes: 10080, secondary_reset_at: "2026-07-30T10:00:00Z", usage_retrieved_at: "2026-07-25T10:00:00Z", usage_source: "wham" }, usage: {}, totals: { total_input_tokens: 10, total_cached_tokens: 4, total_output_tokens: 3, total_billable_tokens: 13 } }];
   await page.route("**/api/v2/provider-connections", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(connections) }));
   await page.goto("/admin/connections"); await page.getByRole("button", { name: /Primary Codex/ }).click();
   const detail = page.getByLabel("Connection detail");
+  await expect(page.getByRole("button", { name: /Primary Codex/ })).toContainText("Cooldown");
   await expect(detail.getByText("public-1")).toBeVisible(); await expect(detail.getByText("subject-1")).toBeVisible(); await expect(detail.getByText("owner@example.com")).toBeVisible();
+  await expect(detail.getByText("Secondary quota is exhausted")).toBeVisible(); await expect(detail.getByText("99.0%")).toBeVisible(); await expect(detail.getByText("1w window used")).toBeVisible(); await expect(detail.getByText("wham")).toBeVisible();
   await detail.getByRole("button", { name: "Rename connection" }).click();
   await detail.getByLabel("Display name").fill("Renamed Codex");
   const rename = page.waitForRequest(request => request.url().endsWith("/api/v2/provider-connections/stable-1/identity") && request.method() === "PATCH");

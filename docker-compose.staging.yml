@@ -1,4 +1,19 @@
 services:
+  staging-data-permissions:
+    image: ${STAGING_IMAGE:?set STAGING_IMAGE to the immutable image promoted from Test}
+    user: "0:0"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        chown -R codex:codex /app/data /app/pool /app/provider-specs &&
+        chmod 700 /app/data /app/pool /app/provider-specs &&
+        find /app/data /app/pool /app/provider-specs -type f -exec chmod 600 {} +
+    volumes:
+      - ./staging/pool:/app/pool
+      - ./staging/data:/app/data
+      - ./staging/provider-specs:/app/provider-specs
+    restart: "no"
+
   codex-pool-staging:
     # Staging receives the exact immutable image promoted from Test.
     # The image is explicit so Compose never silently builds or rolls back a release.
@@ -31,6 +46,9 @@ services:
       ALLOWED_EMAILS: ${STAGING_ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${STAGING_ADMIN_EMAILS:-}
       UPSTREAM_KIMI_PLATFORM_BASE: ${STAGING_UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}
+    depends_on:
+      staging-data-permissions:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
       interval: 10s

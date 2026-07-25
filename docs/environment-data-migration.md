@@ -63,6 +63,8 @@ The command:
 9. rebuilds `request_costs` and `daily_costs` from the canonical ledger;
 10. records an idempotency manifest in `usage_migrations`.
 
+Staging Compose additionally normalizes bind-mounted state ownership for the unprivileged `codex` runtime user before starting the gateway. This is required after host-side snapshots or migrations because SQLite must be able to create `analytics.db-wal` and `analytics.db-shm` as `codex`. A readable main database alone is not sufficient for WAL mode.
+
 Running the same apply twice is a no-op and does not create a second rollback snapshot.
 
 ## Conflict handling

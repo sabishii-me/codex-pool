@@ -1988,6 +1988,9 @@ type responsesToClaudeWriter struct {
 	outputTokens        int64
 	terminal            bool
 	writeErr            error
+	toolContentIndexes  map[string]int
+	toolArgumentSeen    map[string]bool
+	itemToCallID        map[string]string
 }
 
 func (rw *responsesToClaudeWriter) Write(p []byte) (int, error) {
@@ -2154,7 +2157,17 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 				rw.sentThinking = false
 			}
 			callID, _ := item["call_id"].(string)
+			itemID, _ := item["id"].(string)
 			name, _ := item["name"].(string)
+			if rw.toolContentIndexes == nil {
+				rw.toolContentIndexes = make(map[string]int)
+				rw.toolArgumentSeen = make(map[string]bool)
+				rw.itemToCallID = make(map[string]string)
+			}
+			rw.toolContentIndexes[callID] = rw.contentBlockIndex
+			if itemID != "" {
+				rw.itemToCallID[itemID] = callID
+			}
 			rw.emitClaudeEvent("content_block_start", fmt.Sprintf(
 				`{"type":"content_block_start","index":%d,"content_block":{"type":"tool_use","id":%s,"name":%s,"input":{}}}`,
 				rw.contentBlockIndex, mustMarshalString(callID), mustMarshalString(name)))
@@ -2164,18 +2177,35 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 	case "response.function_call_arguments.delta":
 		delta, _ := obj["delta"].(string)
 		if delta != "" {
-			rw.emitClaudeEvent("content_block_delta", fmt.Sprintf(
-				`{"type":"content_block_delta","index":%d,"delta":{"type":"input_json_delta","partial_json":%s}}`,
-				rw.contentBlockIndex, mustMarshalString(delta)))
+			rw.emitToolArguments(obj, delta)
+		}
+
+	case "response.function_call_arguments.done":
+		// Some Codex models, notably GPT-5.3-Codex-Spark, send no argument
+		// delta events and place the complete JSON only on the done event.
+		// Emit it only when no deltas were already forwarded for this call.
+		arguments, _ := obj["arguments"].(string)
+		if arguments != "" && !rw.toolArgumentsWereSeen(obj) {
+			rw.emitToolArguments(obj, arguments)
 		}
 
 	case "response.output_item.done":
 		item, _ := obj["item"].(map[string]any)
 		if item != nil {
 			if itemType, _ := item["type"].(string); itemType == "function_call" {
+				// The final item is another valid location for complete arguments.
+				// This fallback is required when the upstream omits both delta and
+				// function_call_arguments.done events.
+				arguments, _ := item["arguments"].(string)
+				if arguments != "" && !rw.toolArgumentsWereSeen(item) {
+					rw.emitToolArguments(item, arguments)
+				}
+				index := rw.toolContentIndex(item)
 				rw.emitClaudeEvent("content_block_stop", fmt.Sprintf(
-					`{"type":"content_block_stop","index":%d}`, rw.contentBlockIndex))
-				rw.contentBlockIndex++
+					`{"type":"content_block_stop","index":%d}`, index))
+				if index >= rw.contentBlockIndex {
+					rw.contentBlockIndex = index + 1
+				}
 			}
 		}
 
@@ -2234,8 +2264,7 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 
 	case "response.output_text.done", "response.content_part.done",
 		"response.content_part.added", "response.reasoning_text.done",
-		"response.reasoning_summary_text.done", "response.function_call_arguments.done",
-		"response.in_progress":
+		"response.reasoning_summary_text.done", "response.in_progress":
 		// Informational events, no action needed
 
 	default:
@@ -2243,6 +2272,42 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 			log.Printf("[%s] responses->claude: unhandled event type: %s", rw.reqID, eventType)
 		}
 	}
+}
+
+func (rw *responsesToClaudeWriter) toolCallID(obj map[string]any) string {
+	callID, _ := obj["call_id"].(string)
+	if callID != "" {
+		return callID
+	}
+	if itemID, _ := obj["item_id"].(string); itemID != "" {
+		return rw.itemToCallID[itemID]
+	}
+	if item, _ := obj["item"].(map[string]any); item != nil {
+		return rw.toolCallID(item)
+	}
+	return ""
+}
+
+func (rw *responsesToClaudeWriter) toolContentIndex(obj map[string]any) int {
+	if index, ok := rw.toolContentIndexes[rw.toolCallID(obj)]; ok {
+		return index
+	}
+	return rw.contentBlockIndex
+}
+
+func (rw *responsesToClaudeWriter) toolArgumentsWereSeen(obj map[string]any) bool {
+	return rw.toolArgumentSeen[rw.toolCallID(obj)]
+}
+
+func (rw *responsesToClaudeWriter) emitToolArguments(obj map[string]any, arguments string) {
+	callID := rw.toolCallID(obj)
+	if rw.toolArgumentSeen == nil {
+		rw.toolArgumentSeen = make(map[string]bool)
+	}
+	rw.toolArgumentSeen[callID] = true
+	rw.emitClaudeEvent("content_block_delta", fmt.Sprintf(
+		`{"type":"content_block_delta","index":%d,"delta":{"type":"input_json_delta","partial_json":%s}}`,
+		rw.toolContentIndex(obj), mustMarshalString(arguments)))
 }
 
 func (rw *responsesToClaudeWriter) emitClaudeMessageStart() {

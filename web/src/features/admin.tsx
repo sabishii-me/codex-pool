@@ -88,7 +88,20 @@ function runtimeQuotaFacts(connection: OperatorProviderConnectionV2): Array<{ la
   return facts;
 }
 function formatWindow(minutes: number) { if (minutes % 10080 === 0) return `${minutes / 10080}w window`; if (minutes % 1440 === 0) return `${minutes / 1440}d window`; if (minutes % 60 === 0) return `${minutes / 60}h window`; return `${minutes}m window`; }
-function formatRelativeTimestamp(value: string) { const ms = new Date(value).getTime() - Date.now(); if (ms <= 0) return "now"; const minutes = Math.ceil(ms / 60000); if (minutes < 60) return `in ${minutes}m`; const hours = Math.floor(minutes / 60); const remainder = minutes % 60; return `in ${hours}h${remainder ? ` ${remainder}m` : ""}`; }
+export function formatRelativeTimestamp(value: string) {
+  const totalSeconds = Math.max(0, Math.ceil((new Date(value).getTime() - Date.now()) / 1000));
+  if (totalSeconds === 0) return "now";
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const parts: string[] = [];
+  if (days) parts.push(`${days}d`);
+  if (days || hours) parts.push(`${hours}h`);
+  if (days || hours || minutes) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+  return `in ${parts.join(" ")}`;
+}
 function Fact({ label, value }: { label: string; value: string }) { return <div className="connection-fact"><span>{label}</span><b>{value}</b></div>; }
 function formatTimestamp(value: string) { const date = new Date(value); return date.toLocaleString(); }
 

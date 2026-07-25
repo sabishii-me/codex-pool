@@ -16,7 +16,7 @@ func TestStagingAndDevelopmentComposeStayIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	staging, development := string(stagingBytes), string(developmentBytes)
-	for _, required := range []string{"${STAGING_IMAGE:?set STAGING_IMAGE to the immutable image promoted from Test}", "127.0.0.1:18990:8989", "./staging/pool:/app/pool", "./staging/data:/app/data", "${STAGING_"} {
+	for _, required := range []string{"${STAGING_IMAGE:?set STAGING_IMAGE to the immutable image promoted from Test}", "127.0.0.1:18990:8989", "./staging/pool:/app/pool", "./staging/data:/app/data", "LOCAL_DEV_SESSION: ${STAGING_LOCAL_SESSION:-false}", "${STAGING_"} {
 		if !strings.Contains(staging, required) {
 			t.Errorf("staging Compose lacks %q", required)
 		}

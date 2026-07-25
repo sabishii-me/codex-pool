@@ -271,6 +271,12 @@ func buildConfig() *config {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "usage-migrate" {
+		if err := runUsageMigration(os.Args[2:]); err != nil {
+			log.Fatalf("usage migration: %v", err)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "oauth-broker" {
 		if err := runCodexOAuthBroker(os.Args[2:]); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Codex OAuth broker: %v", err)

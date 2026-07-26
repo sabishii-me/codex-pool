@@ -12,7 +12,7 @@ A deployment never copies a destination data directory. The destination keeps it
 
 | Store | Rule |
 |---|---|
-| `analytics.db/usage_events` | Canonical immutable usage ledger. Merge only by `(connection_id, request_id)` with full-payload conflict detection. |
+| `analytics.db/usage_events` | Canonical immutable usage ledger. Merge real upstream usage from any environment only by `(connection_id, request_id)` with full-payload conflict detection and source provenance. Environment-local authentication does not make real provider consumption synthetic. |
 | `request_costs`, `daily_costs` | Derived projections. Rebuild from `usage_events`; never merge independently. |
 | `proxy.db` | Compatibility/cache state. Never file-merge between environments. |
 | `pool_users.json` | Environment authorization state. Production-authoritative only during an explicit sanitized refresh. Test synthetic users never move forward. |
@@ -79,4 +79,4 @@ Conflicts are never automatically resolved. In particular, do not rewrite `user_
 4. Run required schema/data migrations against Staging in dry-run mode.
 5. Stop Staging, apply reviewed migrations, restart, and validate authentication, integrity, and accounting.
 6. Repeat the same image and migration sequence for Production only after Staging approval.
-7. Never merge Test usage into Staging or Production.
+7. Merge canonical real-account usage from Test or Staging only through reviewed migration reports. Preserve source provenance, quarantine rows without canonical identity, and never copy Test authorization or credential state forward.

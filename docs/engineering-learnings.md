@@ -114,3 +114,30 @@ Never persist the authorization code. Use a 15-minute expiry and an exactly-once
 - Generic UI must render `display_name`; provider-specific email/workspace/tenant information belongs in optional identity metadata.
 - Unknown values must not be displayed as zero.
 - Provider-specific token accounting belongs in normalized backend view models, not React branches.
+
+## Protocol semantics and routing affinity
+
+- A complete prompt can be independently executable and still benefit from provider-side prompt caching. Stateless correctness, cache affinity, and provider-managed conversation state are separate concepts.
+- Interpret routing data only through the declared wire protocol or an explicitly registered client/provider extension. Similar field names do not establish equivalent semantics.
+- Preservation can be permissive, but interpretation must be strict: an unknown extension may be forwarded where the adapter contract permits it, but it must not influence connection selection.
+- `prompt_cache_key`, client session IDs, provider conversation references, and `previous_response_id` must not be collapsed into one untyped conversation string.
+- OpenAI cache keys are client/provider cache-routing hints where the selected contract supports them. Forward them unchanged; do not invent, rewrite, or derive them from prompt content.
+- Anthropic `cache_control` identifies cacheable boundaries but does not by itself provide a unique affinity key. Preserve it and its cache-read/cache-creation usage without manufacturing a session.
+- Provider response/conversation references may be account-scoped state. Bind them strictly to the connection that created them unless a protocol adapter proves complete safe replay.
+- Client session and cache identities are soft affinity by default. Namespace their internal HMAC by GatewayUser, provider, canonical model, protocol, and affinity kind; never persist or log raw values.
+- Do not use attribution fields such as `metadata.user_id` as conversation identity without an explicit client contract.
+- Official public API documentation defines field meaning, but does not guarantee cache portability across separate subscription accounts or internal Codex transports. Treat those as observed performance behavior, not correctness contracts.
+- `store=false` and prompt caching are separate concerns. Never infer supported response continuation merely because a field is present.
+
+## Cost-aware pooled scheduling
+
+- The objective is minimizing total economic waste: paid capacity expiring at reset, avoidable uncached repeated input, overflow spend, failures/retries, and latency—not making request counts look equal.
+- Balance new sessions and unbound requests across all eligible Codex Plus, Pro, and Prolite connections. Preserve one request/turn on one connection.
+- Do not encode plan multipliers. Learn per-connection effective tokens per observed quota percentage from canonical usage and valid quota observation intervals.
+- Evaluate primary and secondary quota windows together. Remaining allowance is useful only at the rate the tighter window can safely admit.
+- Provider percentages are stale and quantized. Reserve provisional local usage and in-flight work immediately, then reconcile it when fresh telemetry arrives.
+- Unknown quota remains unknown. Give low-confidence connections bounded exploration; never treat missing data as zero use or unlimited capacity.
+- Existing soft affinity needs hysteresis and minimum residence so small telemetry changes do not destroy cache locality through oscillation.
+- Break affinity for health, cooldown, incompatibility, hard limits, reserve protection, exceptional explicit policy, or a sustained material economic advantage—not for cosmetic equality.
+- Most correction should occur by assigning new sessions to underused, near-reset capacity. Moving an active cached session is a later evidence-driven optimization.
+- Exactly-once usage remains the accounting authority. Provisional scheduling state is not a second ledger and must never alter canonical attribution.

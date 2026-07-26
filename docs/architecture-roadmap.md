@@ -1,10 +1,16 @@
 # Architecture Roadmap
 
-Status: proposed
+Status: active
 
-Baseline commit: `267e80b` (`feat: expand provider gateway and usage accounting`)
+Historical modularization baseline: `267e80b` (`feat: expand provider gateway and usage accounting`)
+
+Current deployed Production code revision: `9ffe963ddcd1`
+
+Current roadmap documentation checkpoint: `9ed853ec19a0`
 
 Related implementation learnings: [`engineering-learnings.md`](engineering-learnings.md)
+
+Active scheduling design: [`protocol-affinity-and-codex-balancing-plan.md`](protocol-affinity-and-codex-balancing-plan.md)
 
 ## Purpose
 
@@ -304,6 +310,55 @@ Status: complete. `ModelRouteRegistry` returns one immutable `ResolvedModelRoute
 
 Exit criterion: one route definition drives every request path.
 
+### Protocol-aware affinity and reset-aware Codex scheduling
+
+Status: planned; detailed implementation plan: [`protocol-affinity-and-codex-balancing-plan.md`](protocol-affinity-and-codex-balancing-plan.md).
+
+The economic objective is not equal request counts. It is to consume already-paid capacity before provider reset while avoiding unnecessary loss of prompt-cache locality and preserving provider-owned state correctly.
+
+Required architecture:
+
+- protocol engines extract typed routing context from the declared OpenAI Responses, OpenAI Chat, Anthropic Messages, Gemini, or explicit client/provider-extension contract;
+- routing must stop assigning semantics through broad JSON/header heuristics such as arbitrary `metadata.user_id` or lookalike session fields;
+- preserve recognized client cache declarations unchanged, never synthesize an upstream cache key, and never derive one from prompt content;
+- keep cache hints, client session identity, provider response state, provider conversations, and asynchronous operation ownership as different affinity kinds;
+- use privacy-safe, GatewayUser/provider/model/protocol-namespaced soft bindings for cache/session locality;
+- require exact connection ownership for provider-managed state unless an adapter proves a complete and safe replay;
+- replace ordinary Codex Pro/Prolite Tier 1 and Plus Tier 2 behavior with one all-eligible capacity pool while preserving required-plan and exceptional cyber policy;
+- score both primary and secondary windows using reset timing, normalized depletion, measured per-connection capacity, health, cooldown, reserves, in-flight work, and penalties;
+- learn capacity from canonical usage versus valid observed quota deltas rather than hard-coded plan multipliers;
+- apply local provisional debits and in-flight reservations so stale or quantized percentages cannot concentrate bursts;
+- balance primarily by assigning new sessions; retain existing soft affinity with hysteresis and break it only for safety or a measured, material economic advantage;
+- measure reset waste, cache reads/creation, uncached input, affinity breaks, failures, and latency before enabling economic migration of active sessions.
+
+Implementation order is contract fixtures and observability, typed request context, safe soft affinity, strict provider-state ownership, all-eligible Codex selection, provisional quota debits, then evidence-driven tuning. HTTP, large-body, streaming, and WebSocket request paths must share the same typed rules.
+
+Exit criterion: Production evidence shows less paid capacity expiring unused without unacceptable cache regression; no unknown field affects routing; provider state never silently crosses connections; exactly-once accounting remains reconciled.
+
+### Shared account-state authority
+
+Status: planned and required before Staging can qualify as a Production-like long soak.
+
+Production remains the sole credential, refresh, lifecycle, canonical global usage, burn, and economics authority. Staging must submit canonical usage through a durable exactly-once outbox, read authoritative provider state, and forward mutations rather than writing shared credentials or databases. Authority authentication, replay protection, provenance, conflict visibility, lag, reconciliation, and fail-closed behavior are required. No writable SQLite, Bolt, OAuth, or provider credential directory may be mounted into more than one gateway.
+
+Exit criterion: real Staging provider activity appears in authoritative accounting exactly once, lifecycle changes have one writer, authority lag/conflicts are observable, and restart/retry/reconciliation tests pass.
+
+### Gateway media operation boundary
+
+Status: planned.
+
+Add capability- and operation-aware model routing plus a canonical submit/observe/cancel provider-operation contract. Asynchronous media operations require sticky provider/connection ownership, upstream-submission idempotency, typed `submission_unknown` reconciliation, tracing, and one terminal usage/cost event. The gateway may return transient provider output references but does not become an artifact store, gallery, transcoder, CDN, or product prompt-history service. A separate generation service owns product jobs, uploads, ingestion, durable artifacts, previews, retention, and downloads.
+
+Exit criterion: one fake asynchronous provider proves restart durability, sticky polling/cancellation, ambiguous-submission handling, exactly-once terminal accounting, and transient outputs without gateway artifact persistence.
+
+### Profile security completion
+
+Status: planned.
+
+Complete authenticated MFA authenticator rotation and recovery-code regeneration through `handleMFARegenerate` and `handleMFARegenerateCodes`, retaining the one full-screen elevation gate and accessible product dialogs.
+
+Exit criterion: elevated Admin browser/API acceptance proves rotation, code regeneration, cancellation, typed failures, and recovery behavior without native browser dialogs.
+
 ### Phase 6 — Separate HTTP APIs
 
 Status: complete. `ConnectionViewService` is the sole read-model boundary that snapshots mutable `ProviderConnection` state for canonical operator DTOs, pool statistics, and explicit compatibility projections. Pool-stat aggregation, economics, and cyber-policy summaries consume detached snapshots rather than locking pool connections in HTTP handlers. `DataAPI.TryServe` owns read-only pool analytics, model catalog, canonical provider-connection collection, compatibility connection collection, and per-user usage routes. `AccessPolicy` owns signed-in session, administrator allowlist, MFA elevation, ban, and attempt-tracking decisions. `ProviderAdminAPI`, `ProviderContributionAPI`, `ProviderOperationsAPI`, `AuthenticationAPI`, and `SystemAdminAPI` own their route groups while preserving existing authorization order, methods, status codes, errors, callbacks, and JSON compatibility. `proxyHandler.ServeHTTP` is now an orchestrator for these boundaries plus static/setup compatibility and gateway/protocol dispatch. Source-level guards prevent route ownership, mutable stats reads, and access decisions from drifting back. The broad `Provider` contract is an explicit compatibility composition of focused capabilities, and isolated consumers use narrower identity/usage contracts. The canonical provider-connections v2 DTO has a checked-in JSON schema, a deterministic TypeScript generator, backend schema-conformance coverage, and generated frontend types. UI redesign remains deliberately deferred to Phase 9.
@@ -389,15 +444,17 @@ Historical compatibility findings remain useful: independently refreshed dashboa
 
 ### Phase 9 — Functional product implementation
 
-Status: **active — Staging long-soak checkpoint after `cc25f3f`**.
+Status: **functional product deployed; authority synchronization and Staging qualification remain active**.
 
 The historical Product Design Harness artifact and separate member/operator workspace plan are superseded by [`frontend-product-architecture.md`](frontend-product-architecture.md). The current implementation is one inherited Member → Admin → MFA-elevated product with canonical routes `/`, `/models`, `/usage`, `/setup`, `/profile`, `/admin/connections`, `/admin/members`, and `/admin/system`. Browser/API route separation, real OAuth dev isolation, one MFA gate, scoped Usage, detailed model/provider/connection attribution, measured per-model curves, Connections operations, Members lifecycle operations, System projections, MFA enrollment, no-fake-data enforcement, and accessible product dialogs are implemented.
 
 Current functional checkpoint:
 
-- **Complete:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, backend-owned selected-model routing context, backend-driven Setup, typed Anthropic overflow/complete usage, image generation/read translation, immutable release images, explicit Test → Staging promotion, real-auth Staging, and conflict-safe usage migration/recovery.
-- **In progress:** Staging-specific authenticated browser acceptance, long-soak evidence, and functional Profile security rotation/recovery operations.
+- **Complete and deployed:** shell/capability model, direct routing, Home/Usage ownership, scoped and detailed Usage, Connections, Members baseline, measured System, Profile MFA enrollment, no-placeholder/no-synthetic-data gate, backend-owned selected-model routing context, backend-driven Setup, typed Anthropic overflow/complete usage, image generation/read translation, immutable release images, explicit Test → Staging → Production promotion, real-auth Staging, conflict-safe historical usage migration/recovery, and the Production accounting recovery/cutover documented in [`production-deployment-9ffe963.md`](production-deployment-9ffe963.md).
+- **In progress:** Production authority synchronization for ongoing Staging usage/provider lifecycle, Staging-specific authenticated browser acceptance, a new valid long-soak period after authority proof, protocol-aware affinity/reset-aware Codex scheduling, scoped operational maintenance, and functional Profile security rotation/recovery operations.
 - **Deferred to Phase 10:** broad accessibility, responsive/visual polish, performance optimization, and release tuning that does not block operation or truthfulness.
+
+The previous Staging elapsed time is not Production-readiness evidence because shared real accounts still lack one ongoing accounting/lifecycle authority boundary. See [`staging-soak-checkpoint.md`](staging-soak-checkpoint.md).
 
 Phase 9 must prioritize real workflows and backend-owned contracts. It must not display future-work cards, fabricated trends, example inventory, inferred routing order, or nonfunctional controls.
 

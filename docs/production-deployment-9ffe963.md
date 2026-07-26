@@ -1,13 +1,13 @@
 # Production deployment checkpoint — 9ffe963
 
-Prepared 2026-07-26. This checkpoint is a plan and immutable artifact set, not approval to change Production.
+Prepared and deployed 2026-07-26. Production was changed only during the explicitly approved maintenance window documented below.
 
 ## Release artifact
 
 - Accepted revision: `9ffe963ddcd1c66ef5c8866a6fec8cd6c17f07f4`
 - Tested Staging image: `codex-pool:staging-9ffe963`
-- Production preparation tag: `codex-pool:production-9ffe963`
-- Production remains on `codex-pool:latest` until explicit cutover approval.
+- Production deployment tag: `codex-pool:production-9ffe963`
+- Production `codex-pool:latest` now resolves to the same immutable image ID after the approved cutover.
 
 ## Data audit
 
@@ -80,9 +80,42 @@ test-merge-idempotency.json
 staging-merge-idempotency.json
 ```
 
-## Required maintenance window
+## Executed maintenance window
 
-Do not copy the prepared candidate blindly over the live database. Production continued accepting traffic after the snapshots, so cutover requires a final delta reconciliation.
+Production was stopped at checkpoint `20260726T023330Z`. The original `analytics.db`, WAL, SHM, container inspection, image inspection, Compose file, health response, and checksums were captured under:
+
+```text
+data/backups/production-cutover-20260726T023330Z/
+```
+
+The stopped-state recovery matched the prepared ledger exactly. Fresh Test and Staging snapshots were merged with the reviewed attribution rule, projections were rebuilt, and both migrations were repeated as idempotent no-ops. The final installed ledger has:
+
+- 13,299 total rows;
+- 13,298 canonical and unique identities;
+- one preserved Production legacy row;
+- 8,706 Production-origin rows;
+- 3,565 Test real-account rows;
+- 1,028 Staging real-account rows;
+- SHA-256 `970fdac2eb709a5f5a492c255dd16afa4c2e47ad42783a429028464a5cb54aa0` before gateway startup.
+
+The exact accepted image was promoted to `codex-pool:latest` and Production restarted successfully. Post-cutover validation confirmed:
+
+- image revision `9ffe963ddcd1`;
+- healthy gateway on port `8989`;
+- frontend and health endpoint return HTTP 200;
+- protected APIs return HTTP 401 when signed out;
+- online SQLite snapshot succeeds;
+- `quick_check=ok`;
+- 13,299 persisted rows and 13,298 unique canonical identities before live validation traffic;
+- a real authenticated Pi Spark tool round trip wrote exact bytes `SPARK_PRODUCTION_OK\n`;
+- the tool-call and follow-up turns produced exactly two additional canonical events, bringing the live ledger to 13,301 rows;
+- no analytics corruption, disk I/O, economics-build, or database-open failures in startup or post-request logs.
+
+The prior image remains tagged as `codex-pool:production-rollback-20260726T023330Z`. Database rollback files and migration evidence remain in the cutover directory.
+
+## Required maintenance procedure
+
+This is the required procedure for repeating or rolling forward this class of deployment. Never copy a prepared candidate blindly over a live database; stop or fully quiesce every writer and reconcile any traffic accepted after the preparation snapshots.
 
 1. Announce maintenance and stop only Production.
 2. Copy the stopped Production database, WAL, and SHM files into a timestamped immutable rollback directory.
@@ -99,6 +132,6 @@ Do not copy the prepared candidate blindly over the live database. Production co
 13. Validate health, real authentication, MFA, provider inventory, `/api/pool/signal`, model routing, typed errors, Spark tool calls, canonical accounting, and database write access.
 14. Roll back both image and database if any validation fails.
 
-## Remaining release gate
+## Remaining architecture gate
 
-The shared-account authority boundary described in the Staging soak checkpoint is still unresolved. Staging currently has environment-local provider lifecycle/accounting state. This checkpoint makes historical accounting recoverable and prepares the exact image, but it does not by itself prove ongoing Staging-to-Production authoritative synchronization. Production promotion requires an explicit decision on that known gate.
+The shared-account authority boundary described in the Staging soak checkpoint is still unresolved. Staging currently has environment-local provider lifecycle/accounting state. Historical usage is now consolidated in Production, but ongoing Staging activity still requires an authenticated durable outbox and Production authority ingestion to remain synchronized exactly once. The roadmap now also includes scoped maintenance mode so future work can drain selected writers and services while unaffected health, authentication, status, and read-only controls remain available.

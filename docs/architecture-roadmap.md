@@ -346,6 +346,31 @@ Status: complete for the modular-monolith hardening scope. WebSocket lifecycle h
 
 Exit criterion: startup, reload, failure, and shutdown behavior are deterministic and observable.
 
+### Operational maintenance mode
+
+Status: planned.
+
+Add a first-class maintenance coordinator so routine operational work does not require shutting down every gateway capability at once. Maintenance is a backend-owned runtime state, not only a frontend page.
+
+Required behavior:
+
+- expose authenticated Admin controls and auditable status for entering, observing, and leaving maintenance;
+- support scoped maintenance domains such as inference admission, WebSockets, provider mutations/OAuth refresh, analytics writes, and projection rebuilds;
+- reject newly admitted work in affected domains with a typed `maintenance_unavailable` response and retry guidance;
+- allow unaffected health, status, authentication, and read-only maintenance UI routes to remain available;
+- drain in-flight HTTP streams, asynchronous provider operations, and WebSocket turns with bounded deadlines before reporting a scope as quiescent;
+- pause and join background jobs that can mutate credentials, provider lifecycle, or the selected data store;
+- expose drain counts, blockers, elapsed time, operator identity, reason, and safe-to-maintain evidence;
+- persist or externally coordinate the maintenance lease so restarts cannot accidentally re-enable writes;
+- fail closed if multiple replicas disagree about maintenance ownership;
+- provide separate readiness and liveness semantics so traffic leaves maintained scopes without hiding process health;
+- require every process that can access a SQLite database to release it before file replacement, recovery, or schema operations that require exclusive ownership;
+- provide a tested abort path that resumes paused jobs and admission without losing canonical usage.
+
+The first vertical slice should implement `normal → draining → quiescent → resuming` for inference admission and analytics writers in the current modular monolith. Later service separation may quiesce only the analytics authority while authenticated read-only product routes remain online. This feature must not imply that an open SQLite file can be replaced safely while another process still owns it.
+
+Exit criterion: an Admin can place selected runtime domains into maintenance, observe deterministic drain completion, perform an offline-required storage operation after exclusive ownership is proven, and restore service without restarting unrelated deployed services.
+
 ### Phase 8 — Evaluate physical service separation
 
 After the event and API contracts stabilize, consider:

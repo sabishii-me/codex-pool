@@ -11,10 +11,10 @@ import (
 const pricingUnitPerMillionTokens = "per_million_tokens"
 
 type ModelPriceRates struct {
-	Input      float64 `json:"input"`
-	Output     float64 `json:"output"`
-	CacheRead  float64 `json:"cache_read"`
-	CacheWrite float64 `json:"cache_write"`
+	Input      float64  `json:"input"`
+	Output     float64  `json:"output"`
+	CacheRead  *float64 `json:"cache_read"`
+	CacheWrite *float64 `json:"cache_write"`
 }
 
 type ModelPriceSource struct {
@@ -45,7 +45,7 @@ func priceSheetForModel(pricing *PricingData, model ModelRoute) ModelPriceSheet 
 	if model.Cost != nil {
 		sheet.Status = "known"
 		sheet.RateKind = pricingRateKind(model.ProviderID)
-		sheet.Rates = &ModelPriceRates{Input: model.Cost.Input, Output: model.Cost.Output, CacheRead: model.Cost.CacheRead, CacheWrite: model.Cost.CacheWrite}
+		sheet.Rates = &ModelPriceRates{Input: model.Cost.Input, Output: model.Cost.Output, CacheRead: float64Ptr(model.Cost.CacheRead), CacheWrite: float64Ptr(model.Cost.CacheWrite)}
 		sheet.Source = ModelPriceSource{Kind: "gateway_catalog", ReferenceModelID: model.ID}
 		sheet.Reason = ""
 		return sheet
@@ -59,16 +59,23 @@ func priceSheetForModel(pricing *PricingData, model ModelRoute) ModelPriceSheet 
 	}
 	sheet.Status = "known"
 	sheet.RateKind = pricingRateKind(model.ProviderID)
-	sheet.Rates = &ModelPriceRates{
-		Input:      price.InputCostPerToken * 1_000_000,
-		Output:     price.OutputCostPerToken * 1_000_000,
-		CacheRead:  price.CacheReadCost * 1_000_000,
-		CacheWrite: price.CacheWriteCost * 1_000_000,
+	rates := &ModelPriceRates{
+		Input:  price.InputCostPerToken * 1_000_000,
+		Output: price.OutputCostPerToken * 1_000_000,
 	}
+	if price.cacheReadSet {
+		rates.CacheRead = float64Ptr(price.CacheReadCost * 1_000_000)
+	}
+	if price.cacheWriteSet {
+		rates.CacheWrite = float64Ptr(price.CacheWriteCost * 1_000_000)
+	}
+	sheet.Rates = rates
 	sheet.Source = ModelPriceSource{Kind: source, ReferenceModelID: model.ID, UpdatedAt: updatedAt}
 	sheet.Reason = ""
 	return sheet
 }
+
+func float64Ptr(value float64) *float64 { return &value }
 
 func pricingRateKind(provider ProviderID) string {
 	if provider == AccountTypeCodex || provider == AccountTypeKimi || provider == AccountTypeQwen {

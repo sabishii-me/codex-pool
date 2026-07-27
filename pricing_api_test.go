@@ -10,7 +10,7 @@ import (
 func TestModelPricingEndpointReportsKnownAndUnknownWithoutInventingZero(t *testing.T) {
 	h, user, secret := newTestHandlerWithSession(t)
 	h.pricing = &PricingData{models: map[string]ModelPricing{
-		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007},
+		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007, cacheReadSet: true},
 	}, source: "test_fixture"}
 
 	request := httptest.NewRequest(http.MethodGet, "/api/v2/pricing/models/deepseek-v4-pro", nil)
@@ -24,7 +24,7 @@ func TestModelPricingEndpointReportsKnownAndUnknownWithoutInventingZero(t *testi
 	if err := json.Unmarshal(response.Body.Bytes(), &known); err != nil {
 		t.Fatal(err)
 	}
-	if known.Status != "known" || known.Rates == nil || known.Rates.Input != 0.27 || known.Rates.Output != 1.1 || known.Source.Kind != "test_fixture" {
+	if known.Status != "known" || known.Rates == nil || known.Rates.Input != 0.27 || known.Rates.Output != 1.1 || known.Rates.CacheRead == nil || *known.Rates.CacheRead != 0.07 || known.Rates.CacheWrite != nil || known.Source.Kind != "test_fixture" {
 		t.Fatalf("known pricing = %#v", known)
 	}
 
@@ -79,7 +79,7 @@ func TestModelPricingEndpointRequiresSessionAndSupportsProviderFilter(t *testing
 
 func TestPiModelsUseCanonicalPricingAndOmitUnknownCost(t *testing.T) {
 	pricing := &PricingData{models: map[string]ModelPricing{
-		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007},
+		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007, cacheReadSet: true},
 	}, source: "test_fixture"}
 	models := piModelsForProvider(AccountTypeDeepSeek, pricing)
 	if len(models) != 2 {

@@ -239,5 +239,12 @@ func piCostForModel(pricing *PricingData, model ModelRoute) *piModelCost {
 	if sheet.Status != "known" || sheet.Rates == nil {
 		return nil
 	}
-	return &piModelCost{Input: sheet.Rates.Input, Output: sheet.Rates.Output, CacheRead: sheet.Rates.CacheRead, CacheWrite: sheet.Rates.CacheWrite}
+	cacheRead, cacheWrite := 0.0, 0.0
+	if sheet.Rates.CacheRead != nil {
+		cacheRead = *sheet.Rates.CacheRead
+	}
+	if sheet.Rates.CacheWrite != nil {
+		cacheWrite = *sheet.Rates.CacheWrite
+	}
+	return &piModelCost{Input: sheet.Rates.Input, Output: sheet.Rates.Output, CacheRead: cacheRead, CacheWrite: cacheWrite}
 }

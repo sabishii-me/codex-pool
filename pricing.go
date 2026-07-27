@@ -23,6 +23,8 @@ type ModelPricing struct {
 	OutputCostPerToken float64 `json:"output_cost_per_token"`
 	CacheReadCost      float64 `json:"cache_read_input_token_cost"`
 	CacheWriteCost     float64 `json:"cache_creation_input_token_cost"`
+	cacheReadSet       bool
+	cacheWriteSet      bool
 }
 
 // PricingData holds the loaded pricing map and provides thread-safe lookup.
@@ -132,9 +134,11 @@ func (pd *PricingData) loadFromJSON(data []byte, source string) {
 		}
 		if entry.CacheCost != nil {
 			mp.CacheReadCost = *entry.CacheCost
+			mp.cacheReadSet = true
 		}
 		if entry.CacheWriteCost != nil {
 			mp.CacheWriteCost = *entry.CacheWriteCost
+			mp.cacheWriteSet = true
 		}
 		models[key] = mp
 	}

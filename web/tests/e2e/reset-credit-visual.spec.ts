@@ -13,7 +13,7 @@ test("reset-credit state is a contained responsive product card", async ({ page 
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading")).toBeVisible();
   await expect(panel.getByRole("link", { name: /Open ChatGPT/ })).toBeVisible();
-  await expect(panel.getByText("Optional fallback:")).toBeVisible();
+  await expect(panel.getByText("Optional fallback:")).toHaveCount(0);
   const result = await panel.evaluate(element => {
     const box = element.getBoundingClientRect();
     const link = element.querySelector("a");

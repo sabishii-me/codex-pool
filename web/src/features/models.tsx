@@ -19,7 +19,7 @@ export function ModelsPage({ models, isElevated }: { models: ModelDescriptor[]; 
     return () => { cancelled = true; };
   }, [selected, isElevated]);
 
-  return <PageFrame kicker="Workspace" title="Models" description="One model inventory with member-facing details and authorized Admin context.">
+  return <PageFrame kicker="Workspace" title="Models" description="Available models and capabilities.">
     <div className="toolbar"><input className="search-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search models or providers" aria-label="Search models" /><span>{filtered.length} of {models.length} models</span></div>
     <section className="model-list">{filtered.length ? filtered.map(model => <button className={`model-row-new ${selected === model.id ? "selected" : ""}`} key={model.id} onClick={() => setSelected(selected === model.id ? null : model.id)} aria-expanded={selected === model.id}>
       <div className="model-identity"><b>{model.name || model.id}</b><code>{model.id}</code></div><span className="model-provider">{model.provider}</span><span className="model-capabilities">{Object.entries(model.capabilities ?? {}).filter(([, enabled]) => enabled).slice(0, 3).map(([name]) => name).join(" · ") || model.protocol}</span><StatusBadge tone={model.available_now ? "success" : "warning"}>{model.available_now ? "Available" : "Unavailable"}</StatusBadge>
@@ -29,7 +29,7 @@ export function ModelsPage({ models, isElevated }: { models: ModelDescriptor[]; 
 }
 
 function RoutingDetail({ state }: { state: ResourceState<ModelRoutingProjection> }) {
-  if (state.status === "loading") return <div className="routing-state"><b>Loading runtime routing</b></div>;
+  if (state.status === "loading") return <div className="routing-state"><b>Loading routing</b></div>;
   if (state.status === "error") return <div className="routing-state error" role="alert"><b>Routing detail could not be loaded</b><p>{state.message}</p></div>;
   if (state.status !== "ready") return null;
   const route = state.data;

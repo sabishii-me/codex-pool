@@ -6,14 +6,14 @@ import { ConfirmDialog } from "../components/confirm-dialog";
 import { PageFrame, StatusBadge } from "../components/ui";
 
 export function AdminCapabilityCheckingPage({ resource }: { resource: "Connections" | "Members" | "System" }) {
-  return <PageFrame kicker="Administration" title={resource} description="Verifying current MFA elevation before loading protected data.">
-    <section className="admin-lock-screen"><span className="admin-lock-icon">◇</span><div><span>Admin identity</span><h2>Checking Admin capability</h2><p>The protected projection will load only after the backend confirms this session's MFA elevation.</p></div></section>
+  return <PageFrame kicker="Administration" title={resource} description="Checking access…">
+    <section className="admin-lock-screen"><span className="admin-lock-icon">◇</span><div><span>Admin access</span><h2>Checking access</h2></div></section>
   </PageFrame>;
 }
 
 export function AdminLockedPage({ resource, onUnlock }: { resource: "Connections" | "Members" | "System"; onUnlock: () => void }) {
-  return <PageFrame kicker="Administration" title={resource} description="Admin identity recognized; MFA elevation is required for protected data.">
-    <section className="admin-lock-screen"><span className="admin-lock-icon">◆</span><div><span>Admin identity</span><h2>{resource} is locked</h2><p>Your member workspace remains available. Elevate this session in Profile to load protected {resource.toLowerCase()} data.</p><button className="primary-button" onClick={onUnlock}>Unlock in Profile</button></div></section>
+  return <PageFrame kicker="Administration" title={resource} description="MFA verification required.">
+    <section className="admin-lock-screen"><span className="admin-lock-icon">◆</span><div><span>Admin access</span><h2>{resource} is locked</h2><button className="primary-button" onClick={onUnlock}>Verify in Profile</button></div></section>
   </PageFrame>;
 }
 
@@ -32,12 +32,12 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
       setFeedback({ tone: "error", text: error instanceof Error ? error.message : `${label} failed` });
     } finally { setOperation(null); }
   };
-  return <PageFrame kicker="Administration" title="Connections" description="Credentialed upstream capacity and lifecycle state.">
+  return <PageFrame kicker="Administration" title="Connections" description="Upstream accounts, capacity, and health.">
     <ResourceMessage state={state} loading="Loading provider connections" empty="No provider connections are configured" />
     {feedback ? <div className={`operation-feedback ${feedback.tone}`} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</div> : null}
     {state.status === "ready" ? <section className="connections-workspace">
       <div className="admin-table connection-list" aria-label="Provider connections">{state.data.map(connection => { const runtime = connectionRuntimePresentation(connection); return <button className={`admin-row connection-row ${selectedID === connection.id ? "selected" : ""}`} key={connection.id} onClick={() => setSelectedID(connection.id)} aria-pressed={selectedID === connection.id}><div><b>{connection.identity.display_name || connection.provider_id}</b><small>{connection.provider_id} · {connection.plan_type || "plan unavailable"}{connection.is_primary ? " · Primary" : ""}</small></div><StatusBadge tone={runtime.tone}>{runtime.label}</StatusBadge><span>{runtime.summary || `${connection.inflight} in flight`}</span></button>; })}</div>
-      {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b><p>Inspect identity, credential lifecycle, measured usage, and available operations.</p></div>}
+      {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b></div>}
     </section> : null}
   </PageFrame>;
 }
@@ -76,9 +76,9 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
   const available = credits.available_count > 0;
   const managedHere = credits.management_available;
   const state = !managedHere
-    ? { tone: "unknown", eyebrow: "Managed by provider-state authority", title: "Reset credits are managed in Production", description: "This environment cannot check or consume provider-owned credits for these shared credentials." }
+    ? { tone: "unknown", eyebrow: "Managed in Production", title: "Reset credits", description: "Check and redeem credits from the Production gateway." }
     : !credits.known
-      ? { tone: "unknown", eyebrow: "Inventory not loaded", title: "Check for reset credits", description: "Request the latest reset-credit inventory from Codex for this connection." }
+      ? { tone: "unknown", eyebrow: "Not checked", title: "Reset credits", description: "Check Codex for available credits." }
       : available
       ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is ready" : "Reset credits are ready", description: "A credit can reset eligible Codex rate-limit windows for this connection." }
       : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "Codex has not reported an available reset credit for this connection." };
@@ -93,9 +93,9 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
     </dl> : null}
     <footer className="reset-credit-actions">
       {credits.inventory_refresh_available ? <button className={available ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => void onRun("Check reset credits", () => mutateProviderConnection(connection.id, "refresh-reset-credits"))}>{operation === "Check reset credits" ? "Checking…" : credits.known ? "Check again" : "Check for credits"}</button> : null}
-      {available && credits.redemption_available ? <ConfirmDialog open={confirmOpen} onOpenChange={onConfirmOpenChange} title="Redeem Codex reset credit?" description="The backend will consume the earliest-expiring credit owned by this connection and refresh its quota windows. This provider action cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => onConfirmOpenChange(false))}><button className="primary-button" disabled={busy}>{operation === "Redeem reset credit" ? "Redeeming…" : "Redeem now"}</button></ConfirmDialog> : null}
-      {available && !credits.redemption_available && managedHere ? <span className="reset-credit-readonly">Redemption is temporarily unavailable</span> : null}
-      <span className="reset-credit-fallback">Optional fallback: <a href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a></span>
+      {available && credits.redemption_available ? <ConfirmDialog open={confirmOpen} onOpenChange={onConfirmOpenChange} title="Redeem Codex reset credit?" description="The earliest-expiring credit will be used and quota will be refreshed. This cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => onConfirmOpenChange(false))}><button className="primary-button" disabled={busy}>{operation === "Redeem reset credit" ? "Redeeming…" : "Redeem now"}</button></ConfirmDialog> : null}
+      {available && !credits.redemption_available && managedHere ? <span className="reset-credit-readonly">Redemption unavailable</span> : null}
+      <a className="reset-credit-fallback" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>
     </footer>
   </section>;
 }
@@ -165,7 +165,7 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
     catch (failure) { setError(failure instanceof Error ? failure.message : "Member update failed"); return false; }
     finally { setBusy(null); }
   };
-  return <PageFrame kicker="Administration" title="Members" description="People authorized to sign in and use this gateway." action={<button className="primary-button" onClick={() => setCreating(true)}>Add member</button>}>
+  return <PageFrame kicker="Administration" title="Members" description="People with access to AI Pool." action={<button className="primary-button" onClick={() => setCreating(true)}>Add member</button>}>
     <ResourceMessage state={state} loading="Loading gateway members" empty="No gateway members are configured" />
     {creating ? <section className="member-create"><div><span>New gateway member</span><h2>Grant gateway access</h2></div><label><span>Email</span><input autoFocus type="email" value={email} onChange={event => setEmail(event.target.value)} /></label><label><span>Plan</span><select value={plan} onChange={event => setPlan(event.target.value)}><option value="pro">Pro</option><option value="team">Team</option><option value="plus">Plus</option></select></label><div><button className="secondary-button" onClick={() => setCreating(false)}>Cancel</button><button className="primary-button" disabled={!email.trim() || busy !== null} onClick={() => void create()}>{busy === "create" ? "Creating…" : "Create member"}</button></div></section> : null}
     {issuedToken ? <section className="issued-token" role="status"><div><b>Member created</b><p>Copy this setup token now. It is only returned by the creation operation.</p></div><code>{issuedToken}</code><button onClick={() => void navigator.clipboard.writeText(issuedToken)}>Copy token</button></section> : null}
@@ -186,18 +186,18 @@ export function SystemPage({ state }: { state: ResourceState<SystemProjection> }
     catch (error) { setMessage(error instanceof Error ? error.message : `${label} failed`); return false; }
     finally { setOperation(null); }
   };
-  return <PageFrame kicker="Administration" title="System" description="Measured runtime, persistence, and registry state owned by the gateway."><ResourceMessage state={state} loading="Loading system projection" empty="System projection is unavailable" />{state.status === "ready" ? <>
+  return <PageFrame kicker="Administration" title="System" description="Runtime and storage health."><ResourceMessage state={state} loading="Loading system" empty="System data is unavailable" />{state.status === "ready" ? <>
     <div className="evidence-strip"><span>{state.data.evidence.kind}</span><b>{state.data.evidence.source}</b><small>Generated {new Date(state.data.evidence.generated_at).toLocaleString()}</small></div>
     <section className="system-grid"><div className="system-card"><span>Gateway runtime</span><b>{state.data.runtime.status}</b><small>{state.data.runtime.version} · {state.data.runtime.commit.slice(0, 12)}</small><small>Started {new Date(state.data.runtime.started_at).toLocaleString()} · {formatUptime(state.data.runtime.uptime_seconds)}</small></div><div className="system-card"><span>Connection capacity</span><b>{state.data.capacity.connections_active} active</b><small>{state.data.capacity.connections_total} total · {state.data.capacity.connections_disabled} disabled · {state.data.capacity.connections_dead} dead</small></div><div className="system-card"><span>Provider registry</span><b>{state.data.capacity.providers_registered} providers</b><small>{state.data.capacity.declarative_providers} declarative specifications active</small></div>{state.data.persistence.map(item => <div className={`system-card ${item.healthy ? "" : "unavailable"}`} key={item.name}><span>{item.name}</span><b>{item.healthy ? "Healthy" : item.configured ? "Unavailable" : "Not configured"}</b><small>{item.detail}</small></div>)}</section>
-    <section className="system-operations"><div><span>Operational controls</span><h2>Gateway maintenance</h2><p>These actions use current backend operations and do not imply persistence or recovery guarantees beyond their response.</p></div><div><button disabled={operation !== null} onClick={() => void run("Reload", "reload-connections")}>{operation === "Reload" ? "Reloading…" : "Reload connections"}</button><button disabled={operation !== null} onClick={() => setConfirmClear(true)}>{operation === "Clear" ? "Clearing…" : "Clear rate limits"}</button></div>{message ? <p role="status">{message}</p> : null}</section><ConfirmDialog open={confirmClear} onOpenChange={setConfirmClear} title="Clear active rate limits?" description="All provider cooldowns currently tracked by this gateway will be cleared. New upstream rate limits can be applied again immediately." confirmLabel="Clear rate limits" busy={operation === "Clear"} onConfirm={() => void run("Clear", "clear-rate-limits").then(success => { if (success) setConfirmClear(false); })} />
+    <section className="system-operations"><div><span>Maintenance</span><h2>System actions</h2></div><div><button disabled={operation !== null} onClick={() => void run("Reload", "reload-connections")}>{operation === "Reload" ? "Reloading…" : "Reload connections"}</button><button disabled={operation !== null} onClick={() => setConfirmClear(true)}>{operation === "Clear" ? "Clearing…" : "Clear rate limits"}</button></div>{message ? <p role="status">{message}</p> : null}</section><ConfirmDialog open={confirmClear} onOpenChange={setConfirmClear} title="Clear active rate limits?" description="All provider cooldowns currently tracked by this gateway will be cleared. New upstream rate limits can be applied again immediately." confirmLabel="Clear rate limits" busy={operation === "Clear"} onConfirm={() => void run("Clear", "clear-rate-limits").then(success => { if (success) setConfirmClear(false); })} />
   </> : null}</PageFrame>;
 }
 function formatUptime(seconds: number) { const days = Math.floor(seconds / 86400); const hours = Math.floor(seconds % 86400 / 3600); const minutes = Math.floor(seconds % 3600 / 60); return `Uptime ${days ? `${days}d ` : ""}${hours}h ${minutes}m`; }
 
 function ResourceMessage<T>({ state, loading, empty }: { state: ResourceState<T>; loading: string; empty: string }) {
-  if (state.status === "idle") return <div className="resource-message"><b>Admin capability required</b><p>This protected resource is locked.</p></div>;
-  if (state.status === "loading") return <div className="resource-message"><b>{loading}</b><p>Waiting for the backend projection.</p></div>;
-  if (state.status === "error") return <div className="resource-message error"><b>Projection unavailable</b><p>{state.message}</p></div>;
-  if (state.status === "empty") return <div className="resource-message"><b>{empty}</b><p>The authorized projection returned no records.</p></div>;
+  if (state.status === "idle") return <div className="resource-message"><b>Admin access required</b></div>;
+  if (state.status === "loading") return <div className="resource-message"><b>{loading}</b></div>;
+  if (state.status === "error") return <div className="resource-message error"><b>Could not load data</b><p>{state.message}</p></div>;
+  if (state.status === "empty") return <div className="resource-message"><b>{empty}</b></div>;
   return null;
 }

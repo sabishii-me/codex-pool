@@ -18,6 +18,11 @@ describe("product truth boundary", () => {
     expect(source).not.toMatch(/dev review data|projection is limited|not yet exposed|shell is ready|no backend projection|routing projection unavailable|example only/i);
   });
 
+  it("does not expose internal architecture narration as product copy", () => {
+    const source = productFiles.map(path => readFileSync(path, "utf8")).join("\n");
+    expect(source).not.toMatch(/Optional fallback:|provider-state authority|provider-owned credits|canonical usage projection|authorized projection|waiting for the backend|current product architecture|does not imply persistence|backend will consume/i);
+  });
+
   it("does not use browser-owned dialogs", () => {
     const source = productFiles.map(path => readFileSync(path, "utf8")).join("\n");
     expect(source).not.toMatch(/window\.(confirm|alert|prompt)\s*\(/);

@@ -18,8 +18,8 @@ export function PageFrame({ kicker, title, description, action, children }: { ki
   return <div className="page-frame"><header className="page-heading"><div><span className="kicker">{kicker}</span><h1>{title}</h1><p>{description}</p></div>{action}</header>{children}</div>;
 }
 
-export function CardHeader({ title, subtitle, action }: { title: string; subtitle: string; action?: ReactNode }) {
-  return <header className="card-header"><div><h2>{title}</h2><p>{subtitle}</p></div>{action}</header>;
+export function CardHeader({ title, subtitle, action }: { title: string; subtitle?: string; action?: ReactNode }) {
+  return <header className="card-header"><div><h2>{title}</h2>{subtitle ? <p>{subtitle}</p> : null}</div>{action}</header>;
 }
 
 export function Metric({ label, value, note }: { label: string; value: string; note: string }) {

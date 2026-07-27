@@ -49,7 +49,7 @@ export function SetupPage({ session: _session }: { session: GatewaySession }) {
     catch (cause) { setConfigError(cause instanceof Error ? cause.message : "Configuration unavailable"); }
   };
 
-  return <PageFrame kicker="Workspace" title="Setup" description="Install and configure a supported coding client with your authenticated gateway access.">
+  return <PageFrame kicker="Workspace" title="Setup" description="Install and configure a coding client.">
     <div className="setup-stepper">
       <Step number={1} title="Choose your client" active={step === 1} complete={step > 1} summary={client?.display_name}>
         {loading ? <div className="empty-state"><b>Loading supported clients…</b></div> : error ? <div className="empty-state"><b>Setup clients unavailable</b><p>{error}</p><button className="secondary-button" onClick={refresh}>Retry</button></div> : <div className="setup-choice-grid">{clients.map(item => <Choice key={item.id} selected={item.id === clientID} title={item.display_name} detail={item.description} onClick={() => chooseClient(item)} />)}</div>}
@@ -69,7 +69,7 @@ export function SetupPage({ session: _session }: { session: GatewaySession }) {
       </Step>
       <Step number={4} title="Verify locally" active={step === 4} complete={false}>
         {client && environment ? <>
-          <p className="setup-note">The gateway generated your setup instructions. Run this command on the configured computer to verify the local client installation.</p>
+          <p className="setup-note">Run this command to verify the installation.</p>
           <CodeBlock label="Local verification command" value={environment.verify_command} onCopy={() => copy(environment.verify_command)} />
           <div className="setup-launch"><span>Then launch {client.display_name} with</span><code>{environment.launch_command}</code><button className="text-button" onClick={() => copy(environment.launch_command)}>Copy</button></div>
           <div className="setup-actions"><button className="secondary-button" onClick={() => setStep(3)}>Back to installation</button><button className="primary-button" onClick={() => { setClientID(""); setEnvironmentID(""); setConfig(""); setStep(1); }}>Configure another client</button></div>

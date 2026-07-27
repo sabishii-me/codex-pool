@@ -59,11 +59,43 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
     {connection.health_error ? <div className="connection-health-error"><b>Current health error</b><p>{connection.health_error}</p></div> : null}
     {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Provider identity</h3>{connection.identity.external_subject ? <Fact label="External subject" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={value} />)}</section> : null}
     <section><h3>Runtime availability</h3><div className="connection-totals">{runtimeQuotaFacts(connection).map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section>
-    {connection.provider_id === "codex" ? <section className="connection-reset-credits"><h3>Rate-limit reset credits</h3><div className="connection-totals"><Fact label="Availability" value={connection.reset_credits.known ? `${connection.reset_credits.available_count} available` : "Not checked"} />{connection.reset_credits.expirations[0] ? <Fact label="Earliest expiry" value={formatTimestamp(connection.reset_credits.expirations[0])} /> : null}{connection.reset_credits.retrieved_at ? <Fact label="Last checked" value={formatTimestamp(connection.reset_credits.retrieved_at)} /> : null}</div><p>{connection.reset_credits.available_count > 0 ? "Redeeming resets this connection's eligible Codex rate-limit windows." : "No reset credit is currently available for this connection."}</p><a href={connection.reset_credits.dashboard_url} target="_blank" rel="noreferrer">Open official Codex dashboard ↗</a>{connection.reset_credits.available_count > 0 && connection.reset_credits.redemption_available ? <ConfirmDialog open={confirmReset} onOpenChange={setConfirmReset} title="Redeem Codex reset credit?" description="The backend will consume the earliest-expiring credit owned by this connection and refresh its quota windows. This provider action cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => setConfirmReset(false))}><button className="primary-button" disabled={busy}>Redeem now</button></ConfirmDialog> : null}{connection.reset_credits.available_count > 0 && !connection.reset_credits.redemption_available ? <p>This gateway is read-only for provider state. Redeem through the official dashboard.</p> : null}</section> : null}
+    {connection.provider_id === "codex" ? <ResetCreditsPanel connection={connection} busy={busy} operation={operation} confirmOpen={confirmReset} onConfirmOpenChange={setConfirmReset} onRun={onRun} /> : null}
     <section><h3>Measured totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
     <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
   </aside>;
 }
+function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirmOpenChange, onRun }: {
+  connection: OperatorProviderConnectionV2;
+  busy: boolean;
+  operation: string | null;
+  confirmOpen: boolean;
+  onConfirmOpenChange: (open: boolean) => void;
+  onRun: (label: string, task: () => Promise<unknown>) => Promise<void>;
+}) {
+  const credits = connection.reset_credits;
+  const available = credits.available_count > 0;
+  const state = !credits.known
+    ? { tone: "unknown", eyebrow: "Inventory unavailable", title: "Reset-credit status has not been checked", description: "This gateway does not have fresh provider inventory for this connection." }
+    : available
+      ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is ready" : "Reset credits are ready", description: "A credit can reset eligible Codex rate-limit windows for this connection." }
+      : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "Codex has not reported an available reset credit for this connection." };
+  return <section className={`reset-credit-card ${state.tone}`} aria-labelledby={`reset-credit-${connection.public_id}`}>
+    <header className="reset-credit-heading">
+      <div className="reset-credit-icon" aria-hidden="true">↻</div>
+      <div><span>{state.eyebrow}</span><h3 id={`reset-credit-${connection.public_id}`}>{state.title}</h3><p>{state.description}</p></div>
+    </header>
+    {(credits.expirations[0] || credits.retrieved_at) ? <dl className="reset-credit-meta">
+      {credits.expirations[0] ? <div><dt>Earliest expiry</dt><dd>{formatTimestamp(credits.expirations[0])}</dd></div> : null}
+      {credits.retrieved_at ? <div><dt>Inventory checked</dt><dd>{formatTimestamp(credits.retrieved_at)}</dd></div> : null}
+    </dl> : null}
+    <footer className="reset-credit-actions">
+      <a className="secondary-button" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>
+      {available && credits.redemption_available ? <ConfirmDialog open={confirmOpen} onOpenChange={onConfirmOpenChange} title="Redeem Codex reset credit?" description="The backend will consume the earliest-expiring credit owned by this connection and refresh its quota windows. This provider action cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => onConfirmOpenChange(false))}><button className="primary-button" disabled={busy}>{operation === "Redeem reset credit" ? "Redeeming…" : "Redeem now"}</button></ConfirmDialog> : null}
+      {available && !credits.redemption_available ? <span className="reset-credit-readonly">Redeem from ChatGPT on this read-only gateway</span> : null}
+    </footer>
+  </section>;
+}
+
 function connectionRuntimePresentation(connection: OperatorProviderConnectionV2): { label: string; tone: "success" | "warning"; summary: string } {
   const labels: Record<string, string> = { healthy: "Healthy", degraded: "Degraded", cooldown: "Cooldown", disabled: "Disabled", dead: "Dead", verification_required: "Verify" };
   const status = connection.runtime.status;

@@ -24,6 +24,7 @@ type DataAPI struct {
 	modelCatalog        http.HandlerFunc
 	usageV2             http.HandlerFunc
 	usageEconomicsV2    http.HandlerFunc
+	pricingModels       http.HandlerFunc
 	modelRouting        http.HandlerFunc
 	providerConnections func(http.ResponseWriter)
 	legacyConnections   func(http.ResponseWriter)
@@ -44,6 +45,11 @@ func (api *DataAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 			return true
 		}
 		api.modelRouting(w, r)
+		return true
+	}
+
+	if r.URL.Path == "/api/v2/pricing/models" || strings.HasPrefix(r.URL.Path, "/api/v2/pricing/models/") {
+		api.pricingModels(w, r)
 		return true
 	}
 
@@ -148,6 +154,7 @@ func (h *proxyHandler) dataAPIService() *DataAPI {
 		},
 		usageV2:             h.handleUsageV2,
 		usageEconomicsV2:    h.handleUsageEconomicsV2,
+		pricingModels:       h.handleModelPricingV2,
 		modelRouting:        h.serveModelRouting,
 		providerConnections: h.serveProviderConnectionsV2,
 		legacyConnections:   h.serveAccounts,

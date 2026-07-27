@@ -27,8 +27,10 @@ type ModelPricing struct {
 
 // PricingData holds the loaded pricing map and provides thread-safe lookup.
 type PricingData struct {
-	mu     sync.RWMutex
-	models map[string]ModelPricing
+	mu        sync.RWMutex
+	models    map[string]ModelPricing
+	source    string
+	updatedAt time.Time
 }
 
 // subscriptionCosts maps (account_type, plan_type) to monthly cost in USD.
@@ -95,12 +97,12 @@ func newPricingData() *PricingData {
 	pd := &PricingData{
 		models: make(map[string]ModelPricing),
 	}
-	pd.loadFromJSON(fallbackPricingJSON)
+	pd.loadFromJSON(fallbackPricingJSON, "embedded_fallback")
 	return pd
 }
 
 // loadFromJSON parses the LiteLLM pricing JSON format into the models map.
-func (pd *PricingData) loadFromJSON(data []byte) {
+func (pd *PricingData) loadFromJSON(data []byte, source string) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		log.Printf("pricing: failed to parse JSON: %v", err)
@@ -139,6 +141,8 @@ func (pd *PricingData) loadFromJSON(data []byte) {
 
 	pd.mu.Lock()
 	pd.models = models
+	pd.source = strings.TrimSpace(source)
+	pd.updatedAt = time.Now().UTC()
 	pd.mu.Unlock()
 	log.Printf("pricing: loaded %d model prices", len(models))
 }
@@ -161,7 +165,7 @@ func (pd *PricingData) fetchAndUpdate() {
 		log.Printf("pricing: read failed: %v", err)
 		return
 	}
-	pd.loadFromJSON(data)
+	pd.loadFromJSON(data, "litellm")
 }
 
 // startPricingRefresh fetches pricing on startup and refreshes every 24h.
@@ -187,6 +191,19 @@ var pricingModelAliases = map[string]string{
 	"claude-sonnet-5":      "claude-sonnet-4-6",
 	"claude-sonnet-5 [1m]": "claude-sonnet-4-6",
 	"claude-sonnet-5[1m]":  "claude-sonnet-4-6",
+}
+
+// lookupExactPricing returns only an exact active price-sheet entry. It does
+// not use the historical estimator's permissive prefix/date fallback because
+// public pricing must not silently assign a nearby model's rate.
+func (pd *PricingData) lookupExactPricing(model string) (ModelPricing, string, time.Time, bool) {
+	if pd == nil || strings.TrimSpace(model) == "" {
+		return ModelPricing{}, "", time.Time{}, false
+	}
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	price, ok := pd.models[model]
+	return price, pd.source, pd.updatedAt, ok
 }
 
 // lookupPricing finds pricing for a model. Tries exact match, then alias match,

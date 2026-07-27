@@ -39,7 +39,11 @@ type piModelCost struct {
 	CacheWrite float64 `json:"cacheWrite"`
 }
 
-func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byte, error) {
+func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pricings ...*PricingData) ([]byte, error) {
+	var pricing *PricingData
+	if len(pricings) > 0 {
+		pricing = pricings[0]
+	}
 	baseURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
 	cfg := piModelsConfig{
 		Providers: map[string]piProviderConfig{
@@ -47,13 +51,13 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 				BaseURL: baseURL + "/backend-api",
 				APIKey:  codexAPIKey,
 				API:     "openai-codex-responses",
-				Models:  piModelsForProvider(AccountTypeCodex),
+				Models:  piModelsForProvider(AccountTypeCodex, pricing),
 			},
 			"claude": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeClaude),
+				Models:  piModelsForProvider(AccountTypeClaude, pricing),
 			},
 			"antigravity": {
 				BaseURL: baseURL,
@@ -65,31 +69,31 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeKimi),
+				Models:  piModelsForProvider(AccountTypeKimi, pricing),
 			},
 			"kimi-platform": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeKimiPlatform),
+				Models:  piModelsForProvider(AccountTypeKimiPlatform, pricing),
 			},
 			"minimax": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeMinimax),
+				Models:  piModelsForProvider(AccountTypeMinimax, pricing),
 			},
 			"zai": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeZAI),
+				Models:  piModelsForProvider(AccountTypeZAI, pricing),
 			},
 			"xiaomi": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeXiaomi),
+				Models:  piModelsForProvider(AccountTypeXiaomi, pricing),
 			},
 			"grok": {
 				BaseURL: baseURL,
@@ -101,25 +105,25 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string) ([]byt
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeDeepSeek),
+				Models:  piModelsForProvider(AccountTypeDeepSeek, pricing),
 			},
 			"qwen": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeQwen),
+				Models:  piModelsForProvider(AccountTypeQwen, pricing),
 			},
 			"openrouter": {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeOpenRouter),
+				Models:  piModelsForProvider(AccountTypeOpenRouter, pricing),
 			},
 			"nvidia": {
 				BaseURL: baseURL,
 				APIKey:  codexAPIKey,
 				API:     "openai-completions",
-				Models:  piModelsForProvider(AccountTypeNvidia),
+				Models:  piModelsForProvider(AccountTypeNvidia, pricing),
 			},
 		},
 	}
@@ -135,7 +139,7 @@ func antigravityPiModels() []piModelConfig {
 		if model.SupportsImages {
 			input = append(input, "image")
 		}
-		result = append(result, piModelConfig{ID: "antigravity/" + model.ID, Name: model.DisplayName, Reasoning: boolPtr(model.SupportsThinking), Input: input, ContextWindow: model.MaxTokens, MaxTokens: model.MaxOutputTokens, Cost: &piModelCost{}})
+		result = append(result, piModelConfig{ID: "antigravity/" + model.ID, Name: model.DisplayName, Reasoning: boolPtr(model.SupportsThinking), Input: input, ContextWindow: model.MaxTokens, MaxTokens: model.MaxOutputTokens})
 	}
 	return result
 }
@@ -156,7 +160,6 @@ func piTextModel(id, name string, reasoning bool, contextWindow, maxTokens int) 
 		Input:         []string{"text", "image"},
 		ContextWindow: contextWindow,
 		MaxTokens:     maxTokens,
-		Cost:          &piModelCost{},
 	}
 }
 
@@ -198,7 +201,11 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
-func piModelsForProvider(accountType AccountType) []piModelConfig {
+func piModelsForProvider(accountType AccountType, pricings ...*PricingData) []piModelConfig {
+	var pricing *PricingData
+	if len(pricings) > 0 {
+		pricing = pricings[0]
+	}
 	models := modelsForProvider(accountType)
 	result := make([]piModelConfig, 0, len(models))
 	for _, model := range models {
@@ -209,7 +216,7 @@ func piModelsForProvider(accountType AccountType) []piModelConfig {
 			Input:         append([]string(nil), model.Input...),
 			ContextWindow: model.ContextWindow,
 			MaxTokens:     model.MaxTokens,
-			Cost:          cloneModelCost(model.Cost),
+			Cost:          piCostForModel(pricing, model),
 		}
 		if accountType == AccountTypeCodex && strings.HasPrefix(model.ID, "gpt-5.6-") {
 			config.ThinkingLevelMap = map[string]string{"xhigh": "xhigh", "max": "max"}
@@ -227,10 +234,10 @@ func piModelsForProvider(accountType AccountType) []piModelConfig {
 	return result
 }
 
-func cloneModelCost(cost *piModelCost) *piModelCost {
-	if cost == nil {
-		return &piModelCost{}
+func piCostForModel(pricing *PricingData, model ModelRoute) *piModelCost {
+	sheet := priceSheetForModel(pricing, model)
+	if sheet.Status != "known" || sheet.Rates == nil {
+		return nil
 	}
-	cloned := *cost
-	return &cloned
+	return &piModelCost{Input: sheet.Rates.Input, Output: sheet.Rates.Output, CacheRead: sheet.Rates.CacheRead, CacheWrite: sheet.Rates.CacheWrite}
 }

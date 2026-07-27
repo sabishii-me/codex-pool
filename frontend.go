@@ -138,7 +138,7 @@ func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Req
 	if authData.Tokens != nil {
 		codexAccessToken = authData.Tokens.AccessToken
 	}
-	piModelsJSON, err := generatePiModelsJSON(h.getEffectivePublicURL(r), codexAccessToken, claudeAuthData.AccessToken)
+	piModelsJSON, err := generatePiModelsJSON(h.getEffectivePublicURL(r), codexAccessToken, claudeAuthData.AccessToken, h.pricing)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate pi models config.")
 		return

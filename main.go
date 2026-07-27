@@ -41,7 +41,6 @@ type config struct {
 	antigravityOnboardBase *url.URL
 	claudeBase             *url.URL // Claude API endpoint
 	kimiBase               *url.URL // Kimi API endpoint
-	kimiPlatformBase       *url.URL // Kimi/Moonshot Open Platform Anthropic-compatible endpoint (general pay-as-you-go key, distinct from the Coding Plan)
 	minimaxBase            *url.URL // MiniMax API endpoint
 	zaiBase                *url.URL // Z.ai Anthropic-compatible endpoint
 	xiaomiBase             *url.URL // Xiaomi MiMo Token Plan Anthropic-compatible endpoint
@@ -124,7 +123,6 @@ func buildConfig() *config {
 	cfg.antigravityOnboardBase = mustParse(getenv("UPSTREAM_ANTIGRAVITY_ONBOARD_BASE", "https://daily-cloudcode-pa.googleapis.com"))
 	cfg.claudeBase = mustParse(getenv("UPSTREAM_CLAUDE_BASE", "https://api.anthropic.com"))
 	cfg.kimiBase = mustParse(getenv("UPSTREAM_KIMI_BASE", "https://api.kimi.com/coding"))
-	cfg.kimiPlatformBase = mustParse(getenv("UPSTREAM_KIMI_PLATFORM_BASE", "https://api.moonshot.ai/anthropic"))
 	cfg.minimaxBase = mustParse(getenv("UPSTREAM_MINIMAX_BASE", "https://api.minimax.io/anthropic"))
 	cfg.zaiBase = mustParse(getenv("UPSTREAM_ZAI_BASE", "https://api.z.ai/api/anthropic"))
 	cfg.xiaomiBase = mustParse(getenv("UPSTREAM_XIAOMI_BASE", "https://token-plan-sgp.xiaomimimo.com/anthropic"))
@@ -253,7 +251,7 @@ func main() {
 	geminiProvider := NewGeminiProvider(cfg.geminiBase, cfg.geminiAPIBase)
 	antigravityProvider := NewAntigravityProvider(cfg.antigravityDailyBase, cfg.antigravityProdBase)
 	kimiProvider := NewKimiProvider(cfg.kimiBase)
-	kimiPlatformProvider := NewKimiPlatformProvider(cfg.kimiPlatformBase)
+	kimiPlatformProvider := NewKimiPlatformProvider(nil)
 	minimaxProvider := NewMinimaxProvider(cfg.minimaxBase)
 	zaiProvider := NewZAIProvider(cfg.zaiBase)
 	xiaomiProvider := NewXiaomiProvider(cfg.xiaomiBase)

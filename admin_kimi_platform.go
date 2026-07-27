@@ -62,11 +62,21 @@ func (h *proxyHandler) handleKimiPlatformAdd(w http.ResponseWriter, r *http.Requ
 	// would conflate product type (Coding Plan vs Open Platform) with
 	// credential validity.
 	//
-	// The OpenAI-compatible base is derived from the configured
-	// Anthropic-compatible base by taking only scheme+host (stripping
-	// the "/anthropic" path). This construction uses url.JoinPath for
-	// safe path joining rather than string concatenation.
-	openAIBase := &url.URL{Scheme: h.cfg.kimiPlatformBase.Scheme, Host: h.cfg.kimiPlatformBase.Host}
+	// The OpenAI-compatible base is derived from the active declarative
+	// provider specification's Anthropic-compatible base by taking only
+	// scheme+host (stripping the "/anthropic" path). This construction uses
+	// url.JoinPath for safe path joining rather than string concatenation.
+	if h == nil || h.registry == nil {
+		respondJSONError(w, http.StatusServiceUnavailable, "Kimi Platform provider is unavailable")
+		return
+	}
+	provider := h.registry.ForType(AccountTypeKimiPlatform)
+	if provider == nil || provider.UpstreamURL("") == nil {
+		respondJSONError(w, http.StatusServiceUnavailable, "Kimi Platform provider is unavailable")
+		return
+	}
+	base := provider.UpstreamURL("")
+	openAIBase := &url.URL{Scheme: base.Scheme, Host: base.Host}
 	validationURL, err := url.JoinPath(openAIBase.String(), "/v1/models")
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "failed to build validation URL: "+err.Error())

@@ -7,19 +7,12 @@ import (
 
 const kimiPlatformModelPrefix = "kimi-platform/"
 
-var kimiPlatformProviderSpec = ProviderSpec{
-	ID: AccountTypeKimiPlatform, Protocol: ProtocolAnthropicMessages,
-	BaseURL: "https://api.moonshot.ai/anthropic", PlanType: "kimi-platform", CredentialField: "api_key",
-	Auth:          ProviderAuthSpec{Type: AuthBearer},
-	UsageProfiles: []string{UsageAnthropicMessages, UsageOpenAIChatKimi},
-	ModelPrefix:   kimiPlatformModelPrefix, StripModelPrefix: true,
-}
+var kimiPlatformProviderSpec = mustBuiltinProviderSpec("kimi-platform")
 
 type KimiPlatformProvider = DeclarativeProvider
 
 func NewKimiPlatformProvider(base *url.URL) *KimiPlatformProvider {
-	spec := kimiPlatformProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeKimiPlatform)
+	spec := cloneProviderSpec(kimiPlatformProviderSpec)
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

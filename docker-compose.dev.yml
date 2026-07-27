@@ -25,7 +25,7 @@ services:
       PROXY_LISTEN_ADDR: 0.0.0.0:8989
       # DEV_* interpolation names intentionally differ from production names.
       # This prevents Compose's automatic root .env loading from importing live
-      # secrets or behavior when --env-file is accidentally omitted.
+      # credentials or environment identity when --env-file is accidentally omitted.
       PROXY_MAX_ATTEMPTS: 3
       PROXY_USAGE_REFRESH_SECONDS: 300
       PUBLIC_URL: ${DEV_PUBLIC_URL:-http://127.0.0.1:18991}
@@ -36,7 +36,6 @@ services:
       OAUTH_GOOGLE_REDIRECT_URI: ${DEV_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.1:18991/auth/callback/google}
       ALLOWED_EMAILS: ${DEV_ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${DEV_ADMIN_EMAILS:-}
-      UPSTREAM_KIMI_PLATFORM_BASE: ${DEV_UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
       interval: 10s

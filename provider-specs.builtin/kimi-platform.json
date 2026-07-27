@@ -1,0 +1,72 @@
+{
+  "id": "kimi-platform",
+  "protocol": "anthropic-messages",
+  "base_url": "https://api.moonshot.ai/anthropic",
+  "plan_type": "kimi-platform",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "usage_profiles": [
+    "anthropic-messages",
+    "openai-chat-kimi-billing"
+  ],
+  "model_prefix": "kimi-platform/",
+  "strip_model_prefix": true,
+  "models": [
+    {
+      "id": "kimi-k3",
+      "display_name": "Kimi K3",
+      "description": "Latest Moonshot/Kimi Open Platform frontier model.",
+      "context_window": 1048576,
+      "max_output_tokens": 131072,
+      "reasoning": true,
+      "input": ["text", "image"]
+    },
+    {
+      "id": "kimi-k3[1m]",
+      "display_name": "Kimi K3 (Anthropic 1M alias)",
+      "description": "Kimi K3 alias documented for Anthropic-compatible clients.",
+      "context_window": 1048576,
+      "max_output_tokens": 131072,
+      "reasoning": true,
+      "input": ["text", "image"]
+    },
+    {
+      "id": "kimi-k2.7-code",
+      "display_name": "Kimi K2.7-Code",
+      "description": "Open Platform coding model.",
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "reasoning": true,
+      "input": ["text", "image"]
+    },
+    {
+      "id": "kimi-k2.7-code-highspeed",
+      "display_name": "Kimi K2.7-Code Highspeed",
+      "description": "Open Platform coding model, faster inference.",
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "reasoning": true,
+      "input": ["text", "image"]
+    },
+    {
+      "id": "kimi-k2.6",
+      "display_name": "Kimi K2.6",
+      "description": "Open Platform general-purpose model.",
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "reasoning": true,
+      "input": ["text", "image"]
+    },
+    {
+      "id": "kimi-k2.5",
+      "display_name": "Kimi K2.5",
+      "description": "Open Platform legacy model.",
+      "context_window": 262144,
+      "max_output_tokens": 32768,
+      "reasoning": true,
+      "input": ["text", "image"]
+    }
+  ]
+}

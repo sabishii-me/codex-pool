@@ -42,7 +42,6 @@ services:
       OAUTH_GOOGLE_REDIRECT_URI: ${STAGING_OAUTH_GOOGLE_REDIRECT_URI:-http://127.0.0.1:18990/auth/callback/google}
       ALLOWED_EMAILS: ${STAGING_ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${STAGING_ADMIN_EMAILS:-}
-      UPSTREAM_KIMI_PLATFORM_BASE: ${STAGING_UPSTREAM_KIMI_PLATFORM_BASE:-https://api.moonshot.ai/anthropic}
     depends_on:
       staging-data-permissions:
         condition: service_completed_successfully

@@ -312,7 +312,9 @@ Exit criterion: one route definition drives every request path.
 
 ### Protocol-aware affinity and reset-aware Codex scheduling
 
-Status: planned; detailed implementation plan: [`protocol-affinity-and-codex-balancing-plan.md`](protocol-affinity-and-codex-balancing-plan.md).
+Status: **P0 critical; next routing implementation milestone**. Detailed implementation plan: [`protocol-affinity-and-codex-balancing-plan.md`](protocol-affinity-and-codex-balancing-plan.md).
+
+Current Production evidence shows the structural failure directly: five healthy Plus connections displayed `0% used` while the one healthy Pro connection displayed `32% used`. The percentages must be compared only with their corresponding window/reset/retrieval metadata, and provider percentages are quantized, but this pattern is still consistent with—and expected from—the current Pro/Prolite Tier 1 gate. It places already-paid Plus allowance at material risk of expiring unused while concentrating failures and cache namespaces on Pro. This is a cost and capacity incident, not cosmetic fairness work.
 
 The economic objective is not equal request counts. It is to consume already-paid capacity before provider reset while avoiding unnecessary loss of prompt-cache locality and preserving provider-owned state correctly.
 

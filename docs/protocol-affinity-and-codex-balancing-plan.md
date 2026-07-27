@@ -1,6 +1,8 @@
 # Protocol-Aware Affinity and Reset-Aware Codex Scheduling Plan
 
-Status: planned; required before replacing the current Codex tier scheduler
+Status: **P0 critical — implementation is the next routing milestone and must precede further ordinary Codex scheduler tuning**
+
+Production evidence: the current six-connection pool has shown all five healthy Plus connections at `0% used` while the single healthy Pro connection reached `32% used`. Subject to matching/fresh quota-window observations, this is the exact failure mode predicted by the current Pro/Prolite Tier 1 policy: one paid allowance is drained while five paid allowances are left at risk of resetting unused. Quantized `0%` telemetry may hide small use, but it cannot justify the structural concentration. Before/after acceptance must capture each window's retrieval/reset timestamps so unlike windows are never compared as if synchronized.
 
 Related roadmap: [`architecture-roadmap.md`](architecture-roadmap.md)
 

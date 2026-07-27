@@ -16,15 +16,21 @@ type UsageEvidence struct {
 }
 
 type UsageDimension struct {
-	ID              string  `json:"id"`
-	ProviderID      string  `json:"provider_id,omitempty"`
-	Requests        int64   `json:"requests"`
-	InputTokens     int64   `json:"input_tokens"`
-	CachedTokens    int64   `json:"cached_tokens"`
-	OutputTokens    int64   `json:"output_tokens"`
-	ReasoningTokens int64   `json:"reasoning_tokens"`
-	BillableTokens  int64   `json:"billable_tokens"`
-	CostUSD         float64 `json:"cost_usd"`
+	ID                string   `json:"id"`
+	ProviderID        string   `json:"provider_id,omitempty"`
+	Requests          int64    `json:"requests"`
+	InputTokens       int64    `json:"input_tokens"`
+	CachedTokens      int64    `json:"cached_tokens"`
+	CacheWriteTokens  int64    `json:"cache_write_tokens"`
+	OutputTokens      int64    `json:"output_tokens"`
+	ReasoningTokens   int64    `json:"reasoning_tokens"`
+	BillableTokens    int64    `json:"billable_tokens"`
+	CostUSD           float64  `json:"cost_usd"`
+	CostStatus        string   `json:"cost_status"`
+	CostReason        string   `json:"cost_reason,omitempty"`
+	CacheSemantics    string   `json:"cache_semantics"`
+	CacheReadSharePct *float64 `json:"cache_read_share_pct"`
+	CacheDiagnostic   string   `json:"cache_diagnostic,omitempty"`
 }
 
 type UsageModelHourly struct {
@@ -117,6 +123,10 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 			}
 			if err != nil {
 				projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
+			} else {
+				applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, true)
+				applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, false)
+				applyUsageProjectionDiagnostics(projection.ByConnection, h.pricing, false)
 			}
 			economics, err := h.buildSignalEconomics(projection.Evidence.GeneratedAt)
 			if err != nil {
@@ -154,9 +164,23 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
+		} else {
+			applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, true)
+			applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, false)
 		}
 	}
 	respondJSON(w, projection)
+}
+
+func applyUsageProjectionDiagnostics(values []UsageDimension, pricing *PricingData, includeCost bool) {
+	for index := range values {
+		applyUsageCacheDiagnostics(&values[index])
+		if includeCost {
+			applyUsageCostDiagnostics(&values[index], pricing)
+		} else {
+			values[index].CostStatus = "aggregate"
+		}
+	}
 }
 
 func addUserUsage(target *UserUsage, value UserUsage) {

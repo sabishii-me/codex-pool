@@ -17,9 +17,9 @@ func TestRetryPolicyCalculatesBoundedAttempts(t *testing.T) {
 		configured, providerConnections, totalConnections, want int
 	}{
 		{configured: 0, providerConnections: 0, totalConnections: 0, want: 1},
-		{configured: 3, providerConnections: 1, totalConnections: 10, want: 3},
-		{configured: 1, providerConnections: 4, totalConnections: 10, want: 4},
-		{configured: 10, providerConnections: 4, totalConnections: 5, want: 5},
+		{configured: 3, providerConnections: 1, totalConnections: 10, want: 1},
+		{configured: 1, providerConnections: 4, totalConnections: 10, want: 1},
+		{configured: 10, providerConnections: 4, totalConnections: 5, want: 4},
 	}
 	for _, tc := range cases {
 		policy := RetryPolicy{ConfiguredAttempts: tc.configured}

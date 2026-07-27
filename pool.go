@@ -487,12 +487,13 @@ type affinityBinding struct {
 }
 
 type ProviderPool struct {
-	mu            sync.RWMutex
-	accounts      []*ProviderConnection
-	convPin       map[string]affinityBinding // private typed affinity key -> bounded local binding
-	debug         bool
-	rr            uint64
-	tierThreshold float64 // secondary usage % at which we stop preferring a tier (default 0.50)
+	mu                    sync.RWMutex
+	accounts              []*ProviderConnection
+	convPin               map[string]affinityBinding // private typed affinity key -> bounded local binding
+	debug                 bool
+	rr                    uint64
+	tierThreshold         float64 // secondary usage % at which we stop preferring a tier (default 0.50)
+	codexBalancingEnabled bool
 }
 
 // poolState is retained for source compatibility.
@@ -500,7 +501,16 @@ type ProviderPool struct {
 type poolState = ProviderPool
 
 func newProviderPool(connections []*ProviderConnection, debug bool) *ProviderPool {
-	return &ProviderPool{accounts: connections, convPin: map[string]affinityBinding{}, debug: debug, tierThreshold: 0.50}
+	return &ProviderPool{accounts: connections, convPin: map[string]affinityBinding{}, debug: debug, tierThreshold: 0.50, codexBalancingEnabled: true}
+}
+
+func (p *ProviderPool) setRoutingFeatures(codexBalancingEnabled bool) {
+	if p == nil {
+		return
+	}
+	p.mu.Lock()
+	p.codexBalancingEnabled = codexBalancingEnabled
+	p.mu.Unlock()
 }
 
 // newPoolState is retained for source compatibility.
@@ -861,7 +871,7 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 				return nil
 			}
 			var selected *ProviderConnection
-			if accountType == AccountTypeCodex {
+			if accountType == AccountTypeCodex && p.codexBalancingEnabled {
 				selected = selectQuotaCompetitiveConnection(candidates, p.rr)
 			} else if candidate := best(candidates); candidate != nil {
 				selected = candidate.connection

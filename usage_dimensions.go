@@ -6,6 +6,52 @@ import (
 	"time"
 )
 
+func applyUsageCostDiagnostics(value *UsageDimension, pricing *PricingData) {
+	if value == nil {
+		return
+	}
+	model, ok := findModelRouteByID(value.ID)
+	if !ok || (value.ProviderID != "" && model.ProviderID != ProviderID(value.ProviderID)) {
+		value.CostStatus = "unknown"
+		value.CostReason = "no canonical model route"
+		return
+	}
+	sheet := priceSheetForModel(pricing, model)
+	value.CostStatus = sheet.Status
+	if sheet.Status == "unknown" {
+		value.CostReason = sheet.Reason
+	}
+}
+
+func applyUsageCacheDiagnostics(value *UsageDimension) {
+	if value == nil {
+		return
+	}
+	switch ProviderID(strings.ToLower(strings.TrimSpace(value.ProviderID))) {
+	case AccountTypeCodex, AccountTypeClaude, AccountTypeGemini, AccountTypeAntigravity:
+		value.CacheSemantics = "inclusive"
+		if value.InputTokens > 0 {
+			share := float64(value.CachedTokens) * 100 / float64(value.InputTokens)
+			value.CacheReadSharePct = &share
+			if value.CachedTokens > value.InputTokens {
+				value.CacheDiagnostic = "cache_read_exceeds_inclusive_input"
+			}
+		}
+	case AccountTypeDeepSeek, AccountTypeZAI:
+		value.CacheSemantics = "exclusive"
+		total := value.InputTokens + value.CachedTokens + value.CacheWriteTokens
+		if total > 0 {
+			share := float64(value.CachedTokens) * 100 / float64(total)
+			value.CacheReadSharePct = &share
+		}
+	default:
+		value.CacheSemantics = "unknown"
+		if value.CachedTokens > 0 {
+			value.CacheDiagnostic = "normalization_unavailable"
+		}
+	}
+}
+
 func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageModelHourly, error) {
 	if s == nil || s.db == nil {
 		return []UsageModelHourly{}, nil
@@ -53,7 +99,7 @@ func (s *AnalyticsStore) getUsageDimensions(userID string, days int, includeConn
 	}
 	query := func(group, id, provider string) ([]UsageDimension, error) {
 		rows, queryErr := s.db.Query(fmt.Sprintf(`SELECT COALESCE(%s,''), COALESCE(%s,''), COUNT(*),
-			COALESCE(SUM(input_tokens),0), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(output_tokens),0),
+			COALESCE(SUM(input_tokens),0), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0), COALESCE(SUM(output_tokens),0),
 			COALESCE(SUM(reasoning_tokens),0), COALESCE(SUM(billable_tokens),0), COALESCE(SUM(cost_usd),0)
 			FROM usage_events WHERE %s GROUP BY %s ORDER BY SUM(billable_tokens) DESC`, id, provider, filter, group), args...)
 		if queryErr != nil {
@@ -63,12 +109,13 @@ func (s *AnalyticsStore) getUsageDimensions(userID string, days int, includeConn
 		out := []UsageDimension{}
 		for rows.Next() {
 			var value UsageDimension
-			if scanErr := rows.Scan(&value.ID, &value.ProviderID, &value.Requests, &value.InputTokens, &value.CachedTokens, &value.OutputTokens, &value.ReasoningTokens, &value.BillableTokens, &value.CostUSD); scanErr != nil {
+			if scanErr := rows.Scan(&value.ID, &value.ProviderID, &value.Requests, &value.InputTokens, &value.CachedTokens, &value.CacheWriteTokens, &value.OutputTokens, &value.ReasoningTokens, &value.BillableTokens, &value.CostUSD); scanErr != nil {
 				return nil, scanErr
 			}
 			if value.ID == "" {
 				value.ID = "unknown"
 			}
+			applyUsageCacheDiagnostics(&value)
 			out = append(out, value)
 		}
 		return out, rows.Err()

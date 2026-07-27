@@ -85,6 +85,40 @@ func TestConnectionSelectorDelegatesTypedAffinityAndExactSelection(t *testing.T)
 	}
 }
 
+func TestConnectionSelectorRollbackDisablesTypedAffinityWithoutLegacyFallback(t *testing.T) {
+	first := &ProviderConnection{ID: "a", Type: AccountTypeCodex, PlanType: "plus"}
+	bound := &ProviderConnection{ID: "z", Type: AccountTypeCodex, PlanType: "plus"}
+	pool := newProviderPool([]*ProviderConnection{first, bound}, false)
+	privateKey := "aff:v1:" + strings.Repeat("a", 64)
+	pool.bindAffinity(privateKey, bound.ID)
+	selector := NewConnectionSelector(pool)
+	selector.typedAffinityEnabled = false
+
+	context := RequestRoutingContext{Provider: AccountTypeCodex, Protocol: "openai_responses", CanonicalModel: "model", SoftAffinity: ClientAffinitySignal{Kind: AffinityPromptCacheKey}, AffinityKey: privateKey}
+	if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex, RoutingContext: context, ConversationID: privateKey}); got != first {
+		t.Fatalf("disabled affinity selected %v, want ordinary candidate %v", got, first)
+	}
+}
+
+func TestCodexBalancingRollbackUsesLegacyUnweightedSelection(t *testing.T) {
+	ordinary := &ProviderConnection{ID: "a", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1, secondarySet: true}}
+	cyber := &ProviderConnection{ID: "b", Type: AccountTypeCodex, PlanType: "plus", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.1, secondarySet: true}}
+	pool := newProviderPool([]*ProviderConnection{ordinary, cyber}, false)
+	pool.setRoutingFeatures(false)
+	selector := NewConnectionSelector(pool)
+	counts := map[string]int{}
+	for i := 0; i < 6; i++ {
+		got := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex})
+		if got == nil {
+			t.Fatal("nil selection")
+		}
+		counts[got.ID]++
+	}
+	if counts[ordinary.ID] != 3 || counts[cyber.ID] != 3 {
+		t.Fatalf("rollback selection=%v, want legacy unweighted rotation", counts)
+	}
+}
+
 func TestConnectionSelectorDelegatesCyberAndCooldownSelection(t *testing.T) {
 	ordinary := &ProviderConnection{Type: AccountTypeCodex, ID: "ordinary", PlanType: "pro"}
 	cyber := &ProviderConnection{Type: AccountTypeCodex, ID: "cyber", PlanType: "pro", CyberAccess: true}

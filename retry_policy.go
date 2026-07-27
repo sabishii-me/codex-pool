@@ -17,11 +17,16 @@ func (policy RetryPolicy) Attempts(providerConnections, totalConnections int) in
 	if attempts <= 0 {
 		attempts = 1
 	}
-	if providerConnections > attempts {
+	// ConfiguredAttempts is an operator safety cap, not a minimum. In
+	// particular, PROXY_MAX_ATTEMPTS=1 must guarantee one upstream attempt.
+	if providerConnections > 0 && attempts > providerConnections {
 		attempts = providerConnections
 	}
 	if totalConnections > 0 && attempts > totalConnections {
 		attempts = totalConnections
+	}
+	if attempts <= 0 {
+		return 1
 	}
 	return attempts
 }

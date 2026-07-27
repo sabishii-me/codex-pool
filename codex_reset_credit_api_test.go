@@ -55,7 +55,7 @@ func TestRedeemCodexResetCreditUsesBackendSelectedOwningCredit(t *testing.T) {
 	})}
 	response := httptest.NewRecorder()
 	h.redeemCodexResetCredit(response, httptest.NewRequest(http.MethodPost, "/", nil), connection.ID)
-	if response.Code != http.StatusOK || requests != 3 || !strings.Contains(response.Body.String(), `"refresh_complete":true`) {
+	if response.Code != http.StatusOK || requests != 3 || !strings.Contains(response.Body.String(), `"refresh_complete":true`) || !strings.Contains(response.Body.String(), `"dashboard_url":"`+codexResetCreditsDashboardURL+`"`) {
 		t.Fatalf("status=%d requests=%d body=%s", response.Code, requests, response.Body.String())
 	}
 }

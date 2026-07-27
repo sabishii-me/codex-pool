@@ -302,7 +302,7 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 			ManagementAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable,
 			InventoryRefreshAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable,
 			RedemptionAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
-			DashboardURL:              "https://chatgpt.com/",
+			DashboardURL:              codexResetCreditsDashboardURL,
 			Expirations:               make([]time.Time, 0, len(connection.RateLimitResetCredits)),
 		}
 		for _, credit := range connection.RateLimitResetCredits {

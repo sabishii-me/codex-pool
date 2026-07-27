@@ -20,7 +20,7 @@ describe("product truth boundary", () => {
 
   it("does not expose internal architecture narration as product copy", () => {
     const source = productFiles.map(path => readFileSync(path, "utf8")).join("\n");
-    expect(source).not.toMatch(/Optional fallback:|provider-state authority|provider-owned credits|managed in Production|canonical usage projection|authorized projection|waiting for the backend|current product architecture|does not imply persistence|backend will consume/i);
+    expect(source).not.toMatch(/Optional fallback:|provider-state authority|provider-owned credits|managed in Production|canonical usage projection|authorized projection|waiting for the backend|current product architecture|does not imply persistence|backend will consume|Runtime availability|Evidence source|Evidence retrieved|Measured totals|Session origin/i);
   });
 
   it("does not use browser-owned dialogs", () => {

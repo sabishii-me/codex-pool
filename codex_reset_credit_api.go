@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const codexResetCreditsDashboardURL = "https://chatgpt.com/codex/settings/usage"
+
 // refreshCodexResetCredits refreshes provider-owned inventory for one connection
 // without exposing provider credit identifiers to the browser.
 func (h *proxyHandler) refreshCodexResetCredits(w http.ResponseWriter, _ *http.Request, connectionID string) {
@@ -101,12 +103,12 @@ func (h *proxyHandler) redeemCodexResetCredit(w http.ResponseWriter, r *http.Req
 	if creditsErr != nil || usageErr != nil {
 		respondJSON(w, map[string]any{
 			"status": "redeemed", "code": code, "windows_reset": windowsReset,
-			"refresh_complete": false, "dashboard_url": "https://chatgpt.com/",
+			"refresh_complete": false, "dashboard_url": codexResetCreditsDashboardURL,
 		})
 		return
 	}
 	respondJSON(w, map[string]any{
 		"status": "redeemed", "code": code, "windows_reset": windowsReset,
-		"refresh_complete": true, "dashboard_url": "https://chatgpt.com/",
+		"refresh_complete": true, "dashboard_url": codexResetCreditsDashboardURL,
 	})
 }

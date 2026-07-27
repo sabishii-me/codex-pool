@@ -32,7 +32,7 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
       setFeedback({ tone: "error", text: error instanceof Error ? error.message : `${label} failed` });
     } finally { setOperation(null); }
   };
-  return <PageFrame kicker="Administration" title="Connections" description="Upstream accounts, capacity, and health.">
+  return <PageFrame kicker="Administration" title="Connections" description="Accounts, limits, and health.">
     <ResourceMessage state={state} loading="Loading provider connections" empty="No provider connections are configured" />
     {feedback ? <div className={`operation-feedback ${feedback.tone}`} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</div> : null}
     {state.status === "ready" ? <section className="connections-workspace">
@@ -52,15 +52,15 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
   const runtime = connectionRuntimePresentation(connection);
   const total = (key: string) => Number(connection.totals[key] ?? 0).toLocaleString();
   return <aside className="connection-detail" aria-label="Connection detail">
-    <header><div><span>Connection detail</span><h2>{connection.identity.display_name || connection.provider_id}</h2><code>{connection.public_id}</code></div><button className="icon-button" aria-label="Close connection detail" onClick={onClose}>×</button></header>
+    <header><div><span>Connection detail</span><h2>{connection.identity.display_name || connection.provider_id}</h2><small className="connection-public-id">Connection ID · <code>{connection.public_id}</code></small></div><button className="icon-button" aria-label="Close connection detail" onClick={onClose}>×</button></header>
     {editing ? <form className="connection-rename" onSubmit={event => { event.preventDefault(); void onRun("Rename", () => renameProviderConnection(connection.id, name)).then(() => setEditing(false)); }}><label><span>Display name</span><input autoFocus maxLength={120} value={name} onChange={event => setName(event.target.value)} /></label><div><button type="button" className="secondary-button" onClick={() => setEditing(false)}>Cancel</button><button className="primary-button" disabled={busy || !name.trim()}>Save name</button></div></form> : <button className="text-action" onClick={() => setEditing(true)}>Rename connection</button>}
-    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} />{connection.plan_type ? <Fact label="Plan" value={connection.plan_type} /> : null}<Fact label="Runtime state" value={runtime.label} /><Fact label="Lifecycle" value={connection.disabled ? "Disabled" : "Enabled"} /><Fact label="In flight" value={String(connection.inflight)} /><Fact label="Primary" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Provider verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Last refresh" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Credential expiry" value={formatTimestamp(connection.expires_at)} /> : null}</div>
-    {connection.runtime.status_detail ? <div className={`connection-health-error ${connection.runtime.status === "healthy" ? "" : "active"}`}><b>Runtime evidence</b><p>{connection.runtime.status_detail}</p></div> : null}
-    {connection.health_error ? <div className="connection-health-error"><b>Current health error</b><p>{connection.health_error}</p></div> : null}
-    {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Provider identity</h3>{connection.identity.external_subject ? <Fact label="External subject" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={key.replaceAll("_", " ")} value={value} />)}</section> : null}
-    <section><h3>Runtime availability</h3><div className="connection-totals">{runtimeQuotaFacts(connection).map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section>
+    <div className="connection-facts"><Fact label="Provider" value={connection.provider_id} />{connection.plan_type ? <Fact label="Plan" value={connection.plan_type} /> : null}<Fact label="Status" value={runtime.label} /><Fact label="Enabled" value={connection.disabled ? "No" : "Yes"} /><Fact label="Active requests" value={String(connection.inflight)} /><Fact label="Primary connection" value={connection.is_primary ? "Yes" : "No"} />{connection.needs_verification ? <Fact label="Account verification" value="Required" /> : null}{connection.last_refresh && !connection.last_refresh.startsWith("0001-") ? <Fact label="Credentials refreshed" value={formatTimestamp(connection.last_refresh)} /> : null}{connection.expires_at && !connection.expires_at.startsWith("0001-") ? <Fact label="Access expires" value={formatTimestamp(connection.expires_at)} /> : null}</div>
+    {connection.runtime.status_detail ? <div className={`connection-health-error ${connection.runtime.status === "healthy" ? "" : "active"}`}><b>Status details</b><p>{presentStatusDetail(connection)}</p></div> : null}
+    {connection.health_error ? <div className="connection-health-error"><b>Connection error</b><p>{connection.health_error}</p></div> : null}
+    {connection.identity.external_subject || Object.keys(connection.identity.attributes ?? {}).length ? <section className="connection-identity"><h3>Account details</h3>{connection.identity.external_subject ? <Fact label="Provider account ID" value={connection.identity.external_subject} /> : null}{Object.entries(connection.identity.attributes ?? {}).map(([key, value]) => <Fact key={key} label={accountAttributeLabel(key)} value={value} />)}</section> : null}
+    <section><h3>Rate limits</h3><div className="connection-totals">{runtimeQuotaFacts(connection).map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section>
     {connection.provider_id === "codex" ? <ResetCreditsPanel connection={connection} busy={busy} operation={operation} confirmOpen={confirmReset} onConfirmOpenChange={setConfirmReset} onRun={onRun} /> : null}
-    <section><h3>Measured totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
+    <section><h3>Usage totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
     <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
   </aside>;
 }
@@ -76,13 +76,16 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
   const available = credits.available_count > 0;
   const managedHere = credits.management_available;
   const state = !managedHere
-    ? null
+    ? !credits.known
+      ? { tone: "unknown", eyebrow: "Status unavailable", title: "Reset credits", description: "Reset-credit status could not be checked." }
+      : available
+        ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is available" : "Reset credits are available", description: "Redemption is not available from this gateway." }
+        : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "No reset credit was reported for this account." }
     : !credits.known
       ? { tone: "unknown", eyebrow: "Not checked", title: "Reset credits", description: "Check Codex for available credits." }
       : available
       ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is ready" : "Reset credits are ready", description: "A credit can reset eligible Codex rate-limit windows for this connection." }
       : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "Codex has not reported an available reset credit for this connection." };
-  if (!state) return <a className="reset-credit-standalone-link" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>;
   return <section className={`reset-credit-card ${state.tone}`} aria-labelledby={`reset-credit-${connection.public_id}`}>
     <header className="reset-credit-heading">
       <div className="reset-credit-icon" aria-hidden="true">↻</div>
@@ -95,12 +98,19 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
     <footer className="reset-credit-actions">
       {credits.inventory_refresh_available ? <button className={available ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => void onRun("Check reset credits", () => mutateProviderConnection(connection.id, "refresh-reset-credits"))}>{operation === "Check reset credits" ? "Checking…" : credits.known ? "Check again" : "Check for credits"}</button> : null}
       {available && credits.redemption_available ? <ConfirmDialog open={confirmOpen} onOpenChange={onConfirmOpenChange} title="Redeem Codex reset credit?" description="The earliest-expiring credit will be used and quota will be refreshed. This cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => onConfirmOpenChange(false))}><button className="primary-button" disabled={busy}>{operation === "Redeem reset credit" ? "Redeeming…" : "Redeem now"}</button></ConfirmDialog> : null}
-      {available && !credits.redemption_available && managedHere ? <span className="reset-credit-readonly">Redemption unavailable</span> : null}
-      <a className="reset-credit-fallback" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>
+      {available && !credits.redemption_available ? <span className="reset-credit-readonly">Redeem unavailable</span> : null}
+      <a className="reset-credit-fallback" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open Codex usage <span aria-hidden="true">↗</span></a>
     </footer>
   </section>;
 }
 
+function presentStatusDetail(connection: OperatorProviderConnectionV2) {
+  let detail = connection.runtime.status_detail ?? "";
+  const primary = limitName(connection.runtime.primary_window_minutes, "Short-term limit");
+  const secondary = limitName(connection.runtime.secondary_window_minutes, "Long-term limit");
+  detail = detail.replace(/primary quota/gi, primary).replace(/secondary quota/gi, secondary).replace(/quota/gi, "limit");
+  return detail;
+}
 function connectionRuntimePresentation(connection: OperatorProviderConnectionV2): { label: string; tone: "success" | "warning"; summary: string } {
   const labels: Record<string, string> = { healthy: "Healthy", degraded: "Degraded", cooldown: "Cooldown", disabled: "Disabled", dead: "Dead", verification_required: "Verify" };
   const status = connection.runtime.status;
@@ -111,20 +121,34 @@ function connectionRuntimePresentation(connection: OperatorProviderConnectionV2)
   return {
     label: labels[status] ?? status,
     tone: status === "healthy" ? "success" : "warning",
-    summary: `${connection.runtime.status_detail || quotaSummary}${resetSummary}`,
+    summary: `${connection.runtime.status_detail ? presentStatusDetail(connection) : quotaSummary}${resetSummary}`,
   };
 }
 function runtimeQuotaFacts(connection: OperatorProviderConnectionV2): Array<{ label: string; value: string }> {
   const runtime = connection.runtime;
-  const facts: Array<{ label: string; value: string }> = [{ label: "State", value: connectionRuntimePresentation(connection).label }];
-  if (runtime.primary_used_percent !== undefined) facts.push({ label: runtime.primary_window_minutes ? `${formatWindow(runtime.primary_window_minutes)} used` : "Primary used", value: `${runtime.primary_used_percent.toFixed(1)}%` });
-  if (runtime.primary_reset_at) facts.push({ label: "Primary reset", value: formatTimestamp(runtime.primary_reset_at) });
-  if (runtime.secondary_used_percent !== undefined) facts.push({ label: runtime.secondary_window_minutes ? `${formatWindow(runtime.secondary_window_minutes)} used` : "Secondary used", value: `${runtime.secondary_used_percent.toFixed(1)}%` });
-  if (runtime.secondary_reset_at) facts.push({ label: "Secondary reset", value: formatTimestamp(runtime.secondary_reset_at) });
-  if (runtime.rate_limit_until) facts.push({ label: "Cooldown until", value: formatTimestamp(runtime.rate_limit_until) });
-  if (runtime.usage_source) facts.push({ label: "Evidence source", value: runtime.usage_source });
-  if (runtime.usage_retrieved_at) facts.push({ label: "Evidence retrieved", value: formatTimestamp(runtime.usage_retrieved_at) });
+  const facts: Array<{ label: string; value: string }> = [];
+  const addWindow = (used: number | undefined, minutes: number | undefined, resetAt: string | undefined, fallback: string) => {
+    if (used === undefined && !resetAt) return;
+    const name = limitName(minutes, fallback);
+    if (used !== undefined) facts.push({ label: `${name} used`, value: `${used.toFixed(1)}%` });
+    if (resetAt) facts.push({ label: `${name} resets`, value: formatTimestamp(resetAt) });
+  };
+  addWindow(runtime.primary_used_percent, runtime.primary_window_minutes, runtime.primary_reset_at, "Short-term limit");
+  addWindow(runtime.secondary_used_percent, runtime.secondary_window_minutes, runtime.secondary_reset_at, "Long-term limit");
+  if (runtime.rate_limit_until) facts.push({ label: "Available again", value: formatTimestamp(runtime.rate_limit_until) });
+  if (!facts.length) facts.push({ label: "Limit information", value: "Unavailable" });
   return facts;
+}
+function limitName(minutes: number | undefined, fallback: string) {
+  if (!minutes) return fallback;
+  if (minutes === 300) return "5-hour limit";
+  if (minutes === 10080) return "Weekly limit";
+  if (minutes >= 40320 && minutes <= 44640) return "Monthly limit";
+  return `${formatWindow(minutes)} limit`;
+}
+function accountAttributeLabel(key: string) {
+  const labels: Record<string, string> = { email: "Email", region: "Region", account_id: "Account ID", organization_id: "Organization ID", workspace_id: "Workspace ID" };
+  return labels[key] ?? key.replaceAll("_", " ");
 }
 function formatWindow(minutes: number) { if (minutes % 10080 === 0) return `${minutes / 10080}w window`; if (minutes % 1440 === 0) return `${minutes / 1440}d window`; if (minutes % 60 === 0) return `${minutes / 60}h window`; return `${minutes}m window`; }
 export function formatRelativeTimestamp(value: string) {

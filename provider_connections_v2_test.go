@@ -40,6 +40,9 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || got.ResetCredits.ManagementAvailable || got.ResetCredits.InventoryRefreshAvailable || got.ResetCredits.RedemptionAvailable {
 		t.Fatalf("reset credit projection = %#v", got.ResetCredits)
 	}
+	if got.ResetCredits.DashboardURL != codexResetCreditsDashboardURL {
+		t.Fatalf("reset credit dashboard URL = %q", got.ResetCredits.DashboardURL)
+	}
 	body := recorder.Body.String()
 	for _, forbidden := range []string{"account_id", "account_email", "id_token_chatgpt_account_id", "upstream_account_id"} {
 		if strings.Contains(body, forbidden) {

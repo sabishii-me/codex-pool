@@ -759,7 +759,7 @@ func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 	}
 
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodPost, "/backend-api/codex/responses", bytes.NewBufferString(`{"model":"gpt-5.5","input":"hi"}`))
+		req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"gpt-5.5","input":"hi"}`))
 		req.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("test-secret", "user-1"))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("session_id", "thread-cyber")
@@ -770,8 +770,8 @@ func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 		}
 	}
 
-	if len(accounts) != 2 || accounts[0] != "acct_ordinary" || accounts[1] != "acct_cyber" {
-		t.Fatalf("accounts = %#v, want ordinary then cyber", accounts)
+	if len(accounts) != 3 || accounts[0] != "acct_ordinary" || accounts[1] != "acct_cyber" || accounts[2] != "acct_cyber" {
+		t.Fatalf("accounts = %#v, want ordinary/cyber retry then cyber affinity", accounts)
 	}
 }
 
@@ -1170,7 +1170,7 @@ func TestClaudePremiumRequestSkipsPinnedProAccount(t *testing.T) {
 	pro := &Account{Type: AccountTypeClaude, ID: "pro", PlanType: "pro"}
 	team := &Account{Type: AccountTypeClaude, ID: "team", PlanType: "team"}
 	pool := newProviderPool([]*Account{pro, team}, false)
-	pool.pin("conv", pro.ID)
+	pool.bindAffinity("conv", pro.ID)
 
 	got := pool.candidate("conv", nil, AccountTypeClaude, "claude_premium", "")
 	if got == nil {

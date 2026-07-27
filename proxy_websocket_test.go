@@ -132,13 +132,9 @@ func TestProxyWebSocketPoolRewritesAuthAndPinsSession(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timed out waiting for upstream websocket request")
 	}
-
-	if got := extractConversationIDFromHeaders(http.Header{"Session_id": []string{"thread-ws-1"}}); got != "thread-ws-1" {
-		t.Fatalf("extractConversationIDFromHeaders = %q, want %q", got, "thread-ws-1")
-	}
 }
 
-func TestProxyWebSocketUsesPinnedAccountBeforeCyberPolicy(t *testing.T) {
+func TestProxyWebSocketDoesNotConsumeRawSessionBindingBeforeModelResolution(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "test-secret")
 
 	upstreamAccountID := make(chan string, 1)
@@ -158,9 +154,12 @@ func TestProxyWebSocketUsesPinnedAccountBeforeCyberPolicy(t *testing.T) {
 	registry := NewProviderRegistry(codex, claude, gemini)
 
 	ordinary := &Account{Type: AccountTypeCodex, ID: "ordinary", AccessToken: "ordinary-token", AccountID: "acct_ordinary", PlanType: "pro"}
-	cyber := &Account{Type: AccountTypeCodex, ID: "cyber", AccessToken: "cyber-token", AccountID: "acct_cyber", PlanType: "pro", CyberAccess: true}
+	cyber := &Account{Type: AccountTypeCodex, ID: "cyber", AccessToken: "cyber-token", AccountID: "acct_cyber", PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5, secondarySet: true}}
 	pool := newProviderPool([]*Account{ordinary, cyber}, false)
-	pool.pin("thread-ws-cyber", "ordinary")
+	pool.bindAffinity("thread-ws-cyber", "ordinary")
+	// The raw compatibility binding must not control typed WebSocket selection.
+	// Keep cyber less competitive so the expected ordinary selection is based on
+	// scheduler telemetry rather than the raw session value.
 
 	h := &proxyHandler{
 		cfg:       &config{requestTimeout: 5 * time.Second, maxInMemoryBodyBytes: 1024},
@@ -189,6 +188,9 @@ func TestProxyWebSocketUsesPinnedAccountBeforeCyberPolicy(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timed out waiting for upstream websocket request")
+	}
+	if binding := pool.convPin["thread-ws-cyber"]; binding.AccountID != "ordinary" {
+		t.Fatalf("raw WebSocket binding changed = %+v", binding)
 	}
 }
 

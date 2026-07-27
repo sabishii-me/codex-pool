@@ -279,7 +279,7 @@ func TestCodexWebSocketCompletionRecordsUsageOnce(t *testing.T) {
 // 1) Cyber policy mid-stream triggers a silent swap. Client never sees
 // the policy frame; the cyber upstream receives a replayed
 // response.create; the conversation gets pinned to the cyber account.
-func TestCyberPolicyMidStreamSwapsSilently(t *testing.T) {
+func TestCyberPolicyMidStreamSwapsWithoutRawWebSocketAffinity(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "test-secret")
 
 	upstream := newFakeCodexUpstream(t)
@@ -311,9 +311,9 @@ func TestCyberPolicyMidStreamSwapsSilently(t *testing.T) {
 
 	upURL, _ := url.Parse(upstream.server.URL)
 	shiv := &Account{Type: AccountTypeCodex, ID: "shiv", AccessToken: "shiv-token", AccountID: "acct_shiv", PlanType: "pro"}
-	darv := &Account{Type: AccountTypeCodex, ID: "darv", AccessToken: "darv-token", AccountID: "acct_darv", PlanType: "pro", CyberAccess: true}
+	darv := &Account{Type: AccountTypeCodex, ID: "darv", AccessToken: "darv-token", AccountID: "acct_darv", PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5, secondarySet: true}}
 	fx := newCodexProxyFixture(t, upURL, []*Account{shiv, darv})
-	fx.handler.pool.pin("conv-mid", "shiv")
+	fx.handler.pool.bindAffinity("conv-mid", "shiv")
 
 	conn := dialClientWS(t, fx, http.Header{
 		"Authorization": []string{"Bearer " + generateClaudePoolToken("test-secret", "mid-user")},
@@ -331,11 +331,14 @@ func TestCyberPolicyMidStreamSwapsSilently(t *testing.T) {
 		t.Fatalf("cyber account never got the replayed response.create")
 	}
 
+	// WebSocket selection cannot safely activate a model-namespaced client
+	// affinity before response.create is read, so the legacy raw binding is
+	// neither consumed nor rewritten by the typed path.
 	fx.handler.pool.mu.RLock()
-	pinned := fx.handler.pool.convPin["conv-mid"]
+	pinned := fx.handler.pool.convPin["conv-mid"].AccountID
 	fx.handler.pool.mu.RUnlock()
-	if pinned != "darv" {
-		t.Fatalf("conversation pin = %q, want darv", pinned)
+	if pinned != "shiv" {
+		t.Fatalf("legacy compatibility binding changed = %q, want shiv", pinned)
 	}
 
 	snap := fx.handler.metrics.cyberPolicySnapshot()
@@ -380,9 +383,9 @@ func TestMetadataRecommendationIsNoOp(t *testing.T) {
 
 	upURL, _ := url.Parse(upstream.server.URL)
 	shiv := &Account{Type: AccountTypeCodex, ID: "shiv", AccessToken: "shiv-token", AccountID: "acct_shiv", PlanType: "pro"}
-	darv := &Account{Type: AccountTypeCodex, ID: "darv", AccessToken: "darv-token", AccountID: "acct_darv", PlanType: "pro", CyberAccess: true}
+	darv := &Account{Type: AccountTypeCodex, ID: "darv", AccessToken: "darv-token", AccountID: "acct_darv", PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5, secondarySet: true}}
 	fx := newCodexProxyFixture(t, upURL, []*Account{shiv, darv})
-	fx.handler.pool.pin("conv-meta", "shiv")
+	fx.handler.pool.bindAffinity("conv-meta", "shiv")
 
 	conn := dialClientWS(t, fx, http.Header{
 		"Authorization": []string{"Bearer " + generateClaudePoolToken("test-secret", "meta-user")},
@@ -405,7 +408,7 @@ func TestMetadataRecommendationIsNoOp(t *testing.T) {
 	}
 
 	fx.handler.pool.mu.RLock()
-	pinned := fx.handler.pool.convPin["conv-meta"]
+	pinned := fx.handler.pool.convPin["conv-meta"].AccountID
 	fx.handler.pool.mu.RUnlock()
 	if pinned != "shiv" {
 		t.Fatalf("pin = %q, want shiv (no swap)", pinned)
@@ -415,7 +418,7 @@ func TestMetadataRecommendationIsNoOp(t *testing.T) {
 // 3) cyber_policy that arrives on an account already marked
 // CyberAccess: there's nowhere to swap to, so the upstream's real
 // cyber_policy frame is forwarded to the client unchanged. We never
-// fabricate assistant text. The conversation pin stays put.
+// fabricate assistant text. The explicit internal affinity binding stays put.
 func TestCyberPolicyOnCyberAccountForwardsUpstreamFrame(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "test-secret")
 
@@ -432,7 +435,7 @@ func TestCyberPolicyOnCyberAccountForwardsUpstreamFrame(t *testing.T) {
 	upURL, _ := url.Parse(upstream.server.URL)
 	darv := &Account{Type: AccountTypeCodex, ID: "darv", AccessToken: "darv-token", AccountID: "acct_darv", PlanType: "pro", CyberAccess: true}
 	fx := newCodexProxyFixture(t, upURL, []*Account{darv})
-	fx.handler.pool.pin("conv-cy", "darv")
+	fx.handler.pool.bindAffinity("conv-cy", "darv")
 
 	conn := dialClientWS(t, fx, http.Header{
 		"Authorization": []string{"Bearer " + generateClaudePoolToken("test-secret", "cy-user")},
@@ -449,10 +452,10 @@ func TestCyberPolicyOnCyberAccountForwardsUpstreamFrame(t *testing.T) {
 
 	// Account stayed at darv — no swap occurred.
 	fx.handler.pool.mu.RLock()
-	pinned := fx.handler.pool.convPin["conv-cy"]
+	pinned := fx.handler.pool.convPin["conv-cy"].AccountID
 	fx.handler.pool.mu.RUnlock()
 	if pinned != "darv" {
-		t.Fatalf("pool pin = %q, want darv (no swap)", pinned)
+		t.Fatalf("affinity binding = %q, want darv (no swap)", pinned)
 	}
 
 	conn.CloseNow()
@@ -486,7 +489,7 @@ func TestCyberPolicyWithoutCyberCandidateForwardsUpstreamFrame(t *testing.T) {
 	upURL, _ := url.Parse(upstream.server.URL)
 	shiv := &Account{Type: AccountTypeCodex, ID: "shiv", AccessToken: "shiv-token", AccountID: "acct_shiv", PlanType: "pro"}
 	fx := newCodexProxyFixture(t, upURL, []*Account{shiv})
-	fx.handler.pool.pin("conv-no-cy", "shiv")
+	fx.handler.pool.bindAffinity("conv-no-cy", "shiv")
 
 	conn := dialClientWS(t, fx, http.Header{
 		"Authorization": []string{"Bearer " + generateClaudePoolToken("test-secret", "nocy-user")},

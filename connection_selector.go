@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -12,17 +15,40 @@ const (
 )
 
 type weightedConnectionCandidate struct {
-	connection  *ProviderConnection
-	score       float64
-	cyberAccess bool
+	connection   *ProviderConnection
+	score        float64
+	cyberAccess  bool
+	telemetrySet bool
 }
 
 // selectQuotaCompetitiveConnection applies ordinary Codex routing fairness
 // after the pool has enforced eligibility, tier, quota, and health policy.
-// Explicit cyber-policy retries never call this function.
+// Known telemetry is preferred; unknown-only sets retain deterministic bounded
+// exploration. Explicit cyber-policy retries never call this function.
 func selectQuotaCompetitiveConnection(candidates []weightedConnectionCandidate, sequence uint64) *ProviderConnection {
 	if len(candidates) == 0 {
 		return nil
+	}
+	valid := make([]weightedConnectionCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.connection != nil {
+			valid = append(valid, candidate)
+		}
+	}
+	if len(valid) == 0 {
+		return nil
+	}
+	candidates = valid
+	knownTelemetry := make([]weightedConnectionCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.telemetrySet {
+			knownTelemetry = append(knownTelemetry, candidate)
+		}
+	}
+	// Unknown telemetry is not free capacity. Prefer valid observations when
+	// available; an all-unknown pool still receives bounded deterministic use.
+	if len(knownTelemetry) > 0 {
+		candidates = knownTelemetry
 	}
 	bestScore := candidates[0].score
 	for _, candidate := range candidates[1:] {
@@ -33,7 +59,7 @@ func selectQuotaCompetitiveConnection(candidates []weightedConnectionCandidate, 
 	minimumScore := bestScore - competitiveRoutingScoreWindow
 	competitive := make([]weightedConnectionCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		if candidate.connection != nil && candidate.score >= minimumScore {
+		if candidate.score >= minimumScore {
 			competitive = append(competitive, candidate)
 		}
 	}
@@ -79,7 +105,8 @@ type ConnectionSelection struct {
 	Mode           ConnectionSelectionMode
 	ProviderID     ProviderID
 	ConnectionID   string
-	ConversationID string
+	RoutingContext RequestRoutingContext
+	ConversationID string // compatibility affinity key for explicit internal/Antigravity callers
 	RequiredPlan   string
 	ClientIP       string
 	Model          string
@@ -90,7 +117,9 @@ type ConnectionSelection struct {
 }
 
 // ConnectionSelector owns the boundary between request routing and pool
-// scoring/pinning. The existing score engine remains unchanged behind it.
+// scoring/affinity. Protocol-owned callers pass RequestRoutingContext; the
+// compatibility ConversationID field remains only for explicit internal model
+// executors until their typed profiles land.
 type ConnectionSelector struct {
 	pool *ProviderPool
 }
@@ -133,8 +162,43 @@ func (selector *ConnectionSelector) Select(request ConnectionSelection) *Provide
 				selector.pool.excludeInflightWhenIdleAvailable(request.ProviderID, exclude)
 			}
 		}
-		return selector.pool.candidate(request.ConversationID, exclude, request.ProviderID, request.RequiredPlan, request.ClientIP)
+		routingContext := request.RoutingContext
+		// Ordinary protocol-owned affinity must be the private versioned form and
+		// must agree with the selected provider/protocol. Compatibility identity is
+		// considered only when no typed context was supplied.
+		affinityKey := routingContext.AffinityKey
+		// Any context field means the caller chose the typed boundary. Inactive or
+		// invalid typed contexts must never fall back to an untyped identity.
+		typedContextSupplied := routingContext.AffinityKey != "" || routingContext.Provider != "" || routingContext.Protocol != "" || routingContext.CanonicalModel != "" || routingContext.SoftAffinity.Value != ""
+		if affinityKey != "" && !routingContextMatchesSelection(routingContext, request.ProviderID) {
+			affinityKey = ""
+		}
+		if affinityKey == "" && !typedContextSupplied {
+			affinityKey = request.ConversationID
+		}
+		return selector.pool.candidate(affinityKey, exclude, request.ProviderID, request.RequiredPlan, request.ClientIP)
 	}
+}
+
+func isPrivateAffinityKey(value string) bool {
+	const prefix = "aff:v1:"
+	if len(value) != len(prefix)+sha256.Size*2 || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	_, err := hex.DecodeString(value[len(prefix):])
+	return err == nil
+}
+
+func routingContextMatchesSelection(context RequestRoutingContext, providerID ProviderID) bool {
+	if !isPrivateAffinityKey(context.AffinityKey) {
+		return false
+	}
+	provider := ProviderID(strings.ToLower(strings.TrimSpace(string(context.Provider))))
+	protocol := strings.ToLower(strings.TrimSpace(context.Protocol))
+	model := strings.TrimSpace(context.CanonicalModel)
+	kind := AffinityKind(strings.ToLower(strings.TrimSpace(string(context.SoftAffinity.Kind))))
+	providerID = ProviderID(strings.ToLower(strings.TrimSpace(string(providerID))))
+	return provider == providerID && model != "" && recognizedAffinityProtocol(protocol) && recognizedAffinityKind(kind) && affinityKindAllowedForProtocolProvider(protocol, provider, kind)
 }
 
 func copyConnectionExclusions(source map[string]bool) map[string]bool {

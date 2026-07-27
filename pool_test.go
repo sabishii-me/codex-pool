@@ -2,11 +2,21 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+func TestScoreDoesNotRewardGlobalRecentUse(t *testing.T) {
+	now := time.Now()
+	recent := &Account{Type: AccountTypeCodex, PlanType: "plus", LastUsed: now.Add(-time.Minute), Usage: UsageSnapshot{SecondaryUsedPercent: 0.2, secondarySet: true}}
+	idle := &Account{Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.2, secondarySet: true}}
+	if got, want := scoreAccountLocked(recent, now), scoreAccountLocked(idle, now); got != want {
+		t.Fatalf("recent unbound score=%v, idle=%v; cache locality belongs to typed affinity", got, want)
+	}
+}
 
 func TestScorePrefersHeadroomAndPlan(t *testing.T) {
 	now := time.Now()
@@ -63,17 +73,115 @@ func TestPenaltyDecay(t *testing.T) {
 	}
 }
 
-func TestCandidateUsesPinUnlessExcluded(t *testing.T) {
+func TestProviderPoolReplaceClearsLocalAffinity(t *testing.T) {
+	pool := newProviderPool(nil, false)
+	if !pool.bindAffinity("aff", "account") {
+		t.Fatal("expected affinity assignment")
+	}
+	pool.replace(nil)
+	if len(pool.convPin) != 0 {
+		t.Fatalf("reload retained local affinity: %+v", pool.convPin)
+	}
+}
+
+func TestBindAffinityReassignsAtomically(t *testing.T) {
+	pool := newProviderPool(nil, false)
+	if !pool.bindAffinity("aff", "first") || !pool.bindAffinity("aff", "second") {
+		t.Fatal("expected affinity assignment")
+	}
+	if binding := pool.convPin["aff"]; binding.AccountID != "second" || binding.TouchedAt.IsZero() {
+		t.Fatalf("atomic rebind=%+v", binding)
+	}
+}
+
+func TestBindAffinityBoundsStore(t *testing.T) {
+	if providerAffinityMaxEntries > 20000 {
+		t.Skip("store bound is too large for a unit allocation test")
+	}
+	pool := newProviderPool(nil, false)
+	if pool.bindAffinity("", "account") || pool.bindAffinity("aff", "") {
+		t.Fatal("empty affinity assignment should be rejected")
+	}
+	pool.convPin["expired"] = affinityBinding{AccountID: "account", TouchedAt: time.Now().Add(-providerAffinityTTL - time.Minute)}
+	for index := 0; index < providerAffinityMaxEntries+10; index++ {
+		if !pool.bindAffinity(fmt.Sprintf("aff-%d", index), "account") {
+			t.Fatalf("affinity %d was rejected", index)
+		}
+	}
+	if got := len(pool.convPin); got != providerAffinityMaxEntries {
+		t.Fatalf("affinity entries=%d, want bounded %d", got, providerAffinityMaxEntries)
+	}
+	if _, exists := pool.convPin["expired"]; exists {
+		t.Fatal("bounded-store cleanup retained expired affinity")
+	}
+}
+
+func TestCandidateBreaksDeletedAffinityOwner(t *testing.T) {
+	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
+	pool := newProviderPool([]*Account{healthy}, false)
+	pool.bindAffinity("aff", "deleted")
+	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
+		t.Fatalf("candidate=%v, want healthy after deleted owner", got)
+	}
+	if binding, exists := pool.convPin["aff"]; exists && binding.AccountID != healthy.ID {
+		t.Fatalf("deleted-owner affinity was not safely rebound: %+v", binding)
+	}
+}
+
+func TestCandidateBreaksDeadAffinity(t *testing.T) {
+	dead := &Account{ID: "dead", Type: AccountTypeCodex, PlanType: "plus", Dead: true}
+	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
+	pool := newProviderPool([]*Account{dead, healthy}, false)
+	pool.bindAffinity("aff", dead.ID)
+	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
+		t.Fatalf("candidate=%v, want healthy after dead binding", got)
+	}
+	if binding, exists := pool.convPin["aff"]; exists && binding.AccountID == dead.ID {
+		t.Fatalf("dead affinity was not broken: %+v", binding)
+	}
+}
+
+func TestCandidateBreaksDisabledAffinity(t *testing.T) {
+	disabled := &Account{ID: "disabled", Type: AccountTypeCodex, PlanType: "plus", Disabled: true}
+	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
+	pool := newProviderPool([]*Account{disabled, healthy}, false)
+	pool.bindAffinity("aff", disabled.ID)
+	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
+		t.Fatalf("candidate=%v, want healthy after disabled binding", got)
+	}
+	if binding, exists := pool.convPin["aff"]; exists && binding.AccountID != healthy.ID {
+		t.Fatalf("disabled affinity was not safely rebound: %+v", binding)
+	}
+}
+
+func TestCandidateExpiresStaleAffinity(t *testing.T) {
+	stale := &Account{ID: "stale", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.6, primarySet: true}}
+	fresh := &Account{ID: "fresh", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, primarySet: true}}
+	pool := newProviderPool([]*Account{stale, fresh}, false)
+	pool.convPin["aff"] = affinityBinding{AccountID: stale.ID, TouchedAt: time.Now().Add(-providerAffinityTTL - time.Minute)}
+
+	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != fresh {
+		t.Fatalf("candidate=%v, want fresh after stale affinity expires", got)
+	}
+	if binding, exists := pool.convPin["aff"]; exists && binding.AccountID != fresh.ID {
+		t.Fatalf("expired affinity was not safely rebound: %+v", binding)
+	}
+}
+
+func TestCandidateUsesAffinityUnlessExcluded(t *testing.T) {
 	a1 := &Account{ID: "a1", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	a2 := &Account{ID: "a2", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
 	p := newProviderPool([]*Account{a1, a2}, true)
-	p.pin("c1", "a1")
+	p.bindAffinity("c1", "a1")
 
 	if got := p.candidate("c1", nil, "", "", ""); got == nil || got.ID != "a1" {
-		t.Fatalf("expected pinned a1, got %+v", got)
+		t.Fatalf("expected bound a1, got %+v", got)
 	}
 	if got := p.candidate("c1", map[string]bool{"a1": true}, "", "", ""); got == nil || got.ID != "a2" {
-		t.Fatalf("expected a2 when pinned excluded, got %+v", got)
+		t.Fatalf("expected a2 when bound account excluded, got %+v", got)
+	}
+	if binding := p.convPin["c1"]; binding.AccountID != "a1" {
+		t.Fatalf("request-local retry exclusion destroyed affinity: %+v", binding)
 	}
 }
 
@@ -104,7 +212,20 @@ func TestCandidateSkipsRateLimitedCodexAccount(t *testing.T) {
 	}
 }
 
-func TestCandidateUnpinsRateLimitedCodexAccount(t *testing.T) {
+func TestCandidateBreaksHardQuotaAffinity(t *testing.T) {
+	exhausted := &Account{ID: "exhausted", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 1, secondarySet: true}}
+	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1, secondarySet: true}}
+	pool := newProviderPool([]*Account{exhausted, healthy}, false)
+	pool.bindAffinity("aff", exhausted.ID)
+	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
+		t.Fatalf("candidate=%v, want healthy after hard quota", got)
+	}
+	if binding, exists := pool.convPin["aff"]; exists && binding.AccountID == exhausted.ID {
+		t.Fatalf("hard-quota affinity was not broken: %+v", binding)
+	}
+}
+
+func TestCandidateBreaksRateLimitedCodexAffinity(t *testing.T) {
 	rateLimited := &Account{
 		ID:             "limited",
 		Type:           AccountTypeCodex,
@@ -113,10 +234,13 @@ func TestCandidateUnpinsRateLimitedCodexAccount(t *testing.T) {
 	}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro"}
 	pool := newProviderPool([]*Account{rateLimited, healthy}, false)
-	pool.pin("conversation", rateLimited.ID)
+	pool.bindAffinity("conversation", rateLimited.ID)
 
 	if got := pool.candidate("conversation", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate = %v, want healthy account", got)
+	}
+	if binding, exists := pool.convPin["conversation"]; exists && binding.AccountID == rateLimited.ID {
+		t.Fatalf("cooldown affinity was not broken: %+v", binding)
 	}
 }
 
@@ -131,16 +255,18 @@ func TestCandidateRequiredPlanFiltersAccounts(t *testing.T) {
 	}
 }
 
-func TestCodexProLiteHasProAccessAndTier(t *testing.T) {
+func TestCodexPlansShareOrdinaryCapacityTier(t *testing.T) {
+	for _, plan := range []string{"plus", "pro", "prolite", "PROLITE", " ProLite "} {
+		if got := accountTier(AccountTypeCodex, plan); got != 2 {
+			t.Fatalf("accountTier(codex, %q) = %d, want ordinary capacity tier 2", plan, got)
+		}
+	}
 	for _, plan := range []string{"prolite", "PROLITE", " ProLite "} {
 		if !isCodexProAccessPlan(plan) {
 			t.Fatalf("expected %q to have Codex Pro access", plan)
 		}
 		if !planMatchesRequired(plan, "pro") {
 			t.Fatalf("expected %q to satisfy a Pro plan requirement", plan)
-		}
-		if got := accountTier(AccountTypeCodex, plan); got != 1 {
-			t.Fatalf("accountTier(codex, %q) = %d, want 1", plan, got)
 		}
 	}
 }
@@ -156,15 +282,15 @@ func TestCandidateUsesCodexProLiteAlongsidePro(t *testing.T) {
 	}
 }
 
-func TestCandidateKeepsPinnedCodexProLite(t *testing.T) {
+func TestCandidateKeepsBoundCodexProLite(t *testing.T) {
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1}}
 	proLite := &Account{ID: "prolite", Type: AccountTypeCodex, PlanType: "prolite", Usage: UsageSnapshot{PrimaryUsedPercent: 0.5, SecondaryUsedPercent: 0.5}}
 	p := newProviderPool([]*Account{pro, proLite}, false)
-	p.pin("conversation", proLite.ID)
+	p.bindAffinity("conversation", proLite.ID)
 
 	got := p.candidate("conversation", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "prolite" {
-		t.Fatalf("expected pinned Pro Lite account to remain eligible, got %+v", got)
+		t.Fatalf("expected bound Pro Lite account to remain eligible, got %+v", got)
 	}
 }
 
@@ -200,38 +326,41 @@ func TestCandidateFallsBackToClaudeProWhenMaxExhausted(t *testing.T) {
 	}
 }
 
-func TestCandidateRequiredPlanOverridesPinnedConversation(t *testing.T) {
+func TestCandidateRequiredPlanOverridesBoundAffinity(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
 	p := newProviderPool([]*Account{plus, pro}, false)
-	p.pin("c1", "plus")
+	p.bindAffinity("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "pro" {
-		t.Fatalf("expected pinned plus to be bypassed for required plan, got %+v", got)
+		t.Fatalf("expected bound plus to be bypassed for required plan, got %+v", got)
+	}
+	if binding, exists := p.convPin["c1"]; exists && binding.AccountID == "plus" {
+		t.Fatalf("incompatible required-plan binding was not broken: %+v", binding)
 	}
 }
 
-func TestCandidateBypassesPinnedNonProCodex(t *testing.T) {
+func TestCandidateKeepsBoundCodexPlus(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.6, SecondaryUsedPercent: 0.6}}
 	p := newProviderPool([]*Account{plus, pro}, false)
-	p.pin("c1", "plus")
+	p.bindAffinity("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "", "")
-	if got == nil || got.ID != "pro" {
-		t.Fatalf("expected codex pro to bypass pinned non-pro account, got %+v", got)
+	if got == nil || got.ID != "plus" {
+		t.Fatalf("expected healthy bound Plus affinity to remain eligible, got %+v", got)
 	}
 }
 
-func TestCandidatePrefersCodexProEvenWhenTierTwoScoresBetter(t *testing.T) {
+func TestCandidateAllCodexPlansCompeteByQuota(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.8, SecondaryUsedPercent: 0.8}}
 	p := newProviderPool([]*Account{plus, pro}, false)
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "")
-	if got == nil || got.ID != "pro" {
-		t.Fatalf("expected codex pro to stay preferred, got %+v", got)
+	if got == nil || got.ID != "plus" {
+		t.Fatalf("expected lower-pressure Plus to compete with Pro, got %+v", got)
 	}
 }
 

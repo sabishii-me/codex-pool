@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1075,35 +1074,8 @@ func codexPassthroughRewrite(path string, body []byte) (rewrittenPath string, re
 	}
 }
 
-func extractConversationIDFromHeaders(headers http.Header) string {
-	for _, key := range []string{
-		"session_id",
-		"Session_id",
-		"Session-Id",
-		"conversation_id",
-		"Conversation_id",
-		"prompt_cache_key",
-		"x-codex-conversation-id",
-	} {
-		if value := strings.TrimSpace(headers.Get(key)); value != "" {
-			return value
-		}
-		for actualKey, values := range headers {
-			if !strings.EqualFold(actualKey, key) {
-				continue
-			}
-			for _, value := range values {
-				if value = strings.TrimSpace(value); value != "" {
-					return value
-				}
-			}
-		}
-	}
-	return ""
-}
-
-func (h *proxyHandler) pinConversationToCyberAccess(conversationID string, accountType AccountType, requiredPlan, clientIP, currentAccountID, reqID string) bool {
-	if conversationID == "" || accountType != AccountTypeCodex {
+func (h *proxyHandler) pinAffinityToCyberAccess(affinityKey string, accountType AccountType, requiredPlan, clientIP, currentAccountID, reqID string) bool {
+	if affinityKey == "" || accountType != AccountTypeCodex {
 		return false
 	}
 	exclude := map[string]bool{}
@@ -1113,13 +1085,15 @@ func (h *proxyHandler) pinConversationToCyberAccess(conversationID string, accou
 	acc := h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, Exclude: exclude})
 	if acc == nil {
 		if h.cfg.debug.Load() {
-			log.Printf("[%s] cyber_policy seen for conversation %s, but no cyber_access account is available", reqID, conversationID)
+			log.Printf("[%s] cyber_policy seen for private affinity, but no cyber_access account is available", reqID)
 		}
 		return false
 	}
-	h.pool.pin(conversationID, acc.ID)
+	if !h.pool.bindAffinity(affinityKey, acc.ID) {
+		return false
+	}
 	if h.cfg.debug.Load() {
-		log.Printf("[%s] pinned conversation %s to cyber_access account %s after cyber_policy", reqID, conversationID, acc.ID)
+		log.Printf("[%s] pinned private affinity to cyber_access account %s after cyber_policy", reqID, acc.ID)
 	}
 	return true
 }
@@ -1164,7 +1138,7 @@ func (h *proxyHandler) wrapBufferedSSEWithCyberDetector(under io.Writer, account
 			if h.metrics != nil {
 				h.metrics.incCyberPolicy(acc.ID, "suppressed_buffered")
 			}
-			if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
+			if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
 				if cyberPinned != nil {
 					*cyberPinned = true
 				}
@@ -1219,7 +1193,7 @@ func singleJoin(basePath, reqPath string) string {
 	return basePath + reqPath
 }
 
-func extractConversationIDFromJSON(blob []byte) string {
+func extractAntigravityConversationID(blob []byte) string {
 	if len(blob) == 0 {
 		return ""
 	}
@@ -1227,21 +1201,13 @@ func extractConversationIDFromJSON(blob []byte) string {
 	if err := json.Unmarshal(blob, &obj); err != nil {
 		return ""
 	}
-	return extractConversationIDFromObject(obj)
-}
-
-func extractConversationIDFromObject(obj map[string]any) string {
-	for _, key := range []string{"conversation_id", "conversation", "session_id"} {
-		if v, ok := obj[key].(string); ok && v != "" {
-			return v
-		}
-	}
-	for _, containerKey := range []string{"metadata", "meta"} {
-		if sub, ok := obj[containerKey].(map[string]any); ok {
-			for _, key := range []string{"conversation_id", "conversation", "session_id", "user_id"} {
-				if v, ok := sub[key].(string); ok && v != "" {
-					return v
-				}
+	// Antigravity's existing explicit executor profile accepts only its named
+	// client conversation/session fields. Generic metadata (especially user_id)
+	// has no routing meaning.
+	for _, key := range []string{"conversation_id", "session_id"} {
+		if value, ok := obj[key].(string); ok {
+			if value = strings.TrimSpace(value); value != "" {
+				return value
 			}
 		}
 	}
@@ -1654,26 +1620,6 @@ func rewriteModelInBody(body []byte, newModel string) []byte {
 	return rewritten
 }
 
-func extractConversationIDFromSSE(sample []byte) string {
-	// Best-effort: scan lines for JSON fragments and grab conversation_id/conversation.
-	for _, line := range bytes.Split(sample, []byte("\n")) {
-		line = bytes.TrimSpace(line)
-		if len(line) == 0 {
-			continue
-		}
-		if bytes.HasPrefix(line, []byte("data:")) {
-			line = bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:")))
-		}
-		if len(line) == 0 || bytes.Equal(line, []byte("[DONE]")) {
-			continue
-		}
-		if id := extractConversationIDFromJSON(line); id != "" {
-			return id
-		}
-	}
-	return ""
-}
-
 func bodyForInspection(r *http.Request, body []byte) []byte {
 	if len(body) == 0 {
 		return body
@@ -1846,7 +1792,8 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	accountType := provider.Type()
 
 	if isWebSocketUpgradeRequest(r) {
-		h.proxyRequestWebSocket(w, r, reqID, userID, originID, provider, targetBase)
+		routingContext := buildRequestRoutingContext(r.URL.Path, nil, r.Header, userID, accountType, "", getPoolJWTSecret())
+		h.proxyRequestWebSocket(w, r, reqID, userID, originID, routingContext, provider, targetBase)
 		return
 	}
 
@@ -1870,9 +1817,15 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			log.Printf("[%s] streaming request body: method=%s path=%s provider=%s content-length=%d",
 				reqID, r.Method, r.URL.Path, accountType, r.ContentLength)
 		}
-		h.proxyRequestStreamed(w, r, reqID, userID, originID, provider, targetBase)
+		routingContext := buildRequestRoutingContext(r.URL.Path, nil, r.Header, userID, accountType, "", getPoolJWTSecret())
+		h.proxyRequestStreamed(w, r, reqID, userID, originID, routingContext, provider, targetBase)
 		return
 	}
+
+	// Preserve the original incoming contract for affinity extraction. Later
+	// translation may rewrite r.URL.Path and bodyBytes for the upstream.
+	incomingPath := r.URL.Path
+	incomingHeaders := r.Header.Clone()
 
 	bodyBytes, bodySample, err := readBodyForReplay(r.Body, h.cfg.logBodies, h.cfg.bodyLogLimit)
 	if err != nil {
@@ -1887,25 +1840,14 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		}
 	}
 
-	// conversation_id usually comes from request JSON (Codex often includes it).
 	inspect := bodyBytes
 	if len(inspect) == 0 {
 		inspect = bodySample
 	}
 	inspect = bodyForInspection(r, inspect)
-	conversationID := extractConversationIDFromJSON(inspect)
-	if conversationID == "" {
-		conversationID = extractConversationIDFromHeaders(r.Header)
-	}
-	// Use Claude Code session ID as fallback for conversation stickiness
-	if conversationID == "" {
-		for _, key := range []string{"X-Claude-Code-Session-Id", "x-claude-code-session-id"} {
-			if v := strings.TrimSpace(r.Header.Get(key)); v != "" {
-				conversationID = v
-				break
-			}
-		}
-	}
+
+	// Parse typed soft routing affinity only after provider/model resolution.
+	// This intentionally does not reuse the removed broad conversation extractor.
 	requestedModel := extractRequestedModelFromJSON(inspect)
 	if requestedModel == "" {
 		requestedModel = antigravityModelFromGeminiPath(r.URL.Path)
@@ -1917,9 +1859,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	}
 
 	// Antigravity owns its complete upstream envelope and protocol conversion.
-	// Resolve it through the same route registry before invoking the custom executor.
+	// Keep its existing explicit executor contract until its typed affinity
+	// profile lands; ordinary pool selection below uses only routingContext.
 	if requestedModel != "" {
-		if route, ok := h.routeRegistry().Resolve(r.URL.Path, requestedModel); ok && h.handleAntigravityProxy(w, r, bodyBytes, route, conversationID, userID, originID, originIP, reqID) {
+		antigravityConversationID := extractAntigravityConversationID(inspect)
+		if route, ok := h.routeRegistry().Resolve(r.URL.Path, requestedModel); ok && h.handleAntigravityProxy(w, r, bodyBytes, route, antigravityConversationID, userID, originID, originIP, reqID) {
 			return
 		}
 	}
@@ -1954,6 +1898,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 		}
 	}
+
+	routingContext := buildRequestRoutingContext(incomingPath, inspect, incomingHeaders, userID, accountType, requestedModel, getPoolJWTSecret())
+	conversationID := routingContext.AffinityKey
 
 	// Inject thinking budget if the original model had a (budget) suffix.
 	if requestedModel != "" {
@@ -2098,33 +2045,23 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		bodyBytes = filtered
 	}
 
-	if h.cfg.debug.Load() && conversationID == "" && len(inspect) > 0 {
-		// Help debug why conversation id isn't being extracted without dumping the full body.
-		var obj map[string]any
-		if err := json.Unmarshal(inspect, &obj); err == nil {
-			keys := make([]string, 0, len(obj))
-			for k := range obj {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			if len(keys) > 30 {
-				keys = keys[:30]
-			}
-			log.Printf("[%s] conv_id empty; top-level keys (first %d): %s", reqID, len(keys), strings.Join(keys, ","))
-		}
+	if h.cfg.debug.Load() && conversationID == "" && routingContext.SoftAffinity.Source != "" {
+		log.Printf("[%s] declared affinity source %s could not be activated; verify gateway affinity inputs", reqID, routingContext.SoftAffinity.Source)
 	}
 
 	if h.cfg.debug.Load() {
-		log.Printf("[%s] incoming %s %s provider=%s conv_id=%s user_id=%s origin_id=%s authZ_len=%d chatgpt-id=%q content-type=%q content-encoding=%q body_bytes=%d",
+		log.Printf("[%s] incoming %s %s provider=%s protocol=%s affinity_source=%s affinity_active=%t user_present=%t origin_present=%t authZ_len=%d chatgpt-id-present=%t content-type=%q content-encoding=%q body_bytes=%d",
 			reqID,
 			r.Method,
 			r.URL.Path,
 			accountType,
-			conversationID,
-			userID,
-			originID,
+			routingContext.Protocol,
+			routingContext.SoftAffinity.Source,
+			conversationID != "",
+			userID != "",
+			originID != "",
 			len(r.Header.Get("Authorization")),
-			r.Header.Get("ChatGPT-Account-ID"),
+			r.Header.Get("ChatGPT-Account-ID") != "",
 			r.Header.Get("Content-Type"),
 			r.Header.Get("Content-Encoding"),
 			len(bodyBytes),
@@ -2186,11 +2123,11 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 		}
 		if acc == nil && !cyberAccessRetry {
-			candidateConversationID := conversationID
+			candidateRoutingContext := routingContext
 			if imageGenerationRequest {
-				candidateConversationID = ""
+				candidateRoutingContext = RequestRoutingContext{}
 			}
-			acc = h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, ConversationID: candidateConversationID, Exclude: candidateExclude, RequireImages: imageGenerationRequest})
+			acc = h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, RoutingContext: candidateRoutingContext, Exclude: candidateExclude, RequireImages: imageGenerationRequest})
 		}
 		if acc == nil {
 			// Brief cooldowns can be cheaper than failing a request. Long quota
@@ -2487,7 +2424,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					sampleBuf.Write(data)
 				}
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
-					if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
+					if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
 						cyberPinned = true
 					}
 					return
@@ -2576,7 +2513,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					sampleBuf.Write(data)
 				}
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
-					if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
+					if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
 						cyberPinned = true
 					}
 					return
@@ -2628,7 +2565,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					sampleBuf.Write(data)
 				}
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
-					if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
+					if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
 						cyberPinned = true
 					}
 					return
@@ -2787,7 +2724,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			usageCallback := func(data []byte) {
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
-					if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
+					if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, originIP, acc.ID, reqID) {
 						cyberPinned = true
 						cancel()
 					}
@@ -2931,13 +2868,8 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		}
 
 		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-			if conversationID == "" {
-				if sampleBuf != nil && sampleBuf.Len() > 0 {
-					conversationID = extractConversationIDFromSSE(sampleBuf.Bytes())
-				}
-			}
 			if conversationID != "" && !cyberPinned {
-				h.pool.pin(conversationID, acc.ID)
+				h.pool.bindAffinity(conversationID, acc.ID)
 			}
 			acc.mu.Lock()
 			acc.LastUsed = time.Now()
@@ -2979,40 +2911,17 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	reqID string,
 	userID string,
 	originID string,
+	routingContext RequestRoutingContext,
 	provider Provider,
 	targetBase *url.URL,
 ) {
 	start := time.Now()
 	accountType := provider.Type()
-
-	conversationID := strings.TrimSpace(r.URL.Query().Get("session_id"))
-	if conversationID == "" {
-		conversationID = extractConversationIDFromHeaders(r.Header)
-	}
-	// Use Claude Code session ID as fallback for conversation stickiness
-	if conversationID == "" {
-		for _, key := range []string{"X-Claude-Code-Session-Id", "x-claude-code-session-id"} {
-			if v := strings.TrimSpace(r.Header.Get(key)); v != "" {
-				conversationID = v
-				break
-			}
-		}
-	}
+	conversationID := routingContext.AffinityKey
 
 	requiredPlan := requiredPlanForRequest(accountType, r, "")
 	clientIP := getClientIP(r)
-	selectionConversationID := conversationID
-	if selectionConversationID == "" && accountType == AccountTypeCodex {
-		fallbackID := userID
-		if fallbackID == "" {
-			fallbackID = originID
-		}
-		if fallbackID == "" {
-			fallbackID = clientIP
-		}
-		selectionConversationID = "cyber-fallback:" + fallbackID
-	}
-	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, ConversationID: selectionConversationID, Exclude: map[string]bool{}})
+	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, RoutingContext: routingContext, Exclude: map[string]bool{}})
 	if acc == nil {
 		http.Error(w, fmt.Sprintf("no live %s accounts", accountType), http.StatusServiceUnavailable)
 		return
@@ -3139,7 +3048,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 		}
 		h.applyWebSocketStatusEffects(reqID, finalAcc, conversationID, swap.swapped, refreshFailed, swap.statusCode)
 		if h.cfg.debug.Load() {
-			log.Printf("[%s] websocket done status=%d account=%s user=%s origin=%s duration_ms=%d cyber_swapped=%v", reqID, swap.statusCode, finalAcc.ID, userID, originID, time.Since(start).Milliseconds(), swap.swapped)
+			log.Printf("[%s] websocket done status=%d account=%s user_present=%t origin_present=%t duration_ms=%d cyber_swapped=%v", reqID, swap.statusCode, finalAcc.ID, userID != "", originID != "", time.Since(start).Milliseconds(), swap.swapped)
 		}
 		return
 	}
@@ -3171,13 +3080,13 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	h.applyWebSocketStatusEffects(reqID, acc, conversationID, cyberPinned, refreshFailed, relay.statusCode)
 
 	if h.cfg.debug.Load() {
-		log.Printf("[%s] websocket done status=%d account=%s user=%s origin=%s duration_ms=%d", reqID, relay.statusCode, acc.ID, userID, originID, time.Since(start).Milliseconds())
+		log.Printf("[%s] websocket done status=%d account=%s user_present=%t origin_present=%t duration_ms=%d", reqID, relay.statusCode, acc.ID, userID != "", originID != "", time.Since(start).Milliseconds())
 	}
 }
 
 // applyWebSocketStatusEffects runs the post-relay account bookkeeping
 // (rate-limit cooldown, auth-failure marking, success-path penalty
-// decay, conversation pinning) shared between the Codex cyber-aware
+// decay, soft-affinity binding) shared between the Codex cyber-aware
 // relay and the legacy passthrough/Claude/Gemini relay.
 func (h *proxyHandler) applyWebSocketStatusEffects(reqID string, acc *ProviderConnection, conversationID string, cyberPinned, refreshFailed bool, statusCode int) {
 	switch {
@@ -3195,7 +3104,7 @@ func (h *proxyHandler) applyWebSocketStatusEffects(reqID string, acc *ProviderCo
 		}
 	case statusCode == http.StatusSwitchingProtocols || (statusCode >= 200 && statusCode < 300):
 		if conversationID != "" && !cyberPinned {
-			h.pool.pin(conversationID, acc.ID)
+			h.pool.bindAffinity(conversationID, acc.ID)
 		}
 		acc.mu.Lock()
 		acc.LastUsed = time.Now()
@@ -3559,13 +3468,13 @@ func logRelayFrame(logLabel, label string, msgType websocket.MessageType, data [
 	log.Printf("[ws-relay %s] %s: type=%v len=%d %s%s", logLabel, label, msgType, len(data), string(summary), suffix)
 }
 
-func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Request, reqID, userID, originID string, provider Provider, targetBase *url.URL) {
+func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Request, reqID, userID, originID string, routingContext RequestRoutingContext, provider Provider, targetBase *url.URL) {
 	start := time.Now()
 	accountType := provider.Type()
 
 	requiredPlan := requiredPlanForRequest(accountType, r, "")
 	clientIP := getClientIP(r)
-	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, Exclude: map[string]bool{}})
+	acc := h.connectionSelector().Select(ConnectionSelection{ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, RoutingContext: routingContext, Exclude: map[string]bool{}})
 	if acc == nil {
 		http.Error(w, fmt.Sprintf("no live %s accounts", accountType), http.StatusServiceUnavailable)
 		return
@@ -3764,7 +3673,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		writer = hw2
 	}
 
-	// Tee a bounded sample for usage extraction and conversation pinning.
+	// Tee a bounded sample for usage extraction and response handling.
 	sampleLimit := int64(16 * 1024)
 	if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
 		sampleLimit = h.cfg.bodyLogLimit
@@ -3795,23 +3704,14 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		h.recordUsageForRequest(acc, *ru, reqID)
 	})
 	cyberPinned := false
-	conversationID := extractConversationIDFromHeaders(r.Header)
-	// Use Claude Code session ID as fallback for conversation stickiness
-	if conversationID == "" {
-		for _, key := range []string{"X-Claude-Code-Session-Id", "x-claude-code-session-id"} {
-			if v := strings.TrimSpace(r.Header.Get(key)); v != "" {
-				conversationID = v
-				break
-			}
-		}
-	}
+	conversationID := routingContext.AffinityKey
 
 	if isSSE {
 		interceptWriter := &sseInterceptWriter{
 			w: writer,
 			callback: func(data []byte) {
 				if accountType == AccountTypeCodex && !acc.CyberAccess && isCyberPolicyError(data) {
-					if h.pinConversationToCyberAccess(conversationID, accountType, requiredPlan, clientIP, acc.ID, reqID) {
+					if h.pinAffinityToCyberAccess(conversationID, accountType, requiredPlan, clientIP, acc.ID, reqID) {
 						cyberPinned = true
 						cancel()
 					}
@@ -3885,11 +3785,8 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	}
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		if conversationID == "" && len(respSample) > 0 {
-			conversationID = extractConversationIDFromSSE(respSample)
-		}
 		if conversationID != "" && !cyberPinned {
-			h.pool.pin(conversationID, acc.ID)
+			h.pool.bindAffinity(conversationID, acc.ID)
 		}
 		acc.mu.Lock()
 		acc.LastUsed = time.Now()

@@ -474,10 +474,22 @@ func applyCommonAccountFileState(account *ProviderConnection, data []byte) {
 // - provider_gemini.go: GeminiProvider.LoadAccount
 
 // ProviderPool coordinates the live connections available for routing.
+// Soft affinity is process-local by design in this slice: restart/reload clears
+// it rather than attempting unsafe cross-replica reconstruction.
+const (
+	providerAffinityTTL        = 24 * time.Hour
+	providerAffinityMaxEntries = 16384
+)
+
+type affinityBinding struct {
+	AccountID string
+	TouchedAt time.Time
+}
+
 type ProviderPool struct {
 	mu            sync.RWMutex
 	accounts      []*ProviderConnection
-	convPin       map[string]string // conversation_id -> account ID
+	convPin       map[string]affinityBinding // private typed affinity key -> bounded local binding
 	debug         bool
 	rr            uint64
 	tierThreshold float64 // secondary usage % at which we stop preferring a tier (default 0.50)
@@ -488,7 +500,7 @@ type ProviderPool struct {
 type poolState = ProviderPool
 
 func newProviderPool(connections []*ProviderConnection, debug bool) *ProviderPool {
-	return &ProviderPool{accounts: connections, convPin: map[string]string{}, debug: debug, tierThreshold: 0.50}
+	return &ProviderPool{accounts: connections, convPin: map[string]affinityBinding{}, debug: debug, tierThreshold: 0.50}
 }
 
 // newPoolState is retained for source compatibility.
@@ -502,7 +514,7 @@ func (p *ProviderPool) replace(accs []*ProviderConnection) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.accounts = accs
-	p.convPin = map[string]string{}
+	p.convPin = map[string]affinityBinding{}
 	p.rr = 0
 }
 
@@ -514,7 +526,8 @@ func (p *ProviderPool) count() int {
 
 // accountTier returns the preference tier for an account (1 = best, 2 = mid, 3 = last resort).
 // Claude: tier 1 = max/team/max_team, tier 2 = unknown/other, tier 3 = pro
-// Codex: tier 1 = pro/prolite, tier 2 = everything else
+// Codex: all ordinary Plus/Pro/Prolite capacity competes in tier 2; required
+// Pro access remains an explicit plan constraint rather than a preference.
 // Gemini: tier 1 = ultra, tier 2 = everything else
 func accountTier(accType AccountType, planType string) int {
 	switch accType {
@@ -529,9 +542,6 @@ func accountTier(accType AccountType, planType string) int {
 			return 2
 		}
 	case AccountTypeCodex:
-		if isCodexProAccessPlan(planType) {
-			return 1
-		}
 		return 2
 	case AccountTypeGemini, AccountTypeAntigravity:
 		plan := strings.ToLower(strings.TrimSpace(planType))
@@ -597,19 +607,7 @@ func (p *ProviderPool) nearestCooldown(accountType AccountType, exclude map[stri
 	return nearest
 }
 
-// candidate selects the best account using tiered selection, optionally filtering by type.
-// If accountType is empty, all account types are considered.
-//
-// Selection strategy:
-//  1. Conversation pinning (stickiness) — only unpin at hard limits
-//  2. Split eligible accounts into Tier 1 and Tier 2
-//  3. If any Tier 1 account has secondary < tierThreshold → pick best Tier 1 below threshold
-//  4. Else if Tier 1 accounts exist above threshold → still prefer best Tier 1 by score
-//     (only fall to Tier 2 if it has significantly better score)
-//  5. Else pick best Tier 2 by threshold then score
-//  6. Within a tier, use score as tiebreaker (headroom, drain urgency, recency, inflight)
-//  7. If all non-codex candidates are rate-limited, pick the best rate-limited account as fallback
-//     to avoid hard 503 failures during transient exhaustion.
+// candidateByID selects one exact eligible connection.
 func (p *ProviderPool) candidateByID(id string, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
 	if id == "" {
 		return nil
@@ -679,63 +677,73 @@ func (p *ProviderPool) candidateWithCyberAccess(exclude map[string]bool, account
 	return best
 }
 
-func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
+// candidate selects the best eligible connection using typed soft affinity,
+// provider-specific tiers, both quota windows, health, cooldown, in-flight
+// pressure, and deterministic rotation among competitive Codex capacity.
+func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, accountType AccountType, requiredPlan string, clientIP string) *ProviderConnection {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	now := time.Now()
 
-	// Conversation pinning — keep using the same account unless at hard limits
-	if conversationID != "" {
-		if id, ok := p.convPin[conversationID]; ok {
-			if exclude != nil && exclude[id] {
-				// pinned excluded; fall through to selection
-			} else if a := p.getLocked(id); a != nil {
+	// Soft affinity — keep using the same account unless eligibility or a hard
+	// safety boundary requires rebinding.
+	if affinityKey != "" {
+		if binding, ok := p.convPin[affinityKey]; ok {
+			switch {
+			case binding.TouchedAt.IsZero() || now.Sub(binding.TouchedAt) > providerAffinityTTL:
+				delete(p.convPin, affinityKey)
+			case exclude != nil && exclude[binding.AccountID]:
+				// Retry exclusion is request-local. Fall through without destroying a
+				// healthy binding merely because this attempt must choose elsewhere.
+			default:
+				id := binding.AccountID
+				a := p.getLocked(id)
+				if a == nil {
+					delete(p.convPin, affinityKey)
+					break
+				}
 				a.mu.Lock()
 				ok := !a.Dead && !a.Disabled && (accountType == "" || a.Type == accountType) && planMatchesRequired(a.PlanType, requiredPlan) && accountAllowsClientIPLocked(a, clientIP)
-				if ok && a.Type == AccountTypeCodex && !isCodexProAccessPlan(a.PlanType) {
-					ok = false
-					if p.debug {
-						log.Printf("unpinning conversation %s from non-pro codex account %s", conversationID, id)
-					}
-				}
 				if ok && !a.RateLimitUntil.IsZero() && a.RateLimitUntil.After(now) {
 					ok = false
 					if p.debug {
-						log.Printf("unpinning conversation %s from rate-limited account %s (until %s)",
-							conversationID, id, a.RateLimitUntil.Format(time.RFC3339))
+						log.Printf("breaking private affinity from rate-limited account %s (until %s)",
+							id, a.RateLimitUntil.Format(time.RFC3339))
 					}
 				}
-				// Unpin at 95% secondary (raised from 90% for better stickiness)
+				// Break at the secondary hard limit.
 				secondaryUsed := accountSecondaryUsageLocked(a)
 				if ok && secondaryUsed >= secondaryHardExcludeThreshold {
 					ok = false
 					if p.debug {
-						log.Printf("unpinning conversation %s from exhausted account %s (%.0f%% secondary >= %.0f%%)",
-							conversationID, id, secondaryUsed*100, secondaryHardExcludeThreshold*100)
+						log.Printf("breaking private affinity from exhausted account %s (%.0f%% secondary >= %.0f%%)",
+							id, secondaryUsed*100, secondaryHardExcludeThreshold*100)
 					}
 				}
-				// Also unpin if primary usage is at/above 95% (hard limit)
+				// Also break if primary usage is at/above its hard limit.
 				primaryUsed := accountPrimaryUsageLocked(a)
 				if ok && primaryUsed >= primaryHardExcludeThreshold {
 					ok = false
 					if p.debug {
-						log.Printf("unpinning conversation %s from account %s (%.0f%% primary >= %.0f%%)",
-							conversationID, id, primaryUsed*100, primaryHardExcludeThreshold*100)
+						log.Printf("breaking private affinity from account %s (%.0f%% primary >= %.0f%%)",
+							id, primaryUsed*100, primaryHardExcludeThreshold*100)
 					}
 				}
-				// Also unpin if token is expired - don't wait for a failed request
+				// Also break if the token is expired; do not wait for a failed request.
 				if ok && !a.ExpiresAt.IsZero() && a.ExpiresAt.Before(now) {
 					ok = false
 					if p.debug {
-						log.Printf("unpinning conversation %s from expired account %s",
-							conversationID, id)
+						log.Printf("breaking private affinity from expired account %s", id)
 					}
 				}
 				a.mu.Unlock()
 				if ok {
+					binding.TouchedAt = now
+					p.convPin[affinityKey] = binding
 					return a
 				}
+				delete(p.convPin, affinityKey)
 			}
 		}
 	}
@@ -752,6 +760,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		secondaryPct float64
 		score        float64
 		cyberAccess  bool
+		telemetrySet bool
 	}
 	var eligible []scoredAccount
 	var rateLimited []scoredAccount
@@ -771,12 +780,14 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 			secondaryUsed := accountSecondaryUsageLocked(a)
 			tier := accountTier(a.Type, a.PlanType)
 			score := scoreAccountLocked(a, now)
+			telemetrySet := a.Usage.primarySet || a.Usage.secondarySet || usagePrimaryWindowAvailable(a.Usage) || usageSecondaryWindowAvailable(a.Usage)
+			rateLimitUntil := a.RateLimitUntil
 			a.mu.Unlock()
 			// Prefer less-loaded accounts
 			score -= float64(atomic.LoadInt64(&a.Inflight)) * 0.02
-			rateLimited = append(rateLimited, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score})
+			rateLimited = append(rateLimited, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score, telemetrySet: telemetrySet})
 			if p.debug {
-				log.Printf("skipping account %s: rate limited until %s", a.ID, a.RateLimitUntil.Format(time.RFC3339))
+				log.Printf("skipping account %s: rate limited until %s", a.ID, rateLimitUntil.Format(time.RFC3339))
 			}
 			continue
 		}
@@ -801,10 +812,11 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		tier := accountTier(a.Type, a.PlanType)
 		score := scoreAccountLocked(a, now)
 		cyberAccess := a.CyberAccess
+		telemetrySet := a.Usage.primarySet || a.Usage.secondarySet || usagePrimaryWindowAvailable(a.Usage) || usageSecondaryWindowAvailable(a.Usage)
 		a.mu.Unlock()
 		// Prefer less-loaded accounts
 		score -= float64(atomic.LoadInt64(&a.Inflight)) * 0.02
-		eligible = append(eligible, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score, cyberAccess: cyberAccess})
+		eligible = append(eligible, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score, cyberAccess: cyberAccess, telemetrySet: telemetrySet})
 	}
 
 	selectCandidate := func(accounts []scoredAccount) *ProviderConnection {
@@ -814,7 +826,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		var tier3Below, tier3Any []weightedConnectionCandidate
 		for i := range accounts {
 			sa := &accounts[i]
-			candidate := weightedConnectionCandidate{connection: sa.acc, score: sa.score, cyberAccess: sa.cyberAccess}
+			candidate := weightedConnectionCandidate{connection: sa.acc, score: sa.score, cyberAccess: sa.cyberAccess, telemetrySet: sa.telemetrySet}
 			switch sa.tier {
 			case 1:
 				tier1Any = append(tier1Any, candidate)
@@ -885,7 +897,7 @@ func (p *ProviderPool) candidate(conversationID string, exclude map[string]bool,
 		}
 		all := make([]weightedConnectionCandidate, 0, len(accounts))
 		for i := range accounts {
-			all = append(all, weightedConnectionCandidate{connection: accounts[i].acc, score: accounts[i].score, cyberAccess: accounts[i].cyberAccess})
+			all = append(all, weightedConnectionCandidate{connection: accounts[i].acc, score: accounts[i].score, cyberAccess: accounts[i].cyberAccess, telemetrySet: accounts[i].telemetrySet})
 		}
 		return choose(all)
 	}
@@ -1044,7 +1056,6 @@ type scoreBreakdown struct {
 	PenaltyFactor      float64
 	PenaltyApplied     float64
 	ClampedToFloor     bool
-	RecentUseBonus     float64
 	CreditBonus        float64
 	HeadroomPreCredit  float64
 }
@@ -1172,10 +1183,10 @@ func scoreAccountBreakdownLocked(a *ProviderConnection, now time.Time) scoreBrea
 		out.ClampedToFloor = true
 	}
 
-	if !a.LastUsed.IsZero() && now.Sub(a.LastUsed) < 5*time.Minute {
-		out.RecentUseBonus = 0.1
-		headroom += out.RecentUseBonus
-	}
+	// Cache locality is preserved by typed affinity, not by globally rewarding
+	// whichever account happened to receive the most recent request. A global
+	// recent-use bonus would concentrate unbound work and defeat this pool.
+	// (No score adjustment is applied here.)
 
 	out.CreditBonus = 1.0
 	if a.Usage.CreditsUnlimited || a.Usage.HasCredits {
@@ -1231,9 +1242,6 @@ func scoreTooltipFromBreakdownLocked(a *ProviderConnection, now time.Time, break
 	if breakdown.ClampedToFloor {
 		lines = append(lines, "Headroom floor applied: 0.01")
 	}
-	if breakdown.RecentUseBonus > 0 {
-		lines = append(lines, fmt.Sprintf("Recent-use bonus: +%.2f", breakdown.RecentUseBonus))
-	}
 	if breakdown.CreditBonus > 1.0 {
 		lines = append(lines, fmt.Sprintf("Credits multiplier: x%.2f", breakdown.CreditBonus))
 	}
@@ -1252,13 +1260,42 @@ func scoreTooltipLocked(a *ProviderConnection, now time.Time) string {
 	return scoreTooltipFromBreakdownLocked(a, now, scoreAccountBreakdownLocked(a, now))
 }
 
-func (p *ProviderPool) pin(conversationID, accountID string) {
-	if conversationID == "" || accountID == "" {
-		return
+// bindAffinity atomically assigns or refreshes one local binding. Ordinary
+// protocol callers must pass the validated private key from RequestRoutingContext;
+// explicit compatibility callers remain isolated pending their typed migration.
+// It reports whether assignment was accepted.
+func (p *ProviderPool) bindAffinity(affinityKey, accountID string) bool {
+	if affinityKey == "" || accountID == "" {
+		return false
 	}
 	p.mu.Lock()
-	p.convPin[conversationID] = accountID
-	p.mu.Unlock()
+	defer p.mu.Unlock()
+	if p.convPin == nil {
+		p.convPin = make(map[string]affinityBinding)
+	}
+	now := time.Now()
+	if len(p.convPin) >= providerAffinityMaxEntries {
+		pruneOldestAffinityBinding(p.convPin, now)
+	}
+	p.convPin[affinityKey] = affinityBinding{AccountID: accountID, TouchedAt: now}
+	return true
+}
+
+func pruneOldestAffinityBinding(bindings map[string]affinityBinding, now time.Time) {
+	oldestKey := ""
+	var oldest time.Time
+	for key, binding := range bindings {
+		if binding.TouchedAt.IsZero() || now.Sub(binding.TouchedAt) > providerAffinityTTL {
+			delete(bindings, key)
+			continue
+		}
+		if oldestKey == "" || binding.TouchedAt.Before(oldest) {
+			oldestKey, oldest = key, binding.TouchedAt
+		}
+	}
+	if len(bindings) >= providerAffinityMaxEntries && oldestKey != "" {
+		delete(bindings, oldestKey)
+	}
 }
 
 // allAccounts returns a copy of all accounts for stats/reporting.

@@ -1,6 +1,16 @@
 # Protocol-Aware Affinity and Reset-Aware Codex Scheduling Plan
 
-Status: **P0 critical — implementation is the next routing milestone and must precede further ordinary Codex scheduler tuning**
+Status: **P0 critical — executable contract tests and the first bounded parts of Slices 1, 2, and 4 are implemented for Test review; remaining real-client fixture capture, strict provider state, full affinity lifecycle, provisional debits, and full reset-aware economics are required before Staging promotion**
+
+Implementation checkpoint (local review candidate):
+
+- declared OpenAI Responses `prompt_cache_key` within the registered Codex provider profile, plus registered Codex/Claude Code soft-affinity sources, replace broad body/header guessing on ordinary buffered HTTP selection; streaming-body and WebSocket paths carry typed but inactive contexts until a canonical model can be resolved before selection; OpenAI Chat support is present only for the registered Codex transport extension, not an assumed base-protocol cache-key contract;
+- `metadata.user_id`, generic `session_id`, generic/provider conversation objects, provider response/SSE state, unrelated-provider extension fields, non-create subresources, malformed JSON, unsafe/oversized declarations, and lookalike headers have negative routing tests;
+- internal affinity keys are HMAC-SHA256 namespaced by non-empty GatewayUser, provider, canonical model, protocol, and affinity kind, and only registered protocol/provider/kind tuples can activate them; missing namespace components disable affinity rather than weakening isolation, and no raw client value is stored or logged; raw declarations are request-scoped, NUL-rejecting, and capped at 4 KiB, while local bindings have a sliding 24-hour TTL and 16,384-entry bound;
+- ordinary Codex Plus, Pro, and Prolite connections now share one eligibility tier, while explicit required-plan constraints remain authoritative; both quota windows and in-flight pressure still score candidates, and unbound selection no longer receives a global recent-use bonus because cache locality is owned by typed affinity;
+- a five-Plus/one-Pro regression test proves unused Plus capacity is selected before a Pro already observed at 32% secondary use; known telemetry is preferred over unknown rather than treating missing quota as free, while an all-unknown pool still receives deterministic bounded exploration;
+- the hot-reload path now applies the configured tier threshold to the live pool and uses the same `0.50` default as startup, avoiding policy drift after reload;
+- this checkpoint intentionally does not claim strict `previous_response_id` ownership, real-client fixture closure, complete break/rebind lifecycle or hysteresis, cross-replica coordination, learned capacity, reset urgency, or provisional quota debits.
 
 Production evidence: the current six-connection pool has shown all five healthy Plus connections at `0% used` while the single healthy Pro connection reached `32% used`. Subject to matching/fresh quota-window observations, this is the exact failure mode predicted by the current Pro/Prolite Tier 1 policy: one paid allowance is drained while five paid allowances are left at risk of resetting unused. Quantized `0%` telemetry may hide small use, but it cannot justify the structural concentration. Before/after acceptance must capture each window's retrieval/reset timestamps so unlike windows are never compared as if synchronized.
 
@@ -269,16 +279,17 @@ The canonical request remains attributed wholly to one connection. Provisional s
 
 ## Current implementation findings
 
-The current code is not yet this design:
+The Test review candidate has closed the most dangerous ordinary-request heuristics and tier concentration, but it is not yet the complete design:
 
-- `main.go` broadly searches body fields, metadata, and several headers and collapses them into one `conversationID`;
-- body-level `prompt_cache_key` is preserved by Responses translation but is not extracted by the body conversation helper;
-- `metadata.user_id` can currently become a conversation ID even though attribution metadata does not prove session semantics;
-- successful responses can create a pool pin, but the pin has no typed source, user/provider/model namespace, TTL, or privacy-safe key;
-- Codex pins currently reject non-Pro/Prolite connections, so Plus cannot retain ordinary affinity;
-- Codex `accountTier` places Pro/Prolite ahead of Plus, which can drain the highest plan while other paid capacity expires;
-- the competitive selector rotates only after tier and eligibility policy have already narrowed the pool;
-- provider telemetry has no local provisional debit in selection;
+- ordinary buffered HTTP and request-body streaming paths pass a typed `RequestRoutingContext`; streamed bodies cannot be inspected and WebSocket/streamed contexts do not activate affinity unless a canonical model is protocol-safely available before selection;
+- client affinity values are forwarded unchanged while the pool sees only a GatewayUser/provider/model/protocol/kind-namespaced HMAC key; affinity is disabled if the gateway secret, GatewayUser, canonical model, provider, protocol, or kind is absent/unknown;
+- successful ordinary responses can retain soft affinity on eligible Plus, Pro, or Prolite connections, and required-plan selection remains explicit;
+- Codex Plus, Pro, and Prolite now share the same ordinary tier and competitive quota scoring; known telemetry is preferred over unknown without rendering unknown as zero/free, and the Production five-Plus/one-Pro concentration shape has a regression test;
+- Antigravity remains on its existing explicit executor conversation contract pending a typed/HMAC profile, but generic `conversation` and metadata values no longer participate in its extraction; this exception is not approved for Production rollout of typed affinity;
+- streaming-body paths can recognize declared registered headers but cannot inspect the body; streaming-body and WebSocket contexts therefore do not activate soft affinity until a canonical model can be resolved before selection, preserving the mandatory model namespace instead of using a weaker key;
+- the existing local affinity map now has a 24-hour sliding TTL and a 16,384-entry cap; request-local retry exclusions preserve the prior binding while deleted, disabled, dead, incompatible, expired, cooldown, or hard-quota owners break and may safely rebind to the newly selected eligible owner, but minimum residence, detailed lifecycle metrics, restart persistence, and multi-replica coordination remain pending;
+- strict `previous_response_id`, provider conversation, and operation ownership is not implemented;
+- provider telemetry has no local provisional debit or learned per-connection capacity in selection;
 - WebSocket cyber swap currently strips `previous_response_id` to replay on another account. This behavior must be retained only under an explicit, tested replay contract; otherwise strict state must fail typed rather than being silently weakened;
 - `store=false` is forced on Codex Responses translations, so state-continuation capabilities must be declared and tested rather than inferred;
 - canonical usage already preserves cached-input dimensions and connection attribution, providing the measurement foundation.
@@ -415,10 +426,10 @@ A candidate fails if it makes percentages look balanced while increasing total e
 
 ## Rollout and promotion
 
-1. Land extraction and observability with selection behavior unchanged.
-2. Run offline replay against the current six-connection Production shape.
-3. Enable soft affinity in Test behind a backend feature flag.
-4. Enable all-eligible reset-aware selection in Test; retain immediate rollback to the old selector.
+1. Land extraction and observability with selection behavior unchanged. **Partially complete:** declared extraction and privacy-safe debug context are implemented; aggregate affinity lifecycle metrics remain pending.
+2. Run offline replay against the current six-connection Production shape. **Pending; a deterministic five-Plus/one-Pro unit regression now protects the observed concentration case.**
+3. Enable soft affinity in Test behind a backend feature flag. **Test review candidate currently enables it when `POOL_JWT_SECRET` is configured; a dedicated rollback flag remains required before Staging.**
+4. Enable all-eligible reset-aware selection in Test; retain immediate rollback to the old selector. **All-eligible tiering is implemented; learned-capacity/reset-urgency scoring and a dedicated rollback flag remain pending.**
 5. Add provisional debits after deterministic concurrency tests pass.
 6. Build one immutable image and promote Test to real-auth Staging.
 7. Validate cache and reset metrics during Staging soak using isolated browser/auth state.

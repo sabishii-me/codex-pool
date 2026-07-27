@@ -183,7 +183,7 @@ func (s *codexRelayState) run() (int, error) {
 				if doErr := s.doSwap(swap.next); doErr != nil {
 					log.Printf("[%s] cyber swap dial failed: %v; forwarding upstream cyber_policy frame", s.opts.ReqID, doErr)
 					s.forwardCyberPolicy(swap.frame)
-					s.legacyPin()
+					s.pinCyberAffinity()
 					return 101, nil
 				}
 				continue
@@ -191,7 +191,7 @@ func (s *codexRelayState) run() (int, error) {
 			// No swap target — surface the upstream's real cyber_policy
 			// frame and end the relay cleanly.
 			s.forwardCyberPolicy(swap.frame)
-			s.legacyPin()
+			s.pinCyberAffinity()
 			return 101, nil
 		}
 		return 101, err
@@ -532,7 +532,7 @@ func (s *codexRelayState) doSwap(cand *ProviderConnection) error {
 		s.opts.SetActiveAccount(cand)
 	}
 	if s.opts.ConversationID != "" {
-		s.h.pool.pin(s.opts.ConversationID, cand.ID)
+		s.h.pool.bindAffinity(s.opts.ConversationID, cand.ID)
 	}
 
 	s.upstreamConn.CloseNow()
@@ -553,11 +553,11 @@ func (s *codexRelayState) pickCyberAccessCandidate() *ProviderConnection {
 	return s.h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex, RequiredPlan: s.opts.RequiredPlan, ClientIP: s.opts.ClientIP, Exclude: exclude})
 }
 
-func (s *codexRelayState) legacyPin() {
+func (s *codexRelayState) pinCyberAffinity() {
 	if s.opts.ConversationID == "" {
 		return
 	}
-	s.h.pinConversationToCyberAccess(s.opts.ConversationID, AccountTypeCodex, s.opts.RequiredPlan, s.opts.ClientIP, s.activeAccount.ID, s.opts.ReqID)
+	s.h.pinAffinityToCyberAccess(s.opts.ConversationID, AccountTypeCodex, s.opts.RequiredPlan, s.opts.ClientIP, s.activeAccount.ID, s.opts.ReqID)
 }
 
 // cyberPolicyHTTPSuppressor wires sseInterceptWriter.onEvent so the
@@ -580,12 +580,12 @@ func (c *cyberPolicyHTTPSuppressor) onEvent(eventData []byte) (drop bool, termin
 	if !isCyberPolicyError(eventData) {
 		return false, false
 	}
-	log.Printf("[%s] cyber_policy SSE event from account %s; pinning conversation, forwarding error", c.reqID, c.accountID)
+	log.Printf("[%s] cyber_policy SSE event from account %s; pinning private affinity, forwarding error", c.reqID, c.accountID)
 	if c.h != nil && c.h.metrics != nil {
 		c.h.metrics.incCyberPolicy(c.accountID, "suppressed_sse")
 	}
 	if c.h != nil && c.conversationID != "" {
-		if c.h.pinConversationToCyberAccess(c.conversationID, AccountTypeCodex, c.requiredPlan, c.clientIP, c.accountID, c.reqID) {
+		if c.h.pinAffinityToCyberAccess(c.conversationID, AccountTypeCodex, c.requiredPlan, c.clientIP, c.accountID, c.reqID) {
 			if c.pinned != nil {
 				*c.pinned = true
 			}

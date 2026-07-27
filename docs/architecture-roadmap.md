@@ -6,7 +6,9 @@ Historical modularization baseline: `267e80b` (`feat: expand provider gateway an
 
 Current deployed Production code revision: `9ffe963ddcd1`
 
-Current roadmap documentation checkpoint: `9ed853ec19a0`
+Current roadmap documentation checkpoint: `2701236` plus the local Test implementation review candidate
+
+Current P0 scheduling checkpoint: declared soft-affinity extraction/HMAC isolation, typed selection context, bounded local bindings, and all-eligible ordinary Codex tiering are implemented locally with regression coverage. Canonical model is mandatory in the HMAC namespace, so streaming-body and WebSocket paths carry typed but inactive affinity until they can resolve that model before selection. Strict provider-state ownership, complete affinity lifecycle, learned reset-aware capacity, provisional debits, rollback flags, and Staging/Production promotion remain pending.
 
 Related implementation learnings: [`engineering-learnings.md`](engineering-learnings.md)
 

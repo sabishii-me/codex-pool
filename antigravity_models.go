@@ -464,22 +464,31 @@ func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclu
 	model = antigravityCanonicalModel(model)
 	now := time.Now()
 	pinKey := "antigravity:" + model + ":" + conversationID
+	// Antigravity remains a temporary explicit internal profile. Its raw client
+	// identity must be replaced by the common HMAC context before Production.
 	if conversationID != "" {
-		if pinnedID := p.convPin[pinKey]; pinnedID != "" && (exclude == nil || !exclude[pinnedID]) {
-			for _, account := range p.accounts {
-				if account.ID != pinnedID || account.Type != AccountTypeAntigravity || !antigravityModels.Supports(account.ID, model) {
-					continue
+		if binding, ok := p.convPin[pinKey]; ok {
+			if binding.AccountID == "" || binding.TouchedAt.IsZero() || now.Sub(binding.TouchedAt) > providerAffinityTTL || (exclude != nil && exclude[binding.AccountID]) {
+				delete(p.convPin, pinKey)
+			} else {
+				pinnedID := binding.AccountID
+				for _, account := range p.accounts {
+					if account.ID != pinnedID || account.Type != AccountTypeAntigravity || !antigravityModels.Supports(account.ID, model) {
+						continue
+					}
+					account.mu.Lock()
+					until := account.ModelRateLimits[model]
+					discoveryAvailable, _ := antigravityModels.DiscoveryAvailability(account.ID, model, now)
+					eligible := !account.Dead && !account.Disabled && !account.NeedsVerification && accountAllowsClientIPLocked(account, clientIP) && !until.After(now) && discoveryAvailable
+					account.mu.Unlock()
+					if eligible {
+						binding.TouchedAt = now
+						p.convPin[pinKey] = binding
+						return account
+					}
 				}
-				account.mu.Lock()
-				until := account.ModelRateLimits[model]
-				discoveryAvailable, _ := antigravityModels.DiscoveryAvailability(account.ID, model, now)
-				eligible := !account.Dead && !account.Disabled && !account.NeedsVerification && accountAllowsClientIPLocked(account, clientIP) && !until.After(now) && discoveryAvailable
-				account.mu.Unlock()
-				if eligible {
-					return account
-				}
+				delete(p.convPin, pinKey)
 			}
-			delete(p.convPin, pinKey)
 		}
 	}
 	var best *ProviderConnection
@@ -499,7 +508,13 @@ func (p *ProviderPool) candidateForAntigravityModel(conversationID string, exclu
 		}
 	}
 	if best != nil && conversationID != "" {
-		p.convPin[pinKey] = best.ID
+		if p.convPin == nil {
+			p.convPin = make(map[string]affinityBinding)
+		}
+		if len(p.convPin) >= providerAffinityMaxEntries {
+			pruneOldestAffinityBinding(p.convPin, now)
+		}
+		p.convPin[pinKey] = affinityBinding{AccountID: best.ID, TouchedAt: now}
 	}
 	return best
 }

@@ -13,6 +13,7 @@ type ProviderAdminAPI struct {
 	setDisabled    func(http.ResponseWriter, string, bool)
 	resurrect      func(http.ResponseWriter, string)
 	refresh        func(http.ResponseWriter, string)
+	redeemReset    func(http.ResponseWriter, *http.Request, string)
 }
 
 func validProviderConnectionPathID(id string) bool {
@@ -35,7 +36,7 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 	const canonicalPrefix = "/api/v2/provider-connections/"
 	if strings.HasPrefix(r.URL.Path, canonicalPrefix) {
 		path := strings.TrimPrefix(r.URL.Path, canonicalPrefix)
-		for _, action := range []string{"identity", "enable", "disable", "recover", "refresh"} {
+		for _, action := range []string{"identity", "enable", "disable", "recover", "refresh", "redeem-reset-credit"} {
 			suffix := "/" + action
 			if !strings.HasSuffix(path, suffix) {
 				continue
@@ -65,6 +66,8 @@ func (api *ProviderAdminAPI) TryServe(w http.ResponseWriter, r *http.Request) bo
 				api.resurrect(w, connectionID)
 			case "refresh":
 				api.refresh(w, connectionID)
+			case "redeem-reset-credit":
+				api.redeemReset(w, r, connectionID)
 			}
 			return true
 		}
@@ -144,5 +147,6 @@ func (h *proxyHandler) providerAdminAPIService() *ProviderAdminAPI {
 		setDisabled:    h.setAccountDisabled,
 		resurrect:      h.resurrectAccount,
 		refresh:        h.forceRefreshAccount,
+		redeemReset:    h.redeemCodexResetCredit,
 	}
 }

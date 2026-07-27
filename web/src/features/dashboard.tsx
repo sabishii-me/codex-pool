@@ -35,6 +35,11 @@ export function DashboardPage({ stats, models, connections, isElevated, onNaviga
       </div>
     </section>
 
+    {stats && stats.accounts.some(account => account.type === "codex" && account.reset_credits_known && Number(account.reset_credits_available ?? 0) > 0) ? <section className="bento-card admin-attention" role="status">
+      <CardHeader title="Codex reset credit available" subtitle="A temporary provider quota reset is waiting" />
+      <div className="attention-list"><div><StatusBadge tone="warning">Available</StatusBadge><span>{stats.accounts.filter(account => account.type === "codex").reduce((sum, account) => sum + Number(account.reset_credits_available ?? 0), 0)} reset credit(s) across Codex connections.</span>{isElevated ? <button onClick={() => onNavigate("/admin/connections")}>Review connections →</button> : <a href="https://chatgpt.com/codex" target="_blank" rel="noreferrer">Official Codex dashboard ↗</a>}</div></div>
+    </section> : null}
+
     <section className="home-resource-grid">
       <button className="home-resource-card" onClick={() => onNavigate("/models")}>
         <span>Models</span><b>Choose a model</b><p>Browse identities, capabilities, limits, and member-facing availability.</p><em>Open Models →</em>
@@ -52,6 +57,7 @@ export function DashboardPage({ stats, models, connections, isElevated, onNaviga
       <div className="attention-list">
         {connections.status === "error" ? <div><StatusBadge tone="warning">Unavailable</StatusBadge><span>{connections.message}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
         {connections.status === "empty" ? <div><StatusBadge tone="warning">Action</StatusBadge><span>No provider connections are configured.</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div> : null}
+        {connections.status === "ready" && connections.data.filter(c => c.reset_credits.available_count > 0).map(connection => <div key={`reset-${connection.id}`}><StatusBadge tone="warning">Reset credit</StatusBadge><span>{connection.identity.display_name || connection.provider_id}: {connection.reset_credits.available_count} available</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div>)}
         {connections.status === "ready" && connections.data.filter(c => c.dead || c.disabled || c.health_error).map(connection => <div key={connection.id}><StatusBadge tone="warning">Connection</StatusBadge><span>{connection.identity.display_name || connection.provider_id}: {connection.dead ? "dead" : connection.disabled ? "disabled" : connection.health_error}</span><button onClick={() => onNavigate("/admin/connections")}>Connections →</button></div>)}
         {connections.status === "ready" && !connections.data.some(c => c.dead || c.disabled || c.health_error) && constrainedModels.length === 0 ? <div><StatusBadge tone="success">Clear</StatusBadge><span>No connection or model issues require attention.</span></div> : null}
         {constrainedModels.slice(0, 3).map(model => <div key={model.id}><StatusBadge tone="warning">Model</StatusBadge><span>{model.name || model.id} is unavailable now.</span><button onClick={() => onNavigate("/models")}>Models →</button></div>)}

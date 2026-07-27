@@ -36,7 +36,7 @@
     "OperatorProviderConnectionV2": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "public_id", "provider_id", "identity", "disabled", "dead", "inflight", "penalty", "score", "is_primary", "runtime", "usage", "totals"],
+      "required": ["id", "public_id", "provider_id", "identity", "disabled", "dead", "inflight", "penalty", "score", "is_primary", "runtime", "reset_credits", "usage", "totals"],
       "properties": {
         "id": { "type": "string" },
         "public_id": { "type": "string" },
@@ -57,6 +57,19 @@
         "score_tooltip": { "type": "string" },
         "is_primary": { "type": "boolean" },
         "runtime": { "$ref": "#/$defs/ProviderConnectionRuntimeView" },
+        "reset_credits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["known", "available_count", "expirations", "redemption_available", "dashboard_url"],
+          "properties": {
+            "known": { "type": "boolean" },
+            "available_count": { "type": "integer" },
+            "expirations": { "type": "array", "items": { "type": "string", "format": "date-time" } },
+            "retrieved_at": { "type": "string", "format": "date-time" },
+            "redemption_available": { "type": "boolean" },
+            "dashboard_url": { "type": "string", "format": "uri" }
+          }
+        },
         "usage": { "type": "object", "additionalProperties": true },
         "totals": { "type": "object", "additionalProperties": { "type": "number" } }
       }

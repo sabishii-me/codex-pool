@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+type ProviderConnectionResetCreditsView struct {
+	Known               bool        `json:"known"`
+	AvailableCount      int         `json:"available_count"`
+	Expirations         []time.Time `json:"expirations"`
+	RetrievedAt         *time.Time  `json:"retrieved_at,omitempty"`
+	RedemptionAvailable bool        `json:"redemption_available"`
+	DashboardURL        string      `json:"dashboard_url"`
+}
+
 type ProviderConnectionRuntimeView struct {
 	Status                 string     `json:"status"`
 	StatusDetail           string     `json:"status_detail,omitempty"`
@@ -22,27 +31,28 @@ type ProviderConnectionRuntimeView struct {
 // OperatorProviderConnectionView is the canonical operator-facing connection
 // DTO. It contains no provider-specific compatibility identity fields.
 type OperatorProviderConnectionView struct {
-	ID                string                        `json:"id"`
-	PublicID          string                        `json:"public_id"`
-	ProviderID        ProviderID                    `json:"provider_id"`
-	Identity          ConnectionIdentity            `json:"identity"`
-	PlanType          string                        `json:"plan_type,omitempty"`
-	Disabled          bool                          `json:"disabled"`
-	Dead              bool                          `json:"dead"`
-	NeedsVerification bool                          `json:"needs_verification,omitempty"`
-	VerificationURL   string                        `json:"verification_url,omitempty"`
-	HealthError       string                        `json:"health_error,omitempty"`
-	CyberAccess       bool                          `json:"cyber_access,omitempty"`
-	Inflight          int64                         `json:"inflight"`
-	ExpiresAt         time.Time                     `json:"expires_at,omitempty"`
-	LastRefresh       time.Time                     `json:"last_refresh,omitempty"`
-	Penalty           float64                       `json:"penalty"`
-	Score             float64                       `json:"score"`
-	ScoreTooltip      string                        `json:"score_tooltip,omitempty"`
-	IsPrimary         bool                          `json:"is_primary"`
-	Runtime           ProviderConnectionRuntimeView `json:"runtime"`
-	Usage             UsageSnapshot                 `json:"usage"`
-	Totals            AccountUsage                  `json:"totals"`
+	ID                string                             `json:"id"`
+	PublicID          string                             `json:"public_id"`
+	ProviderID        ProviderID                         `json:"provider_id"`
+	Identity          ConnectionIdentity                 `json:"identity"`
+	PlanType          string                             `json:"plan_type,omitempty"`
+	Disabled          bool                               `json:"disabled"`
+	Dead              bool                               `json:"dead"`
+	NeedsVerification bool                               `json:"needs_verification,omitempty"`
+	VerificationURL   string                             `json:"verification_url,omitempty"`
+	HealthError       string                             `json:"health_error,omitempty"`
+	CyberAccess       bool                               `json:"cyber_access,omitempty"`
+	Inflight          int64                              `json:"inflight"`
+	ExpiresAt         time.Time                          `json:"expires_at,omitempty"`
+	LastRefresh       time.Time                          `json:"last_refresh,omitempty"`
+	Penalty           float64                            `json:"penalty"`
+	Score             float64                            `json:"score"`
+	ScoreTooltip      string                             `json:"score_tooltip,omitempty"`
+	IsPrimary         bool                               `json:"is_primary"`
+	Runtime           ProviderConnectionRuntimeView      `json:"runtime"`
+	ResetCredits      ProviderConnectionResetCreditsView `json:"reset_credits"`
+	Usage             UsageSnapshot                      `json:"usage"`
+	Totals            AccountUsage                       `json:"totals"`
 }
 
 // LegacyOperatorConnectionView preserves /admin/accounts while compatibility
@@ -93,11 +103,13 @@ type poolStatsConnectionSnapshot struct {
 // mutable ProviderConnection state. It snapshots under the connection lock and
 // returns detached DTO values to HTTP/data consumers.
 type ConnectionViewService struct {
-	pool *ProviderPool
+	pool                  *ProviderPool
+	providerStateWritable bool
 }
 
-func NewConnectionViewService(pool *ProviderPool) *ConnectionViewService {
-	return &ConnectionViewService{pool: pool}
+func NewConnectionViewService(pool *ProviderPool, providerStateWritable ...bool) *ConnectionViewService {
+	writable := len(providerStateWritable) > 0 && providerStateWritable[0]
+	return &ConnectionViewService{pool: pool, providerStateWritable: writable}
 }
 
 func (service *ConnectionViewService) OperatorConnections() []OperatorProviderConnectionView {
@@ -282,6 +294,16 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 		if connection.Dead || connection.Disabled {
 			score = 0
 		}
+		resetCredits := ProviderConnectionResetCreditsView{
+			Known: !connection.ResetCreditsRetrievedAt.IsZero(), AvailableCount: connection.ResetCreditsAvailable,
+			RetrievedAt:         optionalTime(connection.ResetCreditsRetrievedAt),
+			RedemptionAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
+			DashboardURL:        "https://chatgpt.com/codex",
+			Expirations:         make([]time.Time, 0, len(connection.RateLimitResetCredits)),
+		}
+		for _, credit := range connection.RateLimitResetCredits {
+			resetCredits.Expirations = append(resetCredits.Expirations, credit.ExpiresAt.UTC())
+		}
 		canonical := OperatorProviderConnectionView{
 			ID: connection.ID, PublicID: hashAccountID(connection.ID), ProviderID: connection.Type,
 			Identity: identity, PlanType: connection.PlanType, Disabled: connection.Disabled, Dead: connection.Dead,
@@ -291,6 +313,7 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 			LastRefresh: connection.LastRefresh, Penalty: connection.Penalty, Score: score,
 			ScoreTooltip: scoreTooltipFromBreakdownLocked(connection, now, breakdown),
 			Runtime:      providerConnectionRuntimeLocked(connection, now),
+			ResetCredits: resetCredits,
 			Usage:        connection.Usage, Totals: connection.Totals,
 		}
 		legacy := LegacyOperatorConnectionView{

@@ -26,7 +26,7 @@ func (h *proxyHandler) connectionViewService() *ConnectionViewService {
 	if h.connectionViews != nil {
 		return h.connectionViews
 	}
-	return NewConnectionViewService(h.pool)
+	return NewConnectionViewService(h.pool, h.cfg != nil && !h.cfg.disableRefresh)
 }
 
 func (h *proxyHandler) serveProviderConnectionsV2(w http.ResponseWriter) {

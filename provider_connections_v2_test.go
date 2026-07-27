@@ -13,7 +13,9 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 		Type: AccountTypeCodex, ID: "stable", AccountID: "legacy-subject", IDTokenChatGPTAccountID: "legacy-token-subject", Email: "person@example.com",
 		Identity: ConnectionIdentity{DisplayName: "Production Codex", ExternalSubject: "subject-1", Attributes: map[string]string{"region": "us-east"}},
 		PlanType: "pro", Totals: AccountUsage{RequestCount: 2},
-		Usage: UsageSnapshot{SecondaryUsedPercent: 0.99, SecondaryWindowMinutes: 10080, SecondaryResetAt: time.Now().Add(6 * time.Hour), RetrievedAt: time.Now(), Source: "wham", secondarySet: true},
+		ResetCreditsAvailable: 1, ResetCreditsRetrievedAt: time.Now(),
+		RateLimitResetCredits: []RateLimitResetCredit{{ID: "credit", ExpiresAt: time.Now().Add(time.Hour)}},
+		Usage:                 UsageSnapshot{SecondaryUsedPercent: 0.99, SecondaryWindowMinutes: 10080, SecondaryResetAt: time.Now().Add(6 * time.Hour), RetrievedAt: time.Now(), Source: "wham", secondarySet: true},
 	}
 	handler := &proxyHandler{pool: newProviderPool([]*Account{connection}, false)}
 	recorder := httptest.NewRecorder()
@@ -34,6 +36,9 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 	}
 	if got.Runtime.Status != "cooldown" || got.Runtime.StatusDetail != "Secondary quota is exhausted" || got.Runtime.SecondaryUsedPercent == nil || *got.Runtime.SecondaryUsedPercent != 99 || got.Runtime.SecondaryWindowMinutes == nil || *got.Runtime.SecondaryWindowMinutes != 10080 || got.Runtime.SecondaryResetAt == nil || got.Runtime.UsageRetrievedAt == nil || got.Runtime.UsageSource != "wham" {
 		t.Fatalf("runtime projection = %#v", got.Runtime)
+	}
+	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || got.ResetCredits.RedemptionAvailable {
+		t.Fatalf("reset credit projection = %#v", got.ResetCredits)
 	}
 	body := recorder.Body.String()
 	for _, forbidden := range []string{"account_id", "account_email", "id_token_chatgpt_account_id", "upstream_account_id"} {

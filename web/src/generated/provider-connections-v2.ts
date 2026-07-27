@@ -41,6 +41,14 @@ export interface OperatorProviderConnectionV2 {
   score_tooltip?: string;
   is_primary: boolean;
   runtime: ProviderConnectionRuntimeView;
+  reset_credits: {
+  known: boolean;
+  available_count: number;
+  expirations: string[];
+  retrieved_at?: string;
+  redemption_available: boolean;
+  dashboard_url: string;
+};
   usage: Record<string, unknown>;
   totals: Record<string, number>;
 }

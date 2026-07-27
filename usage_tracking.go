@@ -93,7 +93,9 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		if !hasToken || (dead && !accountUsesStaticAPIKey(accType)) {
 			continue
 		}
-		if accType == AccountTypeCodex {
+		// Reset-credit inventory and redemption mutate provider-owned state and
+		// therefore run only on the credential-refresh authority.
+		if accType == AccountTypeCodex && !h.cfg.disableRefresh {
 			resetCreditsFresh := !resetCreditsRetrievedAt.IsZero() && now.Sub(resetCreditsRetrievedAt) < resetCreditPollInterval
 			resetCreditsReady := resetCreditsFresh
 			if !resetCreditsFresh {

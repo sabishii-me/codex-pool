@@ -52,6 +52,13 @@ func applyUsageCacheDiagnostics(value *UsageDimension) {
 	}
 }
 
+func usageRangeStart(now time.Time, hours int) time.Time {
+	if hours <= 0 {
+		hours = 24
+	}
+	return now.UTC().Truncate(time.Hour).Add(-time.Duration(hours-1) * time.Hour)
+}
+
 func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageModelHourly, error) {
 	if s == nil || s.db == nil {
 		return []UsageModelHourly{}, nil
@@ -59,7 +66,7 @@ func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageM
 	if hours <= 0 {
 		hours = 24
 	}
-	since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Format(time.RFC3339Nano)
+	since := usageRangeStart(time.Now(), hours).Format(time.RFC3339Nano)
 	filter, args := "completed_at >= ?", []any{since}
 	if strings.TrimSpace(userID) != "" {
 		filter += " AND user_id = ?"
@@ -84,14 +91,11 @@ func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageM
 	return out, rows.Err()
 }
 
-func (s *AnalyticsStore) getUsageDimensions(userID string, days int, includeConnections bool) (models, providers, connections []UsageDimension, err error) {
+func (s *AnalyticsStore) getUsageDimensions(userID string, hours int, includeConnections bool) (models, providers, connections []UsageDimension, err error) {
 	if s == nil || s.db == nil {
 		return []UsageDimension{}, []UsageDimension{}, []UsageDimension{}, nil
 	}
-	if days <= 0 {
-		days = 30
-	}
-	since := time.Now().UTC().AddDate(0, 0, -days).Format(time.RFC3339Nano)
+	since := usageRangeStart(time.Now(), hours).Format(time.RFC3339Nano)
 	filter, args := "completed_at >= ?", []any{since}
 	if strings.TrimSpace(userID) != "" {
 		filter += " AND user_id = ?"

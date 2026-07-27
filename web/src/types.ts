@@ -310,6 +310,8 @@ export interface SignalAnalytics {
 export interface UsageProjection {
   scope: "me" | "pool" | "member";
   subject_id?: string;
+  range_hours: number;
+  range_days: number;
   evidence: { kind: "measured" | "estimated" | "inferred"; source: string; generated_at: string; data_since?: string };
   totals: {
     user_id?: string;

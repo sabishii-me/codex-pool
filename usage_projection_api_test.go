@@ -23,7 +23,7 @@ func TestUsageDimensionsPreserveModelProviderAndConnectionGrain(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	models, providers, connections, err := store.getUsageDimensions("member", 7, true)
+	models, providers, connections, err := store.getUsageDimensions("member", 7*24, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,6 +36,23 @@ func TestUsageDimensionsPreserveModelProviderAndConnectionGrain(t *testing.T) {
 	}
 	if models[0].BillableTokens+models[1].BillableTokens != 35 {
 		t.Fatalf("models=%#v", models)
+	}
+}
+
+func TestUsageRangeStartUsesCompleteUTCHourBuckets(t *testing.T) {
+	now := time.Date(2026, time.July, 27, 23, 45, 0, 0, time.UTC)
+	if got := usageRangeStart(now, 24); !got.Equal(time.Date(2026, time.July, 27, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("24 hour range starts at %s", got)
+	}
+}
+
+func TestUsageProjectionTotalsAreLimitedToReturnedRange(t *testing.T) {
+	totals := usageTotalsFromHourly([]UserHourlyUsage{
+		{InputTokens: 10, CachedTokens: 3, OutputTokens: 4, ReasoningTokens: 2, BillableTokens: 14, RequestCount: 1},
+		{InputTokens: 20, CachedTokens: 5, OutputTokens: 6, ReasoningTokens: 1, BillableTokens: 26, RequestCount: 2},
+	})
+	if totals.TotalInputTokens != 30 || totals.TotalCachedTokens != 8 || totals.TotalOutputTokens != 10 || totals.TotalReasoningTokens != 3 || totals.TotalBillableTokens != 40 || totals.RequestCount != 3 {
+		t.Fatalf("range totals = %#v", totals)
 	}
 }
 

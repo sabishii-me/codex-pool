@@ -44,6 +44,8 @@ type UsageModelHourly struct {
 type UsageProjection struct {
 	Scope           string                 `json:"scope"`
 	SubjectID       string                 `json:"subject_id,omitempty"`
+	RangeHours      int                    `json:"range_hours"`
+	RangeDays       int                    `json:"range_days"`
 	Evidence        UsageEvidence          `json:"evidence"`
 	Totals          UserUsage              `json:"totals"`
 	Hourly          []UserHourlyUsage      `json:"hourly"`
@@ -89,7 +91,7 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hours, days := parseUsageRange(r)
-	projection := UsageProjection{Scope: scope, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, ByModel: []UsageDimension{}, ByProvider: []UsageDimension{}, ByConnection: []UsageDimension{}, ModelHourly: []UsageModelHourly{}, PartialFailures: []string{}}
+	projection := UsageProjection{Scope: scope, RangeHours: hours, RangeDays: days, Evidence: UsageEvidence{Kind: "measured", Source: "canonical_usage_store", GeneratedAt: time.Now().UTC(), DataSince: time.Now().UTC().Add(-h.store.retention)}, Hourly: []UserHourlyUsage{}, Daily: []UserDailyUsage{}, ByModel: []UsageDimension{}, ByProvider: []UsageDimension{}, ByConnection: []UsageDimension{}, ModelHourly: []UsageModelHourly{}, PartialFailures: []string{}}
 	var subjectID string
 	switch scope {
 	case "me":
@@ -108,16 +110,9 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		projection.Hourly = hourly
-		users, err := h.store.getAllUserUsage()
-		if err != nil {
-			respondJSONError(w, http.StatusInternalServerError, "failed to load pool totals")
-			return
-		}
-		for _, totals := range users {
-			addUserUsage(&projection.Totals, totals)
-		}
+		projection.Totals = usageTotalsFromHourly(hourly)
 		if h.analyticsStore != nil {
-			projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", days, true)
+			projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", hours, true)
 			if err == nil {
 				projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly("", hours)
 			}
@@ -139,26 +134,20 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	projection.SubjectID = subjectID
-	totals, err := h.store.getUserUsage(subjectID)
-	if err != nil {
-		respondJSONError(w, http.StatusInternalServerError, "failed to load usage totals")
-		return
-	}
-	if totals != nil {
-		projection.Totals = *totals
-	}
+	var err error
 	projection.Hourly, err = h.store.getUserHourlyUsage(subjectID, hours)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "failed to load hourly usage")
 		return
 	}
+	projection.Totals = usageTotalsFromHourly(projection.Hourly)
 	projection.Daily, err = h.store.getUserDailyUsage(subjectID, days)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "failed to load daily usage")
 		return
 	}
 	if h.analyticsStore != nil {
-		projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, days, false)
+		projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, hours, false)
 		if err == nil {
 			projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly(subjectID, hours)
 		}
@@ -181,6 +170,19 @@ func applyUsageProjectionDiagnostics(values []UsageDimension, pricing *PricingDa
 			values[index].CostStatus = "aggregate"
 		}
 	}
+}
+
+func usageTotalsFromHourly(hourly []UserHourlyUsage) UserUsage {
+	var totals UserUsage
+	for _, row := range hourly {
+		totals.TotalInputTokens += row.InputTokens
+		totals.TotalCachedTokens += row.CachedTokens
+		totals.TotalOutputTokens += row.OutputTokens
+		totals.TotalReasoningTokens += row.ReasoningTokens
+		totals.TotalBillableTokens += row.BillableTokens
+		totals.RequestCount += row.RequestCount
+	}
+	return totals
 }
 
 func addUserUsage(target *UserUsage, value UserUsage) {

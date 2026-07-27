@@ -37,7 +37,7 @@ export function DashboardPage({ stats, models, connections, isElevated, onNaviga
 
     {stats && stats.accounts.some(account => account.type === "codex" && account.reset_credits_known && Number(account.reset_credits_available ?? 0) > 0) ? <section className="bento-card admin-attention" role="status">
       <CardHeader title="Codex reset credit available" subtitle="A temporary provider quota reset is waiting" />
-      <div className="attention-list"><div><StatusBadge tone="warning">Available</StatusBadge><span>{stats.accounts.filter(account => account.type === "codex").reduce((sum, account) => sum + Number(account.reset_credits_available ?? 0), 0)} reset credit(s) across Codex connections.</span>{isElevated ? <button onClick={() => onNavigate("/admin/connections")}>Review connections →</button> : <a href="https://chatgpt.com/codex" target="_blank" rel="noreferrer">Official Codex dashboard ↗</a>}</div></div>
+      <div className="attention-list"><div><StatusBadge tone="warning">Available</StatusBadge><span>{stats.accounts.filter(account => account.type === "codex").reduce((sum, account) => sum + Number(account.reset_credits_available ?? 0), 0)} reset credit(s) across Codex connections.</span>{isElevated ? <button onClick={() => onNavigate("/admin/connections")}>Review connections →</button> : <a href="https://chatgpt.com/" target="_blank" rel="noreferrer">Official Codex dashboard ↗</a>}</div></div>
     </section> : null}
 
     <section className="home-resource-grid">

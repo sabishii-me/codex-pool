@@ -69,12 +69,12 @@ func (h *proxyHandler) redeemCodexResetCredit(w http.ResponseWriter, r *http.Req
 	if creditsErr != nil || usageErr != nil {
 		respondJSON(w, map[string]any{
 			"status": "redeemed", "code": code, "windows_reset": windowsReset,
-			"refresh_complete": false, "dashboard_url": "https://chatgpt.com/codex",
+			"refresh_complete": false, "dashboard_url": "https://chatgpt.com/",
 		})
 		return
 	}
 	respondJSON(w, map[string]any{
 		"status": "redeemed", "code": code, "windows_reset": windowsReset,
-		"refresh_complete": true, "dashboard_url": "https://chatgpt.com/codex",
+		"refresh_complete": true, "dashboard_url": "https://chatgpt.com/",
 	})
 }

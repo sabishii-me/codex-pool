@@ -298,7 +298,7 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 			Known: !connection.ResetCreditsRetrievedAt.IsZero(), AvailableCount: connection.ResetCreditsAvailable,
 			RetrievedAt:         optionalTime(connection.ResetCreditsRetrievedAt),
 			RedemptionAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
-			DashboardURL:        "https://chatgpt.com/codex",
+			DashboardURL:        "https://chatgpt.com/",
 			Expirations:         make([]time.Time, 0, len(connection.RateLimitResetCredits)),
 		}
 		for _, credit := range connection.RateLimitResetCredits {

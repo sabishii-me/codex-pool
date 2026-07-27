@@ -121,12 +121,11 @@ type ConnectionSelection struct {
 // compatibility ConversationID field remains only for explicit internal model
 // executors until their typed profiles land.
 type ConnectionSelector struct {
-	pool                 *ProviderPool
-	typedAffinityEnabled bool
+	pool *ProviderPool
 }
 
 func NewConnectionSelector(pool *ProviderPool) *ConnectionSelector {
-	return &ConnectionSelector{pool: pool, typedAffinityEnabled: true}
+	return &ConnectionSelector{pool: pool}
 }
 
 func (selector *ConnectionSelector) Select(request ConnectionSelection) *ProviderConnection {
@@ -164,12 +163,6 @@ func (selector *ConnectionSelector) Select(request ConnectionSelection) *Provide
 			}
 		}
 		routingContext := request.RoutingContext
-		if !selector.typedAffinityEnabled {
-			// A disabled typed-affinity feature must not reactivate legacy raw
-			// identity. Clearing compatibility identity keeps rollback privacy-safe.
-			routingContext = RequestRoutingContext{}
-			request.ConversationID = ""
-		}
 		// Ordinary protocol-owned affinity must be the private versioned form and
 		// must agree with the selected provider/protocol. Compatibility identity is
 		// considered only when no typed context was supplied.

@@ -56,12 +56,6 @@ type config struct {
 	disableRefresh  bool
 	refreshProxyURL string // HTTP proxy URL for refresh operations
 
-	// Independent rollback controls for ordinary Codex balancing and typed
-	// client affinity. Both default on and can be disabled without changing
-	// protocol translation, authentication, or canonical accounting.
-	codexBalancingEnabled bool
-	typedAffinityEnabled  bool
-
 	debug                      atomic.Bool
 	logBodies                  bool
 	bodyLogLimit               int64
@@ -168,8 +162,6 @@ func buildConfig() *config {
 
 	// Refresh often fails for some auth.json fixtures; allow opting out.
 	cfg.disableRefresh = getConfigBool("PROXY_DISABLE_REFRESH", fileCfg.DisableRefresh, false)
-	cfg.codexBalancingEnabled = parseBoolEnv("PROXY_CODEX_BALANCING_ENABLED", true)
-	cfg.typedAffinityEnabled = parseBoolEnv("PROXY_TYPED_AFFINITY_ENABLED", true)
 	cfg.refreshProxyURL = getConfigString("REFRESH_PROXY_URL", fileCfg.RefreshProxyURL, "")
 
 	cfg.debug.Store(getConfigBool("PROXY_DEBUG", fileCfg.Debug, false))
@@ -529,10 +521,6 @@ func main() {
 		pacer = newRequestPacer(time.Duration(paceMs) * time.Millisecond)
 	}
 
-	pool.setRoutingFeatures(cfg.codexBalancingEnabled)
-	connections := NewConnectionSelector(pool)
-	connections.typedAffinityEnabled = cfg.typedAffinityEnabled
-
 	h := &proxyHandler{
 		cfg:                  cfg,
 		transport:            transport,
@@ -543,7 +531,7 @@ func main() {
 		adminTOTP:            adminTOTP,
 		registry:             registry,
 		modelRoutes:          NewModelRouteRegistry(registry),
-		connections:          connections,
+		connections:          NewConnectionSelector(pool),
 		store:                store,
 		analyticsStore:       analyticsStore,
 		pricing:              pricing,

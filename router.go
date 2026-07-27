@@ -210,11 +210,27 @@ func isFrontendNavigationRequest(r *http.Request) bool {
 	return isFrontendNavigationPath(r.URL.Path)
 }
 
+func isRemovedFrontendPath(path string) bool {
+	path = normalizeNoopPath(path)
+	return path == "/friend" || strings.HasPrefix(path, "/friend/") ||
+		path == "/operator" || strings.HasPrefix(path, "/operator/") ||
+		path == "/admin/routes" || path == "/admin/usage" || path == "/admin/monitor" ||
+		path == "/hero.png" || path == "/hero.webp" || path == "/og-image.png"
+}
+
 // ServeHTTP routes incoming requests to the appropriate handler.
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqID := randomID()
 	if h.cfg.debug.Load() {
 		log.Printf("[%s] incoming %s %s", reqID, r.Method, r.URL.Path)
+	}
+
+	// Removed frontend paths are tombstoned before authentication, API, and
+	// proxy dispatch. They must never become compatibility aliases or expose an
+	// alternate product surface.
+	if isRemovedFrontendPath(r.URL.Path) {
+		http.NotFound(w, r)
+		return
 	}
 
 	// Fingerprinted frontend assets are embedded by the Go binary.

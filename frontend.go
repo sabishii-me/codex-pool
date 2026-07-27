@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -15,42 +14,21 @@ import (
 	"time"
 )
 
-//go:embed templates/friend_landing.html templates/local_landing.html templates/og-image.png templates/og-image-transparent.webp
+//go:embed templates/og-image.png templates/og-image-transparent.webp
 var friendContent embed.FS
 
 //go:embed web/dist/index.html web/dist/assets/*
 var signalRoomContent embed.FS
 
 func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request) {
-	if h.cfg.oauthGoogleClientID != "" || h.cfg.localDevSession {
-		data, err := signalRoomContent.ReadFile("web/dist/index.html")
-		if err != nil {
-			http.Error(w, "internal error: signal room missing", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-		_, _ = w.Write(data)
-		return
-	}
-
-	data, err := friendContent.ReadFile("templates/local_landing.html")
+	data, err := signalRoomContent.ReadFile("web/dist/index.html")
 	if err != nil {
-		http.Error(w, "internal error: template missing", http.StatusInternalServerError)
-		return
-	}
-	templateData := map[string]string{"BaseURL": getPublicURL()}
-	if templateData["BaseURL"] == "" {
-		templateData["BaseURL"] = "http://localhost:8989"
-	}
-	tmpl, err := template.New("landing").Parse(string(data))
-	if err != nil {
-		http.Error(w, "internal error: template parse failed", http.StatusInternalServerError)
+		http.Error(w, "internal error: product shell missing", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	_ = tmpl.Execute(w, templateData)
+	_, _ = w.Write(data)
 }
 
 func (h *proxyHandler) serveSignalRoomAsset(w http.ResponseWriter, r *http.Request) {

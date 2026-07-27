@@ -476,24 +476,12 @@ func TestXiaomiAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	}
 }
 
-func TestFriendLandingShowsXiaomiStatusWithoutAdminCredentialForm(t *testing.T) {
+func TestLegacyLandingTemplatesAreNotTracked(t *testing.T) {
 	t.Parallel()
-
-	page, err := os.ReadFile(filepath.Join("templates", "friend_landing.html"))
-	if err != nil {
-		t.Fatalf("read friend landing template: %v", err)
-	}
-	html := string(page)
-	for _, needle := range []string{
-		`id="xiaomi-accounts-list"`,
-		`mimo-v2.5-pro[1m]`,
-	} {
-		if !strings.Contains(html, needle) {
-			t.Fatalf("friend landing page missing %q", needle)
+	for _, name := range []string{"friend_landing.html", "local_landing.html"} {
+		if _, err := os.Stat(filepath.Join("templates", name)); !os.IsNotExist(err) {
+			t.Fatalf("legacy frontend %s must not exist, err=%v", name, err)
 		}
-	}
-	if strings.Contains(html, `id="xiaomi-api-key"`) {
-		t.Fatal("friend landing must not render the admin Xiaomi credential form")
 	}
 }
 

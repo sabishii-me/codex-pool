@@ -241,30 +241,24 @@ func newTestPoolUserStoreWithUser(t *testing.T, token string) *GatewayUserStore 
 	return store
 }
 
-func TestFriendLandingServesReactSignalRoom(t *testing.T) {
-	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/", nil)
-	rr := httptest.NewRecorder()
-
-	h.serveFriendLanding(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	body := rr.Body.String()
-	for _, want := range []string{
-		`<div id="root"></div>`,
-		`AI Pool — Model Gateway`,
-		`src="/assets/`,
-		`href="/assets/`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("expected React signal room to contain %q", want)
+func TestFrontendAlwaysServesReactProductShell(t *testing.T) {
+	for _, cfg := range []*config{{}, {oauthGoogleClientID: "configured"}, {localDevSession: true}} {
+		h := &proxyHandler{cfg: cfg}
+		rr := httptest.NewRecorder()
+		h.serveFriendLanding(rr, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
-	}
-	for _, unwanted := range []string{`id="access-form"`, `onclick="switchSubTab`, `id="codex-add-section"`} {
-		if strings.Contains(body, unwanted) {
-			t.Fatalf("React shell still contains legacy friend markup %q", unwanted)
+		body := rr.Body.String()
+		for _, want := range []string{`<div id="root"></div>`, `AI Pool — Model Gateway`, `src="/assets/`, `href="/assets/`} {
+			if !strings.Contains(body, want) {
+				t.Fatalf("expected React product shell to contain %q", want)
+			}
+		}
+		for _, forbidden := range []string{`id="access-form"`, `onclick="switchSubTab`, `id="codex-add-section"`, `One-Line Setup`, `--gold-bright`} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("frontend returned forbidden legacy markup %q", forbidden)
+			}
 		}
 	}
 }

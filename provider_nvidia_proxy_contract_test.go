@@ -46,7 +46,7 @@ func TestNvidiaProxyCanonicalUsageAndLargeBodyIntegrity(t *testing.T) {
 			defer analytics.db.Close()
 			handler := &proxyHandler{
 				cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024},
-				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry,
+				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry,
 				analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 			}
 			requestBody := []byte(`{"model":"nvidia/meta/llama-3.3-70b-instruct","messages":[{"role":"user","content":` + mustJSONContractString(t, padding) + `}],"stream":false}`)

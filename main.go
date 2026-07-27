@@ -53,15 +53,8 @@ type config struct {
 	poolDir                string
 	providerSpecsDir       string
 
-	disableRefresh  bool
 	refreshProxyURL string // HTTP proxy URL for refresh operations
 
-	debug                      atomic.Bool
-	logBodies                  bool
-	bodyLogLimit               int64
-	claudeTraceDir             string
-	claudeTraceBodyLimit       int64
-	claudeTraceSecrets         bool
 	maxInMemoryBodyBytes       int64
 	flushInterval              time.Duration
 	usageRefresh               time.Duration
@@ -70,7 +63,6 @@ type config struct {
 	retentionDays              int
 	oauthGoogleClientID        string
 	oauthGoogleClientSecret    string
-	localDevSession            bool
 	allowedEmails              []string
 	adminEmails                []string
 	requestTimeout             time.Duration // Timeout for non-streaming requests (0 = no timeout)
@@ -79,7 +71,6 @@ type config struct {
 	websocketIdleTimeout       time.Duration // Kill websocket relays idle for this long (0 = no idle timeout)
 	websocketHeartbeatInterval time.Duration // Send downstream app-level websocket heartbeats this often (0 = disabled)
 	websocketReadLimit         int64         // Maximum websocket message size
-	websocketCompression       bool          // Enable per-message websocket compression (off by default for latency)
 	shutdownGrace              time.Duration // Let active websocket turns finish before forced restart close
 	tierThreshold              float64       // Secondary usage % at which we stop preferring a tier (default 0.50)
 }
@@ -103,21 +94,6 @@ func parseInt64(s string) (int64, error) {
 	var n int64
 	_, err := fmt.Sscanf(s, "%d", &n)
 	return n, err
-}
-
-func parseBoolEnv(key string, def bool) bool {
-	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
-	if v == "" {
-		return def
-	}
-	switch v {
-	case "1", "true", "yes", "on", "enabled":
-		return true
-	case "0", "false", "no", "off", "disabled":
-		return false
-	default:
-		return def
-	}
 }
 
 // Global config file reference for pool users config
@@ -160,26 +136,8 @@ func buildConfig() *config {
 	cfg.poolDir = getConfigString("POOL_DIR", fileCfg.PoolDir, "pool")
 	cfg.providerSpecsDir = strings.TrimSpace(getenv("PROVIDER_SPECS_DIR", ""))
 
-	// Refresh often fails for some auth.json fixtures; allow opting out.
-	cfg.disableRefresh = getConfigBool("PROXY_DISABLE_REFRESH", fileCfg.DisableRefresh, false)
 	cfg.refreshProxyURL = getConfigString("REFRESH_PROXY_URL", fileCfg.RefreshProxyURL, "")
 
-	cfg.debug.Store(getConfigBool("PROXY_DEBUG", fileCfg.Debug, false))
-	cfg.logBodies = getenv("PROXY_LOG_BODIES", "0") == "1"
-	cfg.bodyLogLimit = 16 * 1024 // 16 KiB
-	if v := getenv("PROXY_BODY_LOG_LIMIT", ""); v != "" {
-		if n, err := parseInt64(v); err == nil && n > 0 {
-			cfg.bodyLogLimit = n
-		}
-	}
-	cfg.claudeTraceDir = strings.TrimSpace(getenv("PROXY_CLAUDE_TRACE_DIR", ""))
-	cfg.claudeTraceBodyLimit = 256 * 1024
-	if v := getenv("PROXY_CLAUDE_TRACE_BODY_LIMIT", ""); v != "" {
-		if n, err := parseInt64(v); err == nil && n > 0 {
-			cfg.claudeTraceBodyLimit = n
-		}
-	}
-	cfg.claudeTraceSecrets = getenv("PROXY_CLAUDE_TRACE_INCLUDE_SECRETS", "0") == "1"
 	cfg.maxInMemoryBodyBytes = 16 * 1024 * 1024 // 16 MiB
 	if v := getenv("PROXY_MAX_INMEM_BODY_BYTES", ""); v != "" {
 		if n, err := parseInt64(v); err == nil && n >= 0 {
@@ -202,10 +160,6 @@ func buildConfig() *config {
 	cfg.storePath = getConfigString("PROXY_DB_PATH", fileCfg.DBPath, "./data/proxy.db")
 	cfg.oauthGoogleClientID = getConfigString("OAUTH_GOOGLE_CLIENT_ID", fileCfg.OAuthGoogleClientID, "")
 	cfg.oauthGoogleClientSecret = getConfigString("OAUTH_GOOGLE_CLIENT_SECRET", fileCfg.OAuthGoogleClientSecret, "")
-	cfg.localDevSession = parseBoolEnv("LOCAL_DEV_SESSION", false)
-	if cfg.localDevSession && !localDevSessionURLAllowed(getPublicURL()) {
-		log.Fatalf("LOCAL_DEV_SESSION requires PUBLIC_URL to use localhost or a loopback IP")
-	}
 	cfg.allowedEmails = getEmailList("ALLOWED_EMAILS", fileCfg.AllowedEmails)
 	cfg.adminEmails = getEmailList("ADMIN_EMAILS", fileCfg.AdminEmails)
 	cfg.retentionDays = 30
@@ -253,7 +207,6 @@ func buildConfig() *config {
 			cfg.websocketReadLimit = n
 		}
 	}
-	cfg.websocketCompression = parseBoolEnv("WEBSOCKET_COMPRESSION", false)
 	cfg.shutdownGrace = 30 * time.Second
 	if v := getenv("SHUTDOWN_GRACE_SECONDS", ""); v != "" {
 		if n, err := parseInt64(v); err == nil && n >= 0 {
@@ -261,8 +214,8 @@ func buildConfig() *config {
 		}
 	}
 
-	// Tier threshold: secondary usage % at which we stop preferring a tier (default 50%)
-	cfg.tierThreshold = getConfigFloat64("TIER_THRESHOLD", fileCfg.TierThreshold, 0.50)
+	// Routing policy is canonical and identical in every environment.
+	cfg.tierThreshold = 0.50
 
 	flag.StringVar(&cfg.listenAddr, "listen", cfg.listenAddr, "listen address")
 	flag.Parse()
@@ -322,7 +275,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("load pool: %v", err)
 	}
-	pool := newProviderPool(accounts, cfg.debug.Load())
+	pool := newProviderPool(accounts)
 	pool.tierThreshold = cfg.tierThreshold
 	codexCount := pool.countByType(AccountTypeCodex)
 	claudeCount := pool.countByType(AccountTypeClaude)
@@ -380,25 +333,9 @@ func main() {
 	_ = http2.ConfigureTransport(standardTransport)
 	antigravityTransport := cloneAntigravityHTTP11Transport(standardTransport)
 
-	// Anthropic traffic defaults to the Node.js 24.x uTLS profile used by Claude
-	// Code. Other providers retain their existing transports.
+	// Use one canonical transport in every environment.
 	var transport http.RoundTripper = newBunHybridTransport(standardTransport)
-	switch strings.ToLower(os.Getenv("CODEX_TLS_FINGERPRINT")) {
-	case "rustls":
-		transport = newRustlsHybridTransport(standardTransport)
-		log.Printf("codex rustls/uTLS hybrid transport enabled")
-	case "off", "go", "standard":
-		transport = standardTransport
-		log.Printf("standard Go TLS transport enabled")
-	case "bun":
-		transport = newBunHybridTransport(standardTransport)
-		log.Printf("Node.js/uTLS hybrid transport enabled (Anthropic traffic only)")
-	case "bun-all":
-		transport = createBunTransport()
-		log.Printf("Node.js/uTLS transport enabled (all traffic)")
-	default:
-		log.Printf("Node.js/uTLS hybrid transport enabled by default (Anthropic traffic only)")
-	}
+	log.Printf("Node.js/uTLS hybrid transport enabled (Anthropic traffic only)")
 
 	// CODEX_ANTHROPIC_PROXY_URL routes Anthropic API traffic through a proxy
 	// so it appears to originate from a different IP. Other traffic goes direct.
@@ -439,21 +376,15 @@ func main() {
 		log.Printf("refresh operations will use proxy: %s", proxyURL.Host)
 	}
 
-	// Initialize gateway users for OAuth deployments or explicit loopback-only
-	// local development sessions.
+	// Initialize gateway users whenever a signing secret is configured.
 	var poolUsers *GatewayUserStore
-	if (cfg.oauthGoogleClientID != "" || cfg.localDevSession) && getPoolJWTSecret() != "" {
+	if getPoolJWTSecret() != "" {
 		poolUsersPath := getPoolUsersPath()
 		var err error
 		poolUsers, err = newGatewayUserStore(poolUsersPath)
 		if err != nil {
 			log.Printf("warning: failed to load pool users: %v", err)
 		} else {
-			if cfg.localDevSession {
-				if err := ensureLocalDevelopmentUser(poolUsers); err != nil {
-					log.Fatalf("initialize local development user: %v", err)
-				}
-			}
 			log.Printf("pool users enabled (%d users)", len(poolUsers.List()))
 		}
 	}
@@ -608,9 +539,6 @@ func main() {
 	}
 	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
 		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
-	if cfg.claudeTraceDir != "" {
-		log.Printf("claude traffic tracing enabled: dir=%s body_limit=%d include_secrets=%v", cfg.claudeTraceDir, cfg.claudeTraceBodyLimit, cfg.claudeTraceSecrets)
-	}
 	serveErr := serveUntilShutdown(srv, h, processCtx.Done(), cfg.shutdownGrace)
 	stopProcess()
 	jobs.Wait()
@@ -857,9 +785,6 @@ func (h *proxyHandler) handleImagesGenerationFanout(w http.ResponseWriter, r *ht
 	created := time.Now().Unix()
 	for _, result := range results {
 		if result.err != nil {
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] image fanout failed: %v", reqID, result.err)
-			}
 			http.Error(w, result.err.Error(), http.StatusBadGateway)
 			return true
 		}
@@ -1084,16 +1009,10 @@ func (h *proxyHandler) pinAffinityToCyberAccess(affinityKey string, accountType 
 	}
 	acc := h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: clientIP, Exclude: exclude})
 	if acc == nil {
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] cyber_policy seen for private affinity, but no cyber_access account is available", reqID)
-		}
 		return false
 	}
 	if !h.pool.bindAffinity(affinityKey, acc.ID) {
 		return false
-	}
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] pinned private affinity to cyber_access account %s after cyber_policy", reqID, acc.ID)
 	}
 	return true
 }
@@ -1389,9 +1308,6 @@ func (h *proxyHandler) applyStreamedModelRoute(r *http.Request, provider Provide
 
 	requestedModel := strings.TrimSpace(model)
 	if resolved, aliased := h.aliases.resolve(requestedModel); aliased {
-		if h.cfg != nil && h.cfg.debug.Load() {
-			log.Printf("[%s] streamed model alias: %s -> %s", reqID, requestedModel, resolved)
-		}
 		requestedModel = resolved
 	}
 	route, ok := h.routeRegistry().Resolve(r.URL.Path, requestedModel)
@@ -1683,9 +1599,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					return
 				}
 			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] claude pool user request: user_id=%s", reqID, userID)
-			}
 		}
 	}
 
@@ -1707,9 +1620,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						return
 					}
 				}
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] gemini api key pool user request: user_id=%s", reqID, userID)
-				}
 			}
 		}
 	}
@@ -1724,9 +1634,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					http.Error(w, "pool user disabled", http.StatusForbidden)
 					return
 				}
-			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] pool user request: user_id=%s", reqID, userID)
 			}
 		}
 	}
@@ -1743,9 +1650,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					return
 				}
 			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] gemini oauth pool user request: user_id=%s", reqID, userID)
-			}
 		}
 	}
 
@@ -1753,9 +1657,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	// This allows users to use their own API keys while benefiting from the proxy infrastructure
 	if userID == "" {
 		if isProviderCred, providerType := looksLikeProviderCredential(authHeader); isProviderCred {
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] pass-through request with %s credential", reqID, providerType)
-			}
 			h.proxyPassthrough(w, r, reqID, providerType, start)
 			return
 		}
@@ -1813,10 +1714,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			http.Error(w, fmt.Sprintf("large Codex Responses request requires hosted MCP inspection; reduce the request below %d bytes", h.cfg.maxInMemoryBodyBytes), http.StatusBadRequest)
 			return
 		}
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] streaming request body: method=%s path=%s provider=%s content-length=%d",
-				reqID, r.Method, r.URL.Path, accountType, r.ContentLength)
-		}
 		routingContext := buildRequestRoutingContext(r.URL.Path, nil, r.Header, userID, accountType, "", getPoolJWTSecret())
 		h.proxyRequestStreamed(w, r, reqID, userID, originID, routingContext, provider, targetBase)
 		return
@@ -1827,7 +1724,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	incomingPath := r.URL.Path
 	incomingHeaders := r.Header.Clone()
 
-	bodyBytes, bodySample, err := readBodyForReplay(r.Body, h.cfg.logBodies, h.cfg.bodyLogLimit)
+	bodyBytes, bodySample, err := readBodyForReplay(r.Body, false, int64(16*1024))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1855,7 +1752,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 	// Resolve model aliases before routing.
 	if requestedModel != "" {
-		requestedModel, bodyBytes = applyModelAlias(h.aliases, requestedModel, bodyBytes, h.cfg.debug.Load(), reqID)
+		requestedModel, bodyBytes = applyModelAlias(h.aliases, requestedModel, bodyBytes)
 	}
 
 	// Antigravity owns its complete upstream envelope and protocol conversion.
@@ -1909,9 +1806,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			_, budget, hasSuffix := parseThinkingSuffix(origModel)
 			if hasSuffix && budget > 0 {
 				bodyBytes = injectThinkingBudget(bodyBytes, accountType, budget)
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] thinking suffix: budget=%d provider=%s", reqID, budget, accountType)
-				}
 			}
 		}
 	}
@@ -1974,7 +1868,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	}
 
 	if translateDir != TranslateNone {
-		logTranslation(reqID, translateDir, h.cfg.debug.Load())
 		var err error
 		switch translateDir {
 		case TranslateClaudeToOAI:
@@ -2045,35 +1938,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		bodyBytes = filtered
 	}
 
-	if h.cfg.debug.Load() && conversationID == "" && routingContext.SoftAffinity.Source != "" {
-		log.Printf("[%s] declared affinity source %s could not be activated; verify gateway affinity inputs", reqID, routingContext.SoftAffinity.Source)
-	}
-
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] incoming %s %s provider=%s protocol=%s affinity_source=%s affinity_active=%t user_present=%t origin_present=%t authZ_len=%d chatgpt-id-present=%t content-type=%q content-encoding=%q body_bytes=%d",
-			reqID,
-			r.Method,
-			r.URL.Path,
-			accountType,
-			routingContext.Protocol,
-			routingContext.SoftAffinity.Source,
-			conversationID != "",
-			userID != "",
-			originID != "",
-			len(r.Header.Get("Authorization")),
-			r.Header.Get("ChatGPT-Account-ID") != "",
-			r.Header.Get("Content-Type"),
-			r.Header.Get("Content-Encoding"),
-			len(bodyBytes),
-		)
-		if requestedModel != "" {
-			log.Printf("[%s] requested model=%s", reqID, requestedModel)
-		}
-	}
-	if h.cfg.logBodies && len(bodySample) > 0 {
-		log.Printf("[%s] request body sample (%d bytes): %s", reqID, len(bodySample), safeText(bodySample))
-	}
-
 	// Determine timeout: honour X-Stainless-Timeout from the Anthropic SDK when present,
 	// otherwise fall back to streaming vs non-streaming defaults.
 	timeout := clientOrDefaultTimeout(r, h.cfg.requestTimeout, h.cfg.streamTimeout, inspect)
@@ -2109,18 +1973,12 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		}
 		if imageGenerationRequest && attempt == 1 && !imageFanoutChild {
 			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectExactID, ConnectionID: preferredImageCodexAccountID, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP})
-			if acc != nil && h.cfg.debug.Load() {
-				log.Printf("[%s] routing image generation request to codex account %s", reqID, acc.ID)
-			}
 		}
 		if imageGenerationRequest && imageFanoutChild && attempt == 1 {
 			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectImageFanout, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, Exclude: candidateExclude, FanoutIndex: imageFanoutIndex, RequireImages: true, PreferIdle: true})
 		}
 		if acc == nil && cyberAccessRetry {
 			acc = h.connectionSelector().Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: accountType, RequiredPlan: requiredPlan, ClientIP: originIP, Exclude: candidateExclude})
-			if acc != nil && h.cfg.debug.Load() {
-				log.Printf("[%s] routing cyber_policy retry to %s account %s", reqID, accountType, acc.ID)
-			}
 		}
 		if acc == nil && !cyberAccessRetry {
 			candidateRoutingContext := routingContext
@@ -2135,9 +1993,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			// time out while the gateway repeatedly sleeps.
 			if cooldown := h.connectionSelector().NearestCooldown(accountType, nil); cooldown > 0 {
 				if wait := retryPolicy.CooldownWait(cooldown); wait > 0 {
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] all %s connections exhausted, waiting %s for cooldown", reqID, accountType, wait)
-					}
 					select {
 					case <-time.After(wait):
 						// Retry with fresh exclusions after the cooldown expires.
@@ -2185,9 +2040,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				break
 			}
 			h.recent.add(err.Error())
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] attempt %d/%d account=%s failed: %v", reqID, attempt, attempts, acc.ID, err)
-			}
 			continue
 		}
 		lastStatus = resp.StatusCode
@@ -2210,18 +2062,12 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				if h.metrics != nil {
 					h.metrics.incCyberPolicy(acc.ID, "retry_4xx")
 				}
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] retrying cyber_policy response from account %s on a cyber_access account", reqID, acc.ID)
-				}
 				continue
 			}
 
 			// Refine classification with body content.
 			if acc.Type == AccountTypeCodex && errClass == ErrorClassInvalid && isCodexModelUnavailableError(errBody) {
 				errClass = ErrorClassNotFound
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] reclassified codex 400 as model/account mismatch for account %s", reqID, acc.ID)
-				}
 			}
 			if acc.Type == AccountTypeClaude && isClaudeOrganizationDisabled(errBody) {
 				h.disableAccountPermanently(acc, reqID, safeText(errBody))
@@ -2234,9 +2080,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			// Reclassify as transient so accounts don't accumulate auth penalties.
 			if errClass == ErrorClassAuth && isCloudflareChallenge(errBody, resp.Header) {
 				errClass = ErrorClassTransient
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] reclassified 403 as cloudflare challenge for account %s", reqID, acc.ID)
-				}
 			}
 
 			if errClass == ErrorClassPayment && isDeactivatedWorkspace(errBody) {
@@ -2299,10 +2142,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					lastErr = fmt.Errorf("upstream %s", resp.Status)
 				}
 				h.recent.add(lastErr.Error())
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] attempt %d/%d account=%s status=%d class=%s refreshFailed=%v",
-						reqID, attempt, attempts, acc.ID, resp.StatusCode, errClass, refreshFailed)
-				}
 				continue
 			}
 
@@ -2389,9 +2228,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			w.Header().Set("Content-Type", "text/event-stream")
 			applyStreamingResponseHeaders(w.Header())
 		}
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] response: isSSE=%v content-type=%s translateDir=%d status=%d", reqID, isSSE, respContentType, translateDir, resp.StatusCode)
-		}
 
 		// Client wanted non-streaming but Codex requires streaming:
 		// buffer SSE events and assemble a non-streaming response.
@@ -2402,9 +2238,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			bufWriter := &responsesBufferingWriter{model: requestedModel}
 			inspectWriter := h.wrapBufferedSSEWithCyberDetector(bufWriter, accountType, acc, conversationID, requiredPlan, originIP, reqID, &cyberPinned)
 			if err := copyHostedMCPFilteredSSE(inspectWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffering Responses SSE error: %v", reqID, err)
-				}
 			}
 			resp.Body.Close()
 
@@ -2448,15 +2281,10 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			bufWriter := &responsesToClaudeBufferingWriter{
 				callback: usageCallback,
-				debug:    h.cfg.debug.Load(),
-				reqID:    reqID,
 				model:    requestedModel,
 			}
 
 			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffering Claude SSE error: %v", reqID, err)
-				}
 			}
 			resp.Body.Close()
 
@@ -2466,12 +2294,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			}
 
 			result := bufWriter.Result()
-			if _, message, failed := bufWriter.Failure(); failed {
+			if _, _, failed := bufWriter.Failure(); failed {
 				w.WriteHeader(http.StatusBadRequest)
 				w.Write(result)
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffered Responses failure preserved as Anthropic error: %s", reqID, message)
-				}
 				return
 			}
 			w.WriteHeader(resp.StatusCode)
@@ -2484,9 +2309,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			inspectWriter := h.wrapBufferedSSEWithCyberDetector(bufWriter, accountType, acc, conversationID, requiredPlan, originIP, reqID, &cyberPinned)
 			var rawImageStream bytes.Buffer
 			if err := copyHostedMCPFilteredSSE(inspectWriter, io.TeeReader(resp.Body, &rawImageStream), h.cfg.maxInMemoryBodyBytes); err != nil {
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffering Images SSE error: %v", reqID, err)
-				}
 			}
 			resp.Body.Close()
 			if h.shouldRetryBufferedSSEForCyberPolicy(cyberPinned, attempt, attempts, acc, reqID, "images") {
@@ -2537,14 +2359,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			bufWriter := &responsesToCompletionsBufferingWriter{
 				callback: usageCallback,
-				debug:    h.cfg.debug.Load(),
-				reqID:    reqID,
 			}
 
 			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffering completions SSE error: %v", reqID, err)
-				}
 			}
 			resp.Body.Close()
 
@@ -2589,14 +2406,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			bufWriter := &responsesToChatCompletionsBufferingWriter{
 				callback: usageCallback,
-				debug:    h.cfg.debug.Load(),
-				reqID:    reqID,
 			}
 
 			if err := copyHostedMCPFilteredSSE(bufWriter, resp.Body, h.cfg.maxInMemoryBodyBytes); err != nil {
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] buffering SSE error: %v", reqID, err)
-				}
 			}
 			resp.Body.Close()
 
@@ -2641,27 +2453,18 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				var trErr error
 				translated, trErr = translateClaudeRespToResponses(respBody)
 				if trErr != nil {
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] claude->responses translation error: %v", reqID, trErr)
-					}
 					translated = respBody
 				}
 			} else if translateDir == TranslateChatToResponses {
 				var trErr error
 				translated, trErr = translateResponsesToChatCompletions(respBody)
 				if trErr != nil {
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] responses->chat translation error: %v", reqID, trErr)
-					}
 					translated = respBody
 				}
 			} else if translateDir == TranslateCompletionsToResponses {
 				var trErr error
 				translated, trErr = translateResponsesToCompletions(respBody)
 				if trErr != nil {
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] responses->completions translation error: %v", reqID, trErr)
-					}
 					translated = respBody
 				}
 			} else if translateDir == TranslateImagesToResponses {
@@ -2669,9 +2472,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				translated, trErr = translateResponsesToImagesGeneration(respBody, imagesResponseFormat)
 				if trErr != nil {
 					recordImageGenerationResult(acc, false)
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] responses->images translation error: %v", reqID, trErr)
-					}
 					translated = respBody
 				} else {
 					recordImageGenerationResult(acc, true)
@@ -2680,9 +2480,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				var trErr error
 				translated, trErr = translateResponseBody(respBody, targetFormat, sourceFormat, requestedModel)
 				if trErr != nil {
-					if h.cfg.debug.Load() {
-						log.Printf("[%s] response translation error: %v", reqID, trErr)
-					}
 					translated = respBody
 				}
 			}
@@ -2730,9 +2527,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					}
 					return
 				}
-				if err := usageObserver.Observe(data); err != nil && h.cfg.debug.Load() {
-					log.Printf("[%s] SSE callback: failed to parse JSON: %v", reqID, err)
-				}
+				_ = usageObserver.Observe(data)
 			}
 
 			var responsesClaudeWriter *responsesToClaudeWriter
@@ -2741,31 +2536,23 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					writer = &responsesToCompletionsWriter{
 						w:        writer,
 						callback: usageCallback,
-						debug:    h.cfg.debug.Load(),
-						reqID:    reqID,
 					}
 				} else if translateDir == TranslateChatToResponses {
 					writer = &responsesToChatCompletionsWriter{
 						w:        writer,
 						callback: usageCallback,
-						debug:    h.cfg.debug.Load(),
-						reqID:    reqID,
 					}
 				} else if translateDir == TranslateResponsesToClaude {
 					// Claude SSE response → Responses API SSE
 					writer = &claudeToResponsesWriter{
 						w:        writer,
 						callback: usageCallback,
-						debug:    h.cfg.debug.Load(),
-						reqID:    reqID,
 					}
 				} else if translateDir == TranslateClaudeToResponses {
 					// Responses API SSE → Claude SSE
 					responsesClaudeWriter = &responsesToClaudeWriter{
 						w:        writer,
 						callback: usageCallback,
-						debug:    h.cfg.debug.Load(),
-						reqID:    reqID,
 					}
 					writer = responsesClaudeWriter
 				} else if translateDir != TranslateNone {
@@ -2780,8 +2567,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						w:         writer,
 						direction: responseDir,
 						callback:  usageCallback,
-						debug:     h.cfg.debug.Load(),
-						reqID:     reqID,
 					}
 				} else {
 					needsPolicyInspection := accountType == AccountTypeCodex && !acc.CyberAccess
@@ -2796,7 +2581,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 						if needsPolicyInspection {
 							suppressor := &cyberPolicyHTTPSuppressor{
 								h:              h,
-								reqID:          reqID,
 								conversationID: conversationID,
 								requiredPlan:   requiredPlan,
 								clientIP:       originIP,
@@ -2855,13 +2639,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				return
 			}
 
-			respSample := []byte(nil)
-			if sampleBuf != nil {
-				respSample = sampleBuf.Bytes()
-			}
-			if h.cfg.logBodies && len(respSample) > 0 {
-				log.Printf("[%s] response body sample (%d bytes): %s", reqID, len(respSample), safeText(respSample))
-			}
 			if !isSSE && sampleBuf != nil && sampleBuf.Len() > 0 {
 				h.updateUsageFromCapture(acc, sampleBuf, requestedModel, userID, originID, reqID)
 			}
@@ -2884,9 +2661,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 		h.metrics.inc(strconv.Itoa(resp.StatusCode), acc.ID)
 
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] done status=%d account=%s duration_ms=%d", reqID, resp.StatusCode, acc.ID, time.Since(start).Milliseconds())
-		}
 		return
 	}
 
@@ -2940,15 +2714,12 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	}()
 
 	refreshFailed := false
-	if !h.cfg.disableRefresh && h.needsRefresh(acc) {
+	if h.needsRefresh(acc) {
 		if err := h.refreshAccount(r.Context(), acc); err != nil {
 			if isRateLimitError(err) {
 				h.applyRateLimit(acc, nil)
 			} else {
 				refreshFailed = true
-			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] refresh %s failed before websocket request: %v", reqID, acc.ID, err)
 			}
 		}
 	}
@@ -2987,10 +2758,6 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	provider.SetAuthHeaders(tmpReq, acc)
 	upstreamHeaders = tmpReq.Header
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] websocket tunnel -> %s (account=%s)", reqID, outURL.String(), acc.ID)
-	}
-
 	cyberPinned := false
 	relayLabel := fmt.Sprintf("%s account=%s", reqID, acc.ID)
 	readLimit := effectiveWebSocketReadLimit(accountType, h.cfg.websocketReadLimit)
@@ -3018,7 +2785,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 			IdleTimeout:                 h.cfg.websocketIdleTimeout,
 			DownstreamHeartbeatInterval: downstreamHeartbeatInterval,
 			ReadLimit:                   readLimit,
-			CompressionEnabled:          h.cfg.websocketCompression,
+			CompressionEnabled:          false,
 			LogLabel:                    relayLabel,
 			SetActiveAccount: func(next *ProviderConnection) {
 				prev := inflightAcc
@@ -3038,18 +2805,12 @@ func (h *proxyHandler) proxyRequestWebSocket(
 		if swap.err != nil {
 			h.recent.add(swap.err.Error())
 			h.metrics.inc("error", finalAcc.ID)
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] websocket tunnel error (account=%s): %v", reqID, finalAcc.ID, swap.err)
-			}
 			return
 		}
 		if swap.statusCode != 0 {
 			h.metrics.inc(strconv.Itoa(swap.statusCode), finalAcc.ID)
 		}
 		h.applyWebSocketStatusEffects(reqID, finalAcc, conversationID, swap.swapped, refreshFailed, swap.statusCode)
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] websocket done status=%d account=%s user_present=%t origin_present=%t duration_ms=%d cyber_swapped=%v", reqID, swap.statusCode, finalAcc.ID, userID != "", originID != "", time.Since(start).Milliseconds(), swap.swapped)
-		}
 		return
 	}
 
@@ -3057,18 +2818,14 @@ func (h *proxyHandler) proxyRequestWebSocket(
 		IdleTimeout:                 h.cfg.websocketIdleTimeout,
 		DownstreamHeartbeatInterval: downstreamHeartbeatInterval,
 		ReadLimit:                   readLimit,
-		CompressionEnabled:          h.cfg.websocketCompression,
+		CompressionEnabled:          false,
 		LogLabel:                    relayLabel,
-		Debug:                       h.cfg.debug.Load(),
 		Registry:                    h.webSocketRegistry(),
 	})
 
 	if relay.err != nil {
 		h.recent.add(relay.err.Error())
 		h.metrics.inc("error", acc.ID)
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] websocket tunnel error (account=%s): %v", reqID, acc.ID, relay.err)
-		}
 		return
 	}
 
@@ -3079,9 +2836,6 @@ func (h *proxyHandler) proxyRequestWebSocket(
 
 	h.applyWebSocketStatusEffects(reqID, acc, conversationID, cyberPinned, refreshFailed, relay.statusCode)
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] websocket done status=%d account=%s user_present=%t origin_present=%t duration_ms=%d", reqID, relay.statusCode, acc.ID, userID != "", originID != "", time.Since(start).Milliseconds())
-	}
 }
 
 // applyWebSocketStatusEffects runs the post-relay account bookkeeping
@@ -3152,10 +2906,6 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 		upstreamHeaders.Set("anthropic-version", ccAnthropicVersion)
 	}
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough websocket tunnel -> %s", reqID, outURL.String())
-	}
-
 	readLimit := effectiveWebSocketReadLimit(providerType, h.cfg.websocketReadLimit)
 	downstreamHeartbeatInterval := time.Duration(0)
 	var transformUpstream, transformClient func([]byte) ([]byte, error)
@@ -3184,9 +2934,8 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 		IdleTimeout:                 h.cfg.websocketIdleTimeout,
 		DownstreamHeartbeatInterval: downstreamHeartbeatInterval,
 		ReadLimit:                   readLimit,
-		CompressionEnabled:          h.cfg.websocketCompression,
+		CompressionEnabled:          false,
 		LogLabel:                    reqID + " passthrough",
-		Debug:                       h.cfg.debug.Load(),
 		TransformUpstream:           transformUpstream,
 		TransformClient:             transformClient,
 		Registry:                    h.webSocketRegistry(),
@@ -3195,17 +2944,11 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 	if relay.err != nil {
 		h.recent.add(relay.err.Error())
 		h.metrics.inc("error", "passthrough")
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] passthrough websocket tunnel error: %v", reqID, relay.err)
-		}
 		return
 	}
 	h.recordWebSocketTermination(reqID, "passthrough", relay.termination, time.Since(start))
 	if relay.statusCode != 0 {
 		h.metrics.inc(strconv.Itoa(relay.statusCode), "passthrough")
-	}
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough websocket done status=%d duration_ms=%d", reqID, relay.statusCode, time.Since(start).Milliseconds())
 	}
 }
 
@@ -3231,7 +2974,6 @@ type webSocketRelayOptions struct {
 	ReadLimit                   int64
 	CompressionEnabled          bool
 	LogLabel                    string
-	Debug                       bool
 	OnUpstreamResponse          func(*http.Response)
 	OnUpstreamMessage           func([]byte) error
 	OnClientMessage             func([]byte) error
@@ -3309,14 +3051,14 @@ func relayWebSocket(
 	defer stopUpstreamHeartbeat()
 
 	go func() {
-		errC <- relayMessages(relayCtx, upstreamConn, clientWriter, opts.LogLabel, "upstream->client", opts.IdleTimeout, opts.Debug, opts.OnUpstreamMessage, opts.TransformUpstream, func(data []byte) {
+		errC <- relayMessages(relayCtx, upstreamConn, clientWriter, "upstream->client", opts.IdleTimeout, opts.OnUpstreamMessage, opts.TransformUpstream, func(data []byte) {
 			if isTerminalCodexWebSocketEvent(data) {
 				session.setActive(false)
 			}
 		})
 	}()
 	go func() {
-		errC <- relayMessages(relayCtx, clientConn, upstreamWriter, opts.LogLabel, "client->upstream", opts.IdleTimeout, opts.Debug, opts.OnClientMessage, opts.TransformClient, func(data []byte) {
+		errC <- relayMessages(relayCtx, clientConn, upstreamWriter, "client->upstream", opts.IdleTimeout, opts.OnClientMessage, opts.TransformClient, func(data []byte) {
 			if isCodexResponseCreate(data) {
 				session.setActive(true)
 			}
@@ -3391,8 +3133,8 @@ func (w *webSocketWriter) CopyFrom(ctx context.Context, msgType websocket.Messag
 // We use a time.AfterFunc watchdog instead of context.WithTimeout because
 // coder/websocket closes the connection when the read context is cancelled,
 // which would tear the relay down on every successful frame.
-func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWriter, logLabel, label string, idleTimeout time.Duration, debug bool, onMessage func([]byte) error, transform func([]byte) ([]byte, error), afterForward func([]byte)) error {
-	if !debug && onMessage == nil && transform == nil && afterForward == nil {
+func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWriter, label string, idleTimeout time.Duration, onMessage func([]byte) error, transform func([]byte) ([]byte, error), afterForward func([]byte)) error {
+	if onMessage == nil && transform == nil && afterForward == nil {
 		return relayMessagesStreaming(ctx, src, dst, label, idleTimeout)
 	}
 	var idleTimer *time.Timer
@@ -3409,9 +3151,6 @@ func relayMessages(ctx context.Context, src *websocket.Conn, dst *webSocketWrite
 		msgType, data, err := src.Read(ctx)
 		if err != nil {
 			return fmt.Errorf("%s read: %w", label, err)
-		}
-		if debug {
-			logRelayFrame(logLabel, label, msgType, data)
 		}
 		if onMessage != nil {
 			if err := onMessage(data); err != nil {
@@ -3458,18 +3197,7 @@ func relayMessagesStreaming(ctx context.Context, src *websocket.Conn, dst *webSo
 	}
 }
 
-func logRelayFrame(logLabel, label string, msgType websocket.MessageType, data []byte) {
-	summary := data
-	suffix := ""
-	if len(summary) > 200 {
-		summary = summary[:200]
-		suffix = "..."
-	}
-	log.Printf("[ws-relay %s] %s: type=%v len=%d %s%s", logLabel, label, msgType, len(data), string(summary), suffix)
-}
-
 func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Request, reqID, userID, originID string, routingContext RequestRoutingContext, provider Provider, targetBase *url.URL) {
-	start := time.Now()
 	accountType := provider.Type()
 
 	requiredPlan := requiredPlanForRequest(accountType, r, "")
@@ -3502,15 +3230,12 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 
 	// Refresh before building headers to ensure we use the latest token.
 	refreshFailed := false
-	if !h.cfg.disableRefresh && h.needsRefresh(acc) {
+	if h.needsRefresh(acc) {
 		if err := h.refreshAccount(ctx, acc); err != nil {
 			if isRateLimitError(err) {
 				h.applyRateLimit(acc, nil)
 			} else {
 				refreshFailed = true
-			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] refresh %s failed before streamed request: %v", reqID, acc.ID, err)
 			}
 		}
 	}
@@ -3536,12 +3261,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		outURL.RawQuery = q.Encode()
 	}
 
-	var reqSample *bytes.Buffer
 	var body io.Reader = r.Body
-	if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
-		reqSample = &bytes.Buffer{}
-		body = io.TeeReader(r.Body, &limitedWriter{w: reqSample, n: h.cfg.bodyLogLimit})
-	}
 
 	outReq, err := http.NewRequestWithContext(ctx, r.Method, outURL.String(), body)
 	if err != nil {
@@ -3579,18 +3299,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	// break on gzip-compressed streams that split across TCP segments.
 	outReq.Header.Set("Accept-Encoding", "identity")
 
-	if h.cfg.debug.Load() {
-		authHeader := outReq.Header.Get("Authorization")
-		authLen := len(authHeader)
-		authPreview := ""
-		if authLen > 20 {
-			authPreview = authHeader[:20] + "..."
-		} else if authLen > 0 {
-			authPreview = authHeader
-		}
-		log.Printf("[%s] streamed -> %s %s (account=%s account_id=%s auth_len=%d auth=%s)", reqID, outReq.Method, outReq.URL.String(), acc.ID, acc.AccountID, authLen, authPreview)
-	}
-
 	resp, err := h.transport.RoundTrip(outReq)
 	captureCodexResponseState(acc, resp, reqID)
 	if err != nil {
@@ -3602,10 +3310,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer resp.Body.Close()
-
-	if h.cfg.logBodies && reqSample != nil && reqSample.Len() > 0 {
-		log.Printf("[%s] request body sample (%d bytes): %s", reqID, reqSample.Len(), safeText(reqSample.Bytes()))
-	}
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		h.applyRateLimit(acc, resp.Header)
@@ -3675,9 +3379,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 
 	// Tee a bounded sample for usage extraction and response handling.
 	sampleLimit := int64(16 * 1024)
-	if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
-		sampleLimit = h.cfg.bodyLogLimit
-	}
 	sampleBuf := &bytes.Buffer{}
 	resp.Body = struct {
 		io.Reader
@@ -3717,15 +3418,12 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 					}
 					return
 				}
-				if err := usageObserver.Observe(data); err != nil && h.cfg.debug.Load() {
-					log.Printf("[%s] streamed SSE callback: failed to parse JSON: %v", reqID, err)
-				}
+				_ = usageObserver.Observe(data)
 			},
 		}
 		if accountType == AccountTypeCodex && !acc.CyberAccess {
 			suppressor := &cyberPolicyHTTPSuppressor{
 				h:              h,
-				reqID:          reqID,
 				conversationID: conversationID,
 				requiredPlan:   requiredPlan,
 				clientIP:       clientIP,
@@ -3777,9 +3475,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 	}
 
 	respSample := sampleBuf.Bytes()
-	if h.cfg.logBodies && len(respSample) > 0 {
-		log.Printf("[%s] response body sample (%d bytes): %s", reqID, len(respSample), safeText(respSample))
-	}
 	if !isSSE && len(respSample) > 0 {
 		h.updateUsageFromBody(acc, respSample, userID, originID, reqID)
 	}
@@ -3801,9 +3496,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 
 	h.metrics.inc(strconv.Itoa(resp.StatusCode), acc.ID)
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] streamed done status=%d account=%s duration_ms=%d", reqID, resp.StatusCode, acc.ID, time.Since(start).Milliseconds())
-	}
 }
 
 // clientOrDefaultTimeout picks the request timeout. If the client sent X-Stainless-Timeout
@@ -3847,7 +3539,7 @@ func clientOrDefaultTimeout(r *http.Request, reqTimeout, streamTimeout time.Dura
 }
 
 func (h *proxyHandler) logRateLimitResponseHeaders(reqID string, accountType AccountType, hdr http.Header) {
-	if h == nil || !h.cfg.debug.Load() {
+	if h == nil || !false {
 		return
 	}
 	if hdr == nil {
@@ -4022,9 +3714,6 @@ func (h *proxyHandler) applyRateLimit(a *ProviderConnection, hdr http.Header) ti
 		a.RateLimitUntil = until
 	}
 	a.mu.Unlock()
-	if h.cfg.debug.Load() {
-		log.Printf("rate-limit backoff: account=%s level=%d wait=%s precise=%v", a.ID, a.BackoffLevel, wait, gotPreciseReset)
-	}
 	return wait
 }
 
@@ -4114,15 +3803,11 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, fmt.Sprintf("large Codex Responses request requires hosted MCP inspection; reduce the request below %d bytes", h.cfg.maxInMemoryBodyBytes), http.StatusBadRequest)
 			return
 		}
-		if h.cfg.debug.Load() {
-			log.Printf("[%s] passthrough streaming body: method=%s path=%s provider=%s content-length=%d",
-				reqID, r.Method, r.URL.Path, providerType, r.ContentLength)
-		}
 		h.proxyPassthroughStreamed(w, r, reqID, providerType, provider, targetBase, start)
 		return
 	}
 
-	bodyBytes, bodySample, err := readBodyForReplay(r.Body, h.cfg.logBodies, h.cfg.bodyLogLimit)
+	bodyBytes, _, err := readBodyForReplay(r.Body, false, 16*1024)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -4151,25 +3836,6 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		bodyBytes = filtered
-	}
-
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough %s %s provider=%s content-type=%q body_bytes=%d",
-			reqID, r.Method, r.URL.Path, providerType,
-			r.Header.Get("Content-Type"), len(bodyBytes))
-		// Debug: log all headers for Claude passthrough
-		if providerType == AccountTypeClaude {
-			var hdrs []string
-			for k, v := range r.Header {
-				if strings.HasPrefix(strings.ToLower(k), "anthropic") {
-					hdrs = append(hdrs, fmt.Sprintf("%s=%s", k, v[0]))
-				}
-			}
-			log.Printf("[%s] passthrough claude anthropic headers: %v", reqID, hdrs)
-		}
-	}
-	if h.cfg.logBodies && len(bodySample) > 0 {
-		log.Printf("[%s] passthrough request body sample (%d bytes): %s", reqID, len(bodySample), safeText(bodySample))
 	}
 
 	timeout := clientOrDefaultTimeout(r, h.cfg.requestTimeout, h.cfg.streamTimeout, bodyBytes)
@@ -4215,27 +3881,13 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough -> %s %s", reqID, outReq.Method, outReq.URL.String())
-	}
-
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
-		if providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-			h.writeClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, bodyBytes, outReq, bodyBytes, nil, TranslateNone, nil, err.Error())
-		}
 		h.recent.add(err.Error())
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
-	if providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-		sampleLimit := h.claudeTraceSampleLimit(16 * 1024)
-		if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
-			sampleLimit = h.claudeTraceSampleLimit(h.cfg.bodyLogLimit)
-		}
-		h.attachClaudeTrace(reqID, "passthrough", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, bodyBytes, outReq, bodyBytes, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
-	}
 
 	respContentType := resp.Header.Get("Content-Type")
 	isSSE := provider.DetectsSSE(r.URL.Path, respContentType)
@@ -4262,7 +3914,7 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Del("Content-Length")
 		if passthroughTranslateDir == TranslateCompletionsToResponses {
-			bufWriter := &responsesToCompletionsBufferingWriter{debug: h.cfg.debug.Load(), reqID: reqID}
+			bufWriter := &responsesToCompletionsBufferingWriter{}
 			filter := newHostedMCPResponseFilterWriter(bufWriter, h.cfg.maxInMemoryBodyBytes)
 			_, copyErr := io.Copy(filter, resp.Body)
 			if finalizeErr := filter.Finalize(); copyErr == nil {
@@ -4277,7 +3929,7 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		if passthroughTranslateDir == TranslateChatToResponses {
-			bufWriter := &responsesToChatCompletionsBufferingWriter{debug: h.cfg.debug.Load(), reqID: reqID}
+			bufWriter := &responsesToChatCompletionsBufferingWriter{}
 			filter := newHostedMCPResponseFilterWriter(bufWriter, h.cfg.maxInMemoryBodyBytes)
 			_, copyErr := io.Copy(filter, resp.Body)
 			if finalizeErr := filter.Finalize(); copyErr == nil {
@@ -4335,9 +3987,9 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 		defer fw.stop()
 	}
 	if isSSE && passthroughTranslateDir == TranslateCompletionsToResponses {
-		writer = &responsesToCompletionsWriter{w: writer, debug: h.cfg.debug.Load(), reqID: reqID}
+		writer = &responsesToCompletionsWriter{w: writer}
 	} else if isSSE && passthroughTranslateDir == TranslateChatToResponses {
-		writer = &responsesToChatCompletionsWriter{w: writer, debug: h.cfg.debug.Load(), reqID: reqID}
+		writer = &responsesToChatCompletionsWriter{w: writer}
 	}
 	var hostedMCPFilter *hostedMCPResponseFilterWriter
 	if isSSE && providerType == AccountTypeCodex {
@@ -4375,9 +4027,6 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 
 	h.metrics.inc(strconv.Itoa(resp.StatusCode), "passthrough")
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough done status=%d duration_ms=%d", reqID, resp.StatusCode, time.Since(start).Milliseconds())
-	}
 }
 
 func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.Request, reqID string, providerType AccountType, provider Provider, targetBase *url.URL, start time.Time) {
@@ -4399,16 +4048,7 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 	outURL.Host = targetBase.Host
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(r.URL.Path))
 
-	var reqSample *bytes.Buffer
 	var body io.Reader = r.Body
-	if (h.cfg.logBodies && h.cfg.bodyLogLimit > 0) || (providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled()) {
-		sampleLimit := h.cfg.bodyLogLimit
-		if sampleLimit <= 0 || (providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() && h.cfg.claudeTraceBodyLimit > sampleLimit) {
-			sampleLimit = h.cfg.claudeTraceBodyLimit
-		}
-		reqSample = &bytes.Buffer{}
-		body = io.TeeReader(r.Body, &limitedWriter{w: reqSample, n: sampleLimit})
-	}
 
 	outReq, err := http.NewRequestWithContext(ctx, r.Method, outURL.String(), body)
 	if err != nil {
@@ -4434,39 +4074,13 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough streamed -> %s %s", reqID, outReq.Method, outReq.URL.String())
-	}
-
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
-		if providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-			var reqBody []byte
-			if reqSample != nil {
-				reqBody = reqSample.Bytes()
-			}
-			h.writeClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, reqBody, outReq, reqBody, nil, TranslateNone, nil, err.Error())
-		}
 		h.recent.add(err.Error())
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
-	if providerType == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-		var reqBody []byte
-		if reqSample != nil {
-			reqBody = reqSample.Bytes()
-		}
-		sampleLimit := h.claudeTraceSampleLimit(16 * 1024)
-		if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
-			sampleLimit = h.claudeTraceSampleLimit(h.cfg.bodyLogLimit)
-		}
-		h.attachClaudeTrace(reqID, "passthrough_streamed", "", hashRequestOrigin(r, poolHashSalt(getPoolJWTSecret())), nil, r, reqBody, outReq, reqBody, resp, TranslateNone, &bytes.Buffer{}, sampleLimit)
-	}
-
-	if h.cfg.logBodies && reqSample != nil && reqSample.Len() > 0 {
-		log.Printf("[%s] passthrough request body sample (%d bytes): %s", reqID, reqSample.Len(), safeText(reqSample.Bytes()))
-	}
 
 	// Write response to client
 	copyHeader(w.Header(), resp.Header)
@@ -4508,9 +4122,6 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 
 	h.metrics.inc(strconv.Itoa(resp.StatusCode), "passthrough")
 
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] passthrough streamed done status=%d duration_ms=%d", reqID, resp.StatusCode, time.Since(start).Milliseconds())
-	}
 }
 
 func (h *proxyHandler) tryOnce(
@@ -4531,18 +4142,14 @@ func (h *proxyHandler) tryOnce(
 		return nil, nil, false, errors.New("nil account")
 	}
 	refreshFailed := false // Track if refresh was attempted but failed
-	rawIncomingBody := append([]byte(nil), bodyBytes...)
 	if provider.Type() == AccountTypeGrok {
 		bodyBytes = rewriteAndSanitizeGrokRequestBody(bodyBytes, requestedModel)
 	}
 
-	if !h.cfg.disableRefresh && h.needsRefresh(acc) {
+	if h.needsRefresh(acc) {
 		if err := h.refreshAccount(ctx, acc); err != nil {
 			if isRateLimitError(err) {
 				h.applyRateLimit(acc, nil)
-			}
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] refresh %s failed: %v (continuing with existing token)", reqID, acc.ID, err)
 			}
 		}
 	}
@@ -4752,11 +4359,8 @@ func (h *proxyHandler) tryOnce(
 		}
 
 		if provider.Type() == AccountTypeClaude && strings.HasPrefix(access, "sk-ant-oat") {
-			if normalized, hits, changed := normalizeAnthropicDateline(bodyBytes); changed {
+			if normalized, _, changed := normalizeAnthropicDateline(bodyBytes); changed {
 				bodyBytes = normalized
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] normalized %d Anthropic dateline fingerprint(s)", reqID, len(hits))
-				}
 			}
 		}
 
@@ -4771,35 +4375,13 @@ func (h *proxyHandler) tryOnce(
 			outReq.Header.Del("Content-Length")
 		}
 
-		// Debug: log ALL outgoing headers
-		if h.cfg.debug.Load() {
-			var hdrs []string
-			for k, v := range outReq.Header {
-				val := v[0]
-				if len(val) > 80 {
-					val = val[:80]
-				}
-				hdrs = append(hdrs, fmt.Sprintf("%s=%s", k, val))
-			}
-			log.Printf("[%s] ALL outgoing headers (%s): %v", reqID, provider.Type(), hdrs)
-		}
-
 		// Keep the original User-Agent from the client - don't override it
 		return outReq, nil
 	}
 
 	outReq, err := buildReq()
 	if err != nil {
-		if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-			h.writeClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, nil, bodyBytes, nil, translateDir, nil, err.Error())
-		}
 		return nil, nil, false, err
-	}
-
-	if h.cfg.debug.Load() {
-		acc.mu.Lock()
-		log.Printf("[%s] -> %s %s (account=%s account_id=%s)", reqID, outReq.Method, outReq.URL.String(), acc.ID, acc.AccountID)
-		acc.mu.Unlock()
 	}
 
 	resp, err := h.transport.RoundTrip(outReq)
@@ -4809,9 +4391,6 @@ func (h *proxyHandler) tryOnce(
 		resp.Body = newClaudeToolNameReadCloser(resp.Body, claudeToolNameMapper)
 	}
 	if err != nil {
-		if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-			h.writeClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, outReq, bodyBytes, resp, translateDir, nil, err.Error())
-		}
 		acc.mu.Lock()
 		acc.Penalty += 0.2
 		acc.mu.Unlock()
@@ -4819,14 +4398,7 @@ func (h *proxyHandler) tryOnce(
 	}
 
 	// If we got a 401/403, try to refresh and retry on the *same* account once.
-	if (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) && !h.cfg.disableRefresh {
-		// Log the error response body for debugging
-		if h.cfg.debug.Load() {
-			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-			// Try to decompress if gzip
-			decompressed := bodyForInspection(nil, errBody)
-			log.Printf("[%s] got %d from upstream, body: %s", reqID, resp.StatusCode, safeText(decompressed))
-		}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		acc.mu.Lock()
 		hasRefresh := acc.RefreshToken != ""
 		acc.mu.Unlock()
@@ -4835,15 +4407,7 @@ func (h *proxyHandler) tryOnce(
 			if err := h.refreshAccountAfterAuthFailure(ctx, acc); err == nil {
 				outReq, err = buildReq()
 				if err != nil {
-					if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-						h.writeClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, nil, bodyBytes, nil, translateDir, nil, err.Error())
-					}
 					return nil, nil, false, err
-				}
-				if h.cfg.debug.Load() {
-					acc.mu.Lock()
-					log.Printf("[%s] retry after refresh -> %s %s (account=%s account_id=%s)", reqID, outReq.Method, outReq.URL.String(), acc.ID, acc.AccountID)
-					acc.mu.Unlock()
 				}
 				resp, err = h.transport.RoundTrip(outReq)
 				captureCodexResponseState(acc, resp, reqID)
@@ -4852,21 +4416,10 @@ func (h *proxyHandler) tryOnce(
 					resp.Body = newClaudeToolNameReadCloser(resp.Body, claudeToolNameMapper)
 				}
 				if err != nil {
-					if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-						h.writeClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, outReq, bodyBytes, resp, translateDir, nil, err.Error())
-					}
 					acc.mu.Lock()
 					acc.Penalty += 0.2
 					acc.mu.Unlock()
 					return nil, nil, false, err
-				}
-				// Log response after retry
-				if h.cfg.debug.Load() && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
-					errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-					decompressed := bodyForInspection(nil, errBody)
-					log.Printf("[%s] after refresh retry got %d, body: %s", reqID, resp.StatusCode, safeText(decompressed))
-					// Recreate body for downstream processing
-					resp.Body = io.NopCloser(bytes.NewReader(errBody))
 				}
 				// Refresh succeeded - if we still get 401/403 after refresh,
 				// the account is truly dead (fresh token still rejected)
@@ -4889,9 +4442,6 @@ func (h *proxyHandler) tryOnce(
 					// Other non-rate-limited failures also count as refresh failed
 					refreshFailed = true
 				}
-				if h.cfg.debug.Load() {
-					log.Printf("[%s] refresh failed for %s: %v (refreshFailed=%v)", reqID, acc.ID, err, refreshFailed)
-				}
 			}
 		} else {
 			// No refresh token available - can't recover from 401/403
@@ -4903,15 +4453,8 @@ func (h *proxyHandler) tryOnce(
 	// stays on the direct upstream->client path so first tokens are not delayed by
 	// accounting-only parsing or sampling.
 	sampleLimit := int64(16 * 1024)
-	if h.cfg.logBodies && h.cfg.bodyLogLimit > 0 {
-		sampleLimit = h.cfg.bodyLogLimit
-	}
-	sampleLimit = h.claudeTraceSampleLimit(sampleLimit)
 	var buf *responseBodyCapture
-	if provider.Type() == AccountTypeClaude && h.cfg.claudeTraceEnabled() {
-		buf = newResponseBodyCapture(sampleLimit)
-		h.attachClaudeTrace(reqID, "pool", userID, originID, acc, in, rawIncomingBody, outReq, bodyBytes, resp, translateDir, &buf.prefix, sampleLimit)
-	} else if shouldSampleResponseBodyForRequest(provider, acc, in.URL.Path, resp, translateDir, conversationID, h.cfg.logBodies) {
+	if shouldSampleResponseBodyForRequest(provider, acc, in.URL.Path, resp, translateDir, conversationID) {
 		buf = newResponseBodyCapture(sampleLimit)
 		resp.Body = struct {
 			io.Reader
@@ -4935,11 +4478,11 @@ func applyStreamingResponseHeaders(header http.Header) {
 	}
 }
 
-func shouldSampleResponseBodyForRequest(provider Provider, acc *ProviderConnection, path string, resp *http.Response, translateDir TranslateDirection, conversationID string, logBodies bool) bool {
+func shouldSampleResponseBodyForRequest(provider Provider, acc *ProviderConnection, path string, resp *http.Response, translateDir TranslateDirection, conversationID string) bool {
 	if provider == nil || resp == nil {
 		return true
 	}
-	if logBodies || translateDir != TranslateNone {
+	if translateDir != TranslateNone {
 		return true
 	}
 	if !provider.DetectsSSE(path, resp.Header.Get("Content-Type")) {

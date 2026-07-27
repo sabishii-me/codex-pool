@@ -14,7 +14,7 @@ func TestProviderSpecsWatcherKeepsRegistryAndPoolOnInvalidReload(t *testing.T) {
 	provider := NewDeepSeekProvider(base)
 	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, provider)
 	connection := &ProviderConnection{Type: AccountTypeDeepSeek, ID: "existing"}
-	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool([]*ProviderConnection{connection}, false)}
+	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool([]*ProviderConnection{connection})}
 	active := registry.ForType(AccountTypeDeepSeek)
 	if err := os.WriteFile(filepath.Join(specsDir, "broken.json"), []byte(`{"id":"deepseek"}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestProviderSpecsWatcherPublishesThenReloadsConnections(t *testing.T) {
 		t.Fatal(err)
 	}
 	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(nil))
-	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool(nil, false)}
+	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool(nil)}
 	spec := deepSeekProviderSpec
 	spec.BaseURL = "https://replacement.example.test/anthropic"
 	writeProviderSpecTestFile(t, specsDir, "deepseek.json", spec)

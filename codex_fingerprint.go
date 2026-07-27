@@ -197,18 +197,9 @@ func isPersistedCodexCookie(name string) bool {
 }
 
 func startCodexFingerprintUpdater(ctx context.Context, jobs *backgroundJobs) {
-	if getenv("CODEX_FINGERPRINT_AUTO_UPDATE", "1") == "0" {
-		return
-	}
 	jobs.Go(ctx, func(ctx context.Context) {
 		checkCodexFingerprintUpdate()
-		period := codexFingerprintPollPeriod
-		if raw := strings.TrimSpace(os.Getenv("CODEX_FINGERPRINT_UPDATE_SECONDS")); raw != "" {
-			if n, err := parseInt64(raw); err == nil && n > 0 {
-				period = time.Duration(n) * time.Second
-			}
-		}
-		ticker := time.NewTicker(period)
+		ticker := time.NewTicker(codexFingerprintPollPeriod)
 		defer ticker.Stop()
 		for {
 			select {

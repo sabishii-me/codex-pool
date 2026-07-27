@@ -64,7 +64,7 @@ func TestQwenAdminAddValidatesAndSavesAccount(t *testing.T) {
 	validationCalled := false
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, qwenBase: qwenBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
@@ -116,7 +116,7 @@ func TestQwenAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	qwenBase, _ := url.Parse("https://coding-intl.dashscope.aliyuncs.com/apps/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, qwenBase: qwenBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{

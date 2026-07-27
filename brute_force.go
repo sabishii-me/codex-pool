@@ -114,4 +114,3 @@ func (t *bruteForceTracker) cleanup() {
 func (t *bruteForceTracker) stop() {
 	close(t.stopCh)
 }
-

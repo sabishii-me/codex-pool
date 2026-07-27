@@ -49,7 +49,7 @@ docker compose --env-file .env.dev -p codex-pool-dev -f docker-compose.dev.yml u
 curl http://127.0.0.1:18991/healthz
 ```
 
-`DEV_LOCAL_SESSION=true` is allowed only in Test. It creates `developer@localhost.invalid` in Test state. That identity and its data never move to Staging or Production.
+Test uses real Google OAuth, the same authentication and MFA paths as Staging and Production, and isolated Test-owned state and credentials. There is no synthetic session mode.
 
 ## Promote to Staging
 
@@ -62,7 +62,6 @@ curl http://127.0.0.1:18990/healthz
 
 Required Staging properties:
 
-- `STAGING_LOCAL_SESSION=false`;
 - real Google OAuth callback `http://127.0.0.1:18990/auth/callback/google`;
 - real allowed/Admin policy;
 - isolated Staging state;

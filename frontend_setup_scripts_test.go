@@ -242,7 +242,7 @@ func newTestPoolUserStoreWithUser(t *testing.T, token string) *GatewayUserStore 
 }
 
 func TestFrontendAlwaysServesReactProductShell(t *testing.T) {
-	for _, cfg := range []*config{{}, {oauthGoogleClientID: "configured"}, {localDevSession: true}} {
+	for _, cfg := range []*config{{}, {oauthGoogleClientID: "configured"}} {
 		h := &proxyHandler{cfg: cfg}
 		rr := httptest.NewRecorder()
 		h.serveProductShell(rr, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))

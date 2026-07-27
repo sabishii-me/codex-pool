@@ -358,16 +358,8 @@ func (h *proxyHandler) recordUsage(a *ProviderConnection, ru RequestUsage) {
 			return
 		}
 		if !recorded {
-			if h.cfg != nil && h.cfg.debug.Load() {
-				log.Printf("canonical usage deduplicated request=%s connection=%s provider=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID)
-			}
 			return
 		}
-		if h.cfg != nil && h.cfg.debug.Load() {
-			log.Printf("canonical usage committed request=%s connection=%s provider=%s model=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID, ru.Model)
-		}
-	} else if h.cfg != nil && h.cfg.debug.Load() {
-		log.Printf("canonical usage store unavailable request=%s connection=%s provider=%s", ru.RequestID, ru.ConnectionID, ru.ProviderID)
 	}
 
 	// BoltDB remains a compatibility projection during migration. If SQLite is
@@ -393,11 +385,6 @@ func (h *proxyHandler) recordUsage(a *ProviderConnection, ru RequestUsage) {
 		a.mu.Unlock()
 	}
 
-	if h.cfg != nil && h.cfg.debug.Load() {
-		log.Printf("token_count: account=%s plan=%s user=%s origin=%s model=%s in=%d cached=%d out=%d reasoning=%d billable=%d cost=$%.6f primary=%.1f%% secondary=%.1f%%",
-			ru.AccountID, ru.PlanType, ru.UserID, ru.OriginID, ru.Model, ru.InputTokens, ru.CachedInputTokens, ru.OutputTokens, ru.ReasoningTokens, ru.BillableTokens,
-			costUSD, ru.PrimaryUsedPct*100, ru.SecondaryUsedPct*100)
-	}
 }
 
 func parseRequestUsage(obj map[string]any) *RequestUsage {

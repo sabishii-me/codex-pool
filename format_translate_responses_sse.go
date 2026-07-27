@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -353,8 +352,6 @@ type responsesToCompletionsWriter struct {
 	w         io.Writer
 	buf       []byte
 	callback  func([]byte)
-	debug     bool
-	reqID     string
 	id        string
 	model     string
 	createdAt int64
@@ -466,16 +463,12 @@ func (rw *responsesToCompletionsWriter) emitChunk(text, finishReason string, usa
 }
 
 func (rw *responsesToCompletionsWriter) writeRaw(s string) {
-	if _, err := rw.w.Write([]byte(s)); err != nil && rw.debug {
-		log.Printf("[%s] responses->completions write error: %v", rw.reqID, err)
-	}
+	_, _ = rw.w.Write([]byte(s))
 }
 
 type responsesToCompletionsBufferingWriter struct {
 	buf          []byte
 	callback     func([]byte)
-	debug        bool
-	reqID        string
 	id           string
 	model        string
 	contentText  string
@@ -626,9 +619,6 @@ type responsesToChatCompletionsWriter struct {
 	w        io.Writer
 	buf      []byte
 	callback func([]byte) // called with original event data for usage parsing
-	debug    bool
-	reqID    string
-
 	// State tracking
 	id                  string
 	model               string
@@ -876,9 +866,6 @@ func (rw *responsesToChatCompletionsWriter) processEvent(event []byte) {
 		// Informational events, no action needed
 
 	default:
-		if rw.debug {
-			log.Printf("[%s] responses->chat: unhandled event type: %s", rw.reqID, eventType)
-		}
 	}
 }
 
@@ -987,11 +974,7 @@ func (rw *responsesToChatCompletionsWriter) emitChunk(delta map[string]any, fini
 }
 
 func (rw *responsesToChatCompletionsWriter) writeRaw(s string) {
-	if _, err := rw.w.Write([]byte(s)); err != nil {
-		if rw.debug {
-			log.Printf("[%s] responses->chat write error: %v", rw.reqID, err)
-		}
-	}
+	_, _ = rw.w.Write([]byte(s))
 }
 
 // responsesToChatCompletionsBufferingWriter is like responsesToChatCompletionsWriter
@@ -1000,9 +983,6 @@ func (rw *responsesToChatCompletionsWriter) writeRaw(s string) {
 type responsesToChatCompletionsBufferingWriter struct {
 	buf      []byte
 	callback func([]byte) // usage callback
-	debug    bool
-	reqID    string
-
 	// State accumulated from SSE events
 	id                  string
 	model               string
@@ -1378,11 +1358,8 @@ func anthropicErrorJSON(errorType, message string) []byte {
 // responsesToClaudeBufferingWriter buffers Responses API SSE events into a
 // non-streaming Claude Messages API response.
 type responsesToClaudeBufferingWriter struct {
-	buf      []byte
-	callback func([]byte)
-	debug    bool
-	reqID    string
-
+	buf                 []byte
+	callback            func([]byte)
 	id                  string
 	model               string
 	contentText         string
@@ -1434,9 +1411,6 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 
 	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
-		if bw.debug {
-			log.Printf("[%s] responses->claude buffer: JSON parse error for event %q: %v", bw.reqID, eventType, err)
-		}
 		return
 	}
 	if eventType == "" {
@@ -1639,9 +1613,6 @@ type claudeToResponsesWriter struct {
 	w        io.Writer
 	buf      []byte
 	callback func([]byte)
-	debug    bool
-	reqID    string
-
 	// State
 	id               string
 	model            string
@@ -1956,11 +1927,7 @@ func (cw *claudeToResponsesWriter) emitEvent(eventType string, data map[string]a
 		return
 	}
 	out := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, string(b))
-	if _, err := cw.w.Write([]byte(out)); err != nil {
-		if cw.debug {
-			log.Printf("[%s] claude->responses write error: %v", cw.reqID, err)
-		}
-	}
+	_, _ = cw.w.Write([]byte(out))
 }
 
 // responsesToClaudeWriter translates Responses API SSE events to Claude Messages
@@ -1970,9 +1937,6 @@ type responsesToClaudeWriter struct {
 	w        io.Writer
 	buf      []byte
 	callback func([]byte)
-	debug    bool
-	reqID    string
-
 	// State
 	id                  string
 	model               string
@@ -2056,9 +2020,6 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 
 	var obj map[string]any
 	if err := json.Unmarshal(data, &obj); err != nil {
-		if rw.debug {
-			log.Printf("[%s] responses->claude: JSON parse error for event %q: %v (data len=%d)", rw.reqID, eventType, err, len(data))
-		}
 		return
 	}
 
@@ -2066,10 +2027,6 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 		if t, ok := obj["type"].(string); ok {
 			eventType = t
 		}
-	}
-
-	if rw.debug {
-		log.Printf("[%s] responses->claude: processing event: %s", rw.reqID, eventType)
 	}
 
 	switch eventType {
@@ -2268,9 +2225,6 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 		// Informational events, no action needed
 
 	default:
-		if rw.debug {
-			log.Printf("[%s] responses->claude: unhandled event type: %s", rw.reqID, eventType)
-		}
 	}
 }
 
@@ -2330,20 +2284,11 @@ func (rw *responsesToClaudeWriter) emitClaudeMessageStart() {
 
 func (rw *responsesToClaudeWriter) emitClaudeEvent(eventType, data string) {
 	out := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, data)
-	if rw.debug {
-		preview := data
-		if len(preview) > 200 {
-			preview = preview[:200] + "..."
-		}
-		log.Printf("[%s] responses->claude EMIT: %s (len=%d) %s", rw.reqID, eventType, len(data), preview)
-	}
+
 	if rw.writeErr != nil {
 		return
 	}
 	if _, err := rw.w.Write([]byte(out)); err != nil {
 		rw.writeErr = err
-		if rw.debug {
-			log.Printf("[%s] responses->claude write error: %v", rw.reqID, err)
-		}
 	}
 }

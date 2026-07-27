@@ -67,7 +67,7 @@ func TestAnthropicCompatibleProvidersProxyNonStreamingExactlyOnce(t *testing.T) 
 			defer analytics.db.Close()
 			handler := &proxyHandler{
 				cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
-				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry,
+				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry,
 				analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5),
 			}
 			requestBody := []byte(`{"model":"` + test.Model + `","messages":[{"role":"user","content":"hi"}],"stream":false}`)
@@ -132,7 +132,7 @@ func TestAnthropicCompatibleProvidersProxyStreamingExactlyOnce(t *testing.T) {
 			defer analytics.db.Close()
 			handler := &proxyHandler{
 				cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
-				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry,
+				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry,
 				analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5),
 			}
 			requestBody := []byte(`{"model":"` + test.Model + `","messages":[{"role":"user","content":"hi"}],"stream":true}`)
@@ -202,7 +202,7 @@ func TestAnthropicCompatibleProvidersProxyLargeBodyRouteAndUsage(t *testing.T) {
 			defer analytics.db.Close()
 			handler := &proxyHandler{
 				cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024},
-				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry,
+				transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry,
 				analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 			}
 			padding := strings.Repeat("x", streamedModelRoutePeekBytes+1024)

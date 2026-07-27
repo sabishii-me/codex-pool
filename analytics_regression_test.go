@@ -77,7 +77,7 @@ func TestDeepSeekSSEStreamRecordsExactlyOneRequest(t *testing.T) {
 		AccessToken: "ds-test",
 		PlanType:    "deepseek",
 	}
-	pool := newProviderPool([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc})
 
 	h := &proxyHandler{
 		cfg: &config{
@@ -205,7 +205,7 @@ func TestZAISSEStreamRecordsExactlyOneRequest(t *testing.T) {
 		AccessToken: "zai-test",
 		PlanType:    "zai",
 	}
-	pool := newProviderPool([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc})
 
 	h := &proxyHandler{
 		cfg: &config{
@@ -298,7 +298,7 @@ func TestDeepSeekNonStreamingRecordsExactlyOneRequest(t *testing.T) {
 		AccessToken: "ds-test",
 		PlanType:    "deepseek",
 	}
-	pool := newProviderPool([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc})
 
 	h := &proxyHandler{
 		cfg: &config{

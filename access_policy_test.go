@@ -19,9 +19,9 @@ func (stub *accessAttemptStub) recordFailure(string) bool {
 }
 func (stub *accessAttemptStub) recordSuccess(string) { stub.success++ }
 
-func TestAccessPolicyOpenSessionStillHonorsActiveBan(t *testing.T) {
+func TestAccessPolicyBanPrecedesAuthentication(t *testing.T) {
 	attempts := &accessAttemptStub{banned: true}
-	policy := &AccessPolicy{openSessionAccess: true, attempts: attempts}
+	policy := &AccessPolicy{attempts: attempts}
 	response := httptest.NewRecorder()
 	if policy.RequireSession(response, httptest.NewRequest(http.MethodGet, "/", nil)) {
 		t.Fatal("banned request authenticated")
@@ -31,10 +31,14 @@ func TestAccessPolicyOpenSessionStillHonorsActiveBan(t *testing.T) {
 	}
 }
 
-func TestAccessPolicyOpenSessionDoesNotRequireIdentity(t *testing.T) {
-	policy := &AccessPolicy{openSessionAccess: true}
-	if !policy.RequireSession(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil)) {
-		t.Fatal("open local deployment rejected request")
+func TestAccessPolicyAlwaysRequiresIdentity(t *testing.T) {
+	policy := &AccessPolicy{}
+	response := httptest.NewRecorder()
+	if policy.RequireSession(response, httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Fatal("missing authentication opened a protected route")
+	}
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status=%d", response.Code)
 	}
 }
 

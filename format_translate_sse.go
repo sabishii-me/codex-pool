@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 )
 
 // sseTranslateWriter intercepts upstream SSE events, translates them to the
@@ -17,8 +16,6 @@ type sseTranslateWriter struct {
 	state     streamTranslationState
 	buf       []byte
 	callback  func([]byte) // called with original event data for usage parsing
-	debug     bool
-	reqID     string
 }
 
 type streamTranslationState struct {
@@ -261,11 +258,7 @@ func (sw *sseTranslateWriter) emitClaudeMessageDelta() {
 
 func (sw *sseTranslateWriter) emitClaudeEvent(eventType, data string) {
 	out := fmt.Sprintf("event: %s\ndata: %s\n\n", eventType, data)
-	if _, err := sw.w.Write([]byte(out)); err != nil {
-		if sw.debug {
-			log.Printf("[%s] translate write error: %v", sw.reqID, err)
-		}
-	}
+	_, _ = sw.w.Write([]byte(out))
 }
 
 // --- Claude Stream -> OpenAI Stream ---
@@ -455,11 +448,7 @@ func (sw *sseTranslateWriter) emitOAIChunkWithFinish(delta map[string]any, finis
 }
 
 func (sw *sseTranslateWriter) writeOAI(s string) {
-	if _, err := sw.w.Write([]byte(s)); err != nil {
-		if sw.debug {
-			log.Printf("[%s] translate write error: %v", sw.reqID, err)
-		}
-	}
+	_, _ = sw.w.Write([]byte(s))
 }
 
 func mustMarshalString(s string) string {

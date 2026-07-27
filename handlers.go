@@ -26,7 +26,7 @@ func (h *proxyHandler) connectionViewService() *ConnectionViewService {
 	if h.connectionViews != nil {
 		return h.connectionViews
 	}
-	return NewConnectionViewService(h.pool, h.cfg != nil && !h.cfg.disableRefresh)
+	return NewConnectionViewService(h.pool)
 }
 
 func (h *proxyHandler) serveProviderConnectionsV2(w http.ResponseWriter) {
@@ -605,9 +605,6 @@ func (h *proxyHandler) handleAggregatedUsage(w http.ResponseWriter, reqID string
 			"accounts":          poolStats.Accounts,
 			"providers":         poolStats.Providers,
 		},
-	}
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] aggregate usage served locally", reqID)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	respondJSON(w, resp)

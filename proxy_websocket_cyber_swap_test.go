@@ -93,15 +93,13 @@ func newCodexProxyFixture(t *testing.T, base *url.URL, accounts []*Account) *cod
 			maxInMemoryBodyBytes:       1024,
 			websocketReadLimit:         128 * 1024 * 1024,
 			websocketHeartbeatInterval: 0,
-			disableRefresh:             true,
 		},
 		transport: http.DefaultTransport,
-		pool:      newProviderPool(accounts, false),
+		pool:      newProviderPool(accounts),
 		registry:  registry,
 		metrics:   newMetrics(),
 		recent:    newRecentErrors(8),
 	}
-	h.cfg.debug.Store(true)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return &codexProxyFixture{server: srv, handler: h}

@@ -35,7 +35,7 @@ func TestCodexProxyFiltersHostedMCPRequestAndJSONResponse(t *testing.T) {
 			return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": []string{"application/json"}}, Body: io.NopCloser(strings.NewReader(response))}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newProviderPool([]*ProviderConnection{connection}, false),
+		pool:             newProviderPool([]*ProviderConnection{connection}),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(), recent: newRecentErrors(5),
 	}
@@ -65,7 +65,7 @@ func TestCodexProxyRejectsOversizedResponsesRequestBeforeTransport(t *testing.T)
 	handler := &proxyHandler{
 		cfg:       &config{maxAttempts: 1, maxInMemoryBodyBytes: 32},
 		transport: roundTripFunc(func(*http.Request) (*http.Response, error) { called = true; return nil, nil }),
-		pool:      newProviderPool([]*ProviderConnection{{Type: AccountTypeCodex, ID: "codex", AccessToken: "token", PlanType: "pro"}}, false),
+		pool:      newProviderPool([]*ProviderConnection{{Type: AccountTypeCodex, ID: "codex", AccessToken: "token", PlanType: "pro"}}),
 		registry:  NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)), metrics: newMetrics(), recent: newRecentErrors(5),
 	}
 	body := []byte(`{"model":"gpt-5.5","input":"` + strings.Repeat("x", 80) + `"}`)

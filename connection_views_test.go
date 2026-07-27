@@ -14,8 +14,8 @@ func TestPoolStatsConnectionsReturnsDetachedReadModels(t *testing.T) {
 		Usage:                 UsageSnapshot{PrimaryUsed: 0.4, primarySet: true},
 		RateLimitResetCredits: []RateLimitResetCredit{{ExpiresAt: time.Now().Add(time.Hour)}},
 	}
-	service := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection}, false))
-	views := service.PoolStatsConnections(time.Now(), false)
+	service := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection}))
+	views := service.PoolStatsConnections(time.Now())
 	if len(views) != 1 || views[0].ConnectionID != connection.ID || views[0].View.DisplayName != "Primary" {
 		t.Fatalf("unexpected snapshot: %+v", views)
 	}
@@ -36,7 +36,7 @@ func TestOperatorConnectionsExposeProviderStateManagementCapability(t *testing.T
 		ID: "codex", Type: AccountTypeCodex, ResetCreditsRetrievedAt: time.Now(), ResetCreditsAvailable: 1,
 		RateLimitResetCredits: []RateLimitResetCredit{{ID: "private", ExpiresAt: time.Now().Add(time.Hour)}},
 	}
-	view := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection}, false), true).OperatorConnections()[0]
+	view := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection})).OperatorConnections()[0]
 	if !view.ResetCredits.ManagementAvailable || !view.ResetCredits.InventoryRefreshAvailable || !view.ResetCredits.RedemptionAvailable {
 		t.Fatalf("reset-credit management projection = %#v", view.ResetCredits)
 	}
@@ -46,7 +46,7 @@ func TestPoolStatsConnectionsMarksPrimaryAndCyberEligibility(t *testing.T) {
 	now := time.Now()
 	low := &ProviderConnection{ID: "low", Type: AccountTypeCodex, Penalty: 1}
 	high := &ProviderConnection{ID: "high", Type: AccountTypeCodex, CyberAccess: true, ExpiresAt: now.Add(time.Hour)}
-	views := NewConnectionViewService(newProviderPool([]*ProviderConnection{low, high}, false)).PoolStatsConnections(now, false)
+	views := NewConnectionViewService(newProviderPool([]*ProviderConnection{low, high})).PoolStatsConnections(now)
 	if len(views) != 2 {
 		t.Fatalf("len=%d", len(views))
 	}

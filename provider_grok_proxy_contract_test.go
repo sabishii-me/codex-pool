@@ -38,7 +38,7 @@ func TestGrokProxyCanonicalUsageAndSanitizedResponseIntegrity(t *testing.T) {
 	defer analytics.db.Close()
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
-		transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry,
+		transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry,
 		analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
 	requestBody := []byte(`{"model":"grok-composer","input":"hello","stream":false,"metadata":{"conversation_id":"remove"},"reasoning":{"effort":"high"}}`)
@@ -77,7 +77,7 @@ func TestGrokLargeBodyIsRejectedBeforeUpstream(t *testing.T) {
 	base, _ := url.Parse(upstream.URL)
 	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), NewGrokProvider(base))
 	account := &Account{Type: AccountTypeGrok, ID: "grok_large", AccessToken: "contract-key"}
-	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	body := []byte(`{"model":"grok-composer","input":` + mustJSONContractString(t, strings.Repeat("x", streamedModelRoutePeekBytes+1024)) + `,"metadata":{"must":"not leak"}}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))
 	request.ContentLength = int64(len(body))

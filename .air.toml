@@ -7,7 +7,7 @@ tmp_dir = "tmp"
 [build]
   cmd = "go build -o ./tmp/codex-pool ."
   bin = "tmp/codex-pool"
-  full_bin = "PROXY_DEBUG=1 POOL_DIR=./pool ./tmp/codex-pool"
+  full_bin = "POOL_DIR=./pool ./tmp/codex-pool"
   delay = 200
   include_ext = ["go"]
   exclude_dir = ["codex", "data", "pool", "tmp", ".git"]

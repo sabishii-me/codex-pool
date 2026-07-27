@@ -1502,8 +1502,7 @@ func quotaPaceRatio(usedPercent float64, resetMinutes, windowMinutes int) float6
 
 func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
-	disableRefresh := h.cfg != nil && h.cfg.disableRefresh
-	snapshots := h.connectionViewService().PoolStatsConnections(now, disableRefresh)
+	snapshots := h.connectionViewService().PoolStatsConnections(now)
 	stats := PoolStats{
 		TotalAccounts: len(snapshots),
 		Accounts:      make([]ProviderConnectionStats, 0, len(snapshots)),
@@ -1716,8 +1715,8 @@ func (h *proxyHandler) handlePoolStats(w http.ResponseWriter, r *http.Request) {
 // buffered/4xx retry — i.e. no synthetic-refusal fallbacks AND there's
 // still a cyber candidate available for the next hit.
 func (h *proxyHandler) computeCyberPolicyStats(accounts []*ProviderConnection) CyberPolicyStats {
-	pool := newProviderPool(accounts, h.cfg != nil && h.cfg.disableRefresh)
-	snapshots := NewConnectionViewService(pool).PoolStatsConnections(time.Now(), h.cfg != nil && h.cfg.disableRefresh)
+	pool := newProviderPool(accounts)
+	snapshots := NewConnectionViewService(pool).PoolStatsConnections(time.Now())
 	return h.computeCyberPolicyStatsFromSnapshots(snapshots)
 }
 

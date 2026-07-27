@@ -114,7 +114,7 @@ func TestNvidiaAdminAddValidatesUsingOpenAIChatCompletionsShape(t *testing.T) {
 	validationCalled := false
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, nvidiaBase: nvidiaBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
@@ -172,7 +172,7 @@ func TestNvidiaAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	nvidiaBase, _ := url.Parse("https://integrate.api.nvidia.com/v1")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, nvidiaBase: nvidiaBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{

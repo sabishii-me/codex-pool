@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"strings"
 	"sync"
 )
@@ -66,20 +65,14 @@ func (m *modelAliases) reload(cfg map[string]string) {
 
 // applyModelAlias resolves the model alias and rewrites the body if needed.
 // Uses the existing rewriteModelInBody from main.go.
-func applyModelAlias(aliases *modelAliases, model string, body []byte, debug bool, reqID string) (string, []byte) {
+func applyModelAlias(aliases *modelAliases, model string, body []byte) (string, []byte) {
 	resolved, aliased := aliases.resolve(model)
 	if !aliased {
 		return model, body
 	}
 	if rewritten := rewriteModelInBody(body, resolved); rewritten != nil {
-		if debug {
-			log.Printf("[%s] model alias: %s -> %s", reqID, model, resolved)
-		}
 		return resolved, rewritten
 	}
 	// Body rewrite failed, but still use the resolved name for routing.
-	if debug {
-		log.Printf("[%s] model alias: %s -> %s (body rewrite failed, routing only)", reqID, model, resolved)
-	}
 	return resolved, body
 }

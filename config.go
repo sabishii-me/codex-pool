@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -10,18 +9,15 @@ import (
 
 // ConfigFile represents the config.toml structure.
 type ConfigFile struct {
-	ListenAddr      string  `toml:"listen_addr"`
-	PoolDir         string  `toml:"pool_dir"`
-	DBPath          string  `toml:"db_path"`
-	MaxAttempts     int     `toml:"max_attempts"`
-	DisableRefresh  bool    `toml:"disable_refresh"`
-	RefreshProxyURL string  `toml:"refresh_proxy_url"` // HTTP proxy for refresh operations
-	Debug           bool    `toml:"debug"`
-	PublicURL       string  `toml:"public_url"`
-	GrokBase        string  `toml:"grok_base"`
-	FriendName      string  `toml:"friend_name"`
-	FriendTagline   string  `toml:"friend_tagline"`
-	TierThreshold   float64 `toml:"tier_threshold"` // Secondary usage % threshold for tier preference (default 0.15)
+	ListenAddr      string `toml:"listen_addr"`
+	PoolDir         string `toml:"pool_dir"`
+	DBPath          string `toml:"db_path"`
+	MaxAttempts     int    `toml:"max_attempts"`
+	RefreshProxyURL string `toml:"refresh_proxy_url"` // HTTP proxy for refresh operations
+	PublicURL       string `toml:"public_url"`
+	GrokBase        string `toml:"grok_base"`
+	FriendName      string `toml:"friend_name"`
+	FriendTagline   string `toml:"friend_tagline"`
 
 	OAuthGoogleClientID     string   `toml:"oauth_google_client_id"`
 	OAuthGoogleClientSecret string   `toml:"oauth_google_client_secret"`
@@ -117,30 +113,6 @@ func getConfigInt(envKey string, configValue int, defaultValue int) int {
 	}
 	if configValue > 0 {
 		return configValue
-	}
-	return defaultValue
-}
-
-// getConfigFloat64 returns the config value with priority: env var > config file > default.
-func getConfigFloat64(envKey string, configValue float64, defaultValue float64) float64 {
-	if v := os.Getenv(envKey); v != "" {
-		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return f
-		}
-	}
-	if configValue > 0 {
-		return configValue
-	}
-	return defaultValue
-}
-
-// getConfigBool returns the config value with priority: env var > config file > default.
-func getConfigBool(envKey string, configValue bool, defaultValue bool) bool {
-	if v := os.Getenv(envKey); v != "" {
-		return v == "1" || v == "true"
-	}
-	if configValue {
-		return true
 	}
 	return defaultValue
 }

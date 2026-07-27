@@ -49,7 +49,7 @@ func TestRoutingContextMatchRequiresCompleteTypedContext(t *testing.T) {
 func TestConnectionSelectorDelegatesTypedAffinityAndExactSelection(t *testing.T) {
 	first := &ProviderConnection{Type: AccountTypeCodex, ID: "first", PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1, SecondaryWindowMinutes: 10080}}
 	second := &ProviderConnection{Type: AccountTypeCodex, ID: "second", PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.8, SecondaryWindowMinutes: 10080}}
-	pool := newProviderPool([]*ProviderConnection{first, second}, false)
+	pool := newProviderPool([]*ProviderConnection{first, second})
 	privateKey := affinityRoutingKey("test-secret", "test-user", AccountTypeCodex, "test-model", "openai_responses", ClientAffinitySignal{Kind: AffinityClientSession, Value: "conversation"})
 	if privateKey == "" {
 		t.Fatal("typed affinity fixture did not derive a key")
@@ -89,7 +89,7 @@ func TestConnectionSelectorDelegatesCyberAndCooldownSelection(t *testing.T) {
 	ordinary := &ProviderConnection{Type: AccountTypeCodex, ID: "ordinary", PlanType: "pro"}
 	cyber := &ProviderConnection{Type: AccountTypeCodex, ID: "cyber", PlanType: "pro", CyberAccess: true}
 	cooling := &ProviderConnection{Type: AccountTypeClaude, ID: "cooling", RateLimitUntil: time.Now().Add(time.Minute)}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber, cooling}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber, cooling}))
 
 	got := selector.Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex})
 	if got != cyber {
@@ -106,7 +106,7 @@ func TestConnectionSelectorDelegatesAntigravityModelCapability(t *testing.T) {
 	t.Cleanup(antigravityModels.Reset)
 	connection := &ProviderConnection{Type: AccountTypeAntigravity, ID: "ag", ModelRateLimits: map[string]time.Time{}}
 	antigravityModels.ReplaceAccount(connection.ID, AntigravityAccountSnapshot{Models: map[string]AntigravityModelInfo{"gemini-test": {ID: "gemini-test"}}})
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{connection}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{connection}))
 	got := selector.Select(ConnectionSelection{Mode: SelectModelCapability, ProviderID: AccountTypeAntigravity, Model: "gemini-test"})
 	if got != connection {
 		t.Fatalf("model-capability selection=%v", got)
@@ -130,7 +130,7 @@ func TestSelectQuotaCompetitiveConnectionIgnoresNilCandidates(t *testing.T) {
 func TestConnectionSelectorRequiredPlanOverridesTypedPlusAffinity(t *testing.T) {
 	plus := &ProviderConnection{ID: "plus", Type: AccountTypeCodex, PlanType: "plus"}
 	pro := &ProviderConnection{ID: "pro", Type: AccountTypeCodex, PlanType: "pro"}
-	pool := newProviderPool([]*ProviderConnection{plus, pro}, false)
+	pool := newProviderPool([]*ProviderConnection{plus, pro})
 	context := buildRequestRoutingContext("/v1/responses", nil, http.Header{"Session_id": []string{"plus-session"}}, "test-user", AccountTypeCodex, "test-model", "test-secret")
 	if context.AffinityKey == "" || !routingContextMatchesSelection(context, AccountTypeCodex) {
 		t.Fatal("test context did not derive private affinity")
@@ -148,7 +148,7 @@ func TestConnectionSelectorRequiredPlanOverridesTypedPlusAffinity(t *testing.T) 
 func TestConnectionSelectorUsesBothQuotaWindows(t *testing.T) {
 	primaryConstrained := &ProviderConnection{ID: "primary-constrained", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.9, SecondaryUsedPercent: 0.1, PrimaryWindowMinutes: 300, SecondaryWindowMinutes: 10080}}
 	balanced := &ProviderConnection{ID: "balanced", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2, SecondaryUsedPercent: 0.2, PrimaryWindowMinutes: 300, SecondaryWindowMinutes: 10080}}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{primaryConstrained, balanced}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{primaryConstrained, balanced}))
 	if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex}); got != balanced {
 		t.Fatalf("primary pressure was ignored: %v", got)
 	}
@@ -158,7 +158,7 @@ func TestConnectionSelectorExploresWhenAllTelemetryUnknown(t *testing.T) {
 	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{
 		{ID: "unknown-a", Type: AccountTypeCodex, PlanType: "plus"},
 		{ID: "unknown-b", Type: AccountTypeCodex, PlanType: "pro"},
-	}, false))
+	}))
 	seen := map[string]int{}
 	for range 10 {
 		selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex})
@@ -175,7 +175,7 @@ func TestConnectionSelectorExploresWhenAllTelemetryUnknown(t *testing.T) {
 func TestConnectionSelectorDoesNotTreatUnknownTelemetryAsFreeCapacity(t *testing.T) {
 	known := &ProviderConnection{ID: "known", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.2, SecondaryWindowMinutes: 10080, secondarySet: true}}
 	unknown := &ProviderConnection{ID: "unknown", Type: AccountTypeCodex, PlanType: "plus"}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{unknown, known}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{unknown, known}))
 	for range 10 {
 		if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex}); got != known {
 			t.Fatalf("unknown telemetry selected as free capacity: %v", got)
@@ -192,7 +192,7 @@ func TestConnectionSelectorUsesUnderusedPlusCapacityBeforeDrainingPro(t *testing
 		{ID: "plus-e", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0, secondarySet: true}},
 		{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.32, secondarySet: true}},
 	}
-	selector := NewConnectionSelector(newProviderPool(connections, false))
+	selector := NewConnectionSelector(newProviderPool(connections))
 	seen := map[string]int{}
 	for range 25 {
 		selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex})
@@ -218,7 +218,7 @@ func TestConnectionSelectorWeightsCompetitiveCodexWithoutStarvation(t *testing.T
 		{ID: "ordinary-a", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
 		{ID: "ordinary-b", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}},
 	}
-	selector := NewConnectionSelector(newProviderPool(connections, false))
+	selector := NewConnectionSelector(newProviderPool(connections))
 	counts := map[string]int{}
 	for range 60 {
 		selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex})
@@ -242,7 +242,7 @@ func TestConnectionSelectorWeightsCompetitiveCodexWithoutStarvation(t *testing.T
 func TestConnectionSelectorExcludesNoncompetitiveCodexFromFairRotation(t *testing.T) {
 	healthy := &ProviderConnection{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1}}
 	drainedCyber := &ProviderConnection{ID: "drained-cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5}}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{drainedCyber, healthy}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{drainedCyber, healthy}))
 	for i := 0; i < 12; i++ {
 		if selected := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex}); selected != healthy {
 			t.Fatalf("selection %d=%v, want quota-healthy ordinary connection", i, selected)
@@ -253,7 +253,7 @@ func TestConnectionSelectorExcludesNoncompetitiveCodexFromFairRotation(t *testin
 func TestConnectionSelectorCyberRetryRemainsCyberOnly(t *testing.T) {
 	ordinary := &ProviderConnection{ID: "ordinary", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{SecondaryUsedPercent: 0}}
 	cyber := &ProviderConnection{ID: "cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{SecondaryUsedPercent: 0.5}}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber}))
 	for i := 0; i < 4; i++ {
 		if selected := selector.Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex}); selected != cyber {
 			t.Fatalf("cyber retry selected=%v", selected)
@@ -265,7 +265,7 @@ func TestConnectionSelectorOwnsImageCapabilityAndFanout(t *testing.T) {
 	unsupported := &ProviderConnection{Type: AccountTypeCodex, ID: "unsupported", ImageGenerationSupport: -1}
 	first := &ProviderConnection{Type: AccountTypeCodex, ID: "first", ImageGenerationSupport: 1}
 	second := &ProviderConnection{Type: AccountTypeCodex, ID: "second", ImageGenerationSupport: 1}
-	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{unsupported, first, second}, false))
+	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{unsupported, first, second}))
 
 	general := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex, RequireImages: true})
 	if general == unsupported || general == nil {

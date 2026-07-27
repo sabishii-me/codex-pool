@@ -32,7 +32,7 @@ func TestCodexProxyStreamingCanonicalUsageAndResponseIntegrity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer analytics.db.Close()
-	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	requestBody := []byte(`{"model":"gpt-5.5","input":"hello","stream":true}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(requestBody))
 	request.Header.Set("Content-Type", "application/json")
@@ -63,8 +63,8 @@ func TestCodexToAnthropicStreamFinalizesUnterminatedCompletedEvent(t *testing.T)
 	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base))
 	connection := &ProviderConnection{Type: AccountTypeCodex, ID: "codex_terminal", AccessToken: "contract-key", PlanType: "plus"}
 	handler := &proxyHandler{
-		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true},
-		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}, false), registry: registry,
+		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
+		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: registry,
 		metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
 	request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{"model":"gpt-5.6-sol","max_tokens":64,"stream":true,"messages":[{"role":"user","content":"hi"}]}`))
@@ -98,8 +98,8 @@ func TestCodexProxyCanonicalizesSSEContentTypeForImageTool(t *testing.T) {
 	base, _ := url.Parse(upstream.URL)
 	connection := &ProviderConnection{Type: AccountTypeCodex, ID: "codex_image", AccessToken: "contract-key", PlanType: "plus"}
 	handler := &proxyHandler{
-		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024, disableRefresh: true},
-		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}, false),
+		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
+		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}),
 		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:  newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
@@ -143,7 +143,7 @@ func TestCodexProxyRejectsLargeNativeResponsesBeforeUpstream(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer analytics.db.Close()
-	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024, disableRefresh: true}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}, false), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{cfg: &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry, analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	padding := strings.Repeat("x", streamedModelRoutePeekBytes+1024)
 	requestBody := []byte(`{"model":"gpt-5.5","input":` + mustJSONContractString(t, padding) + `,"stream":false}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(requestBody))

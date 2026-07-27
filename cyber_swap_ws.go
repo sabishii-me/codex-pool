@@ -225,12 +225,11 @@ func (s *codexRelayState) relayOnce() error {
 	clientErrCh := make(chan error, 1)
 	activityCh := make(chan struct{}, 1)
 
-	debug := s.h != nil && s.h.cfg != nil && s.h.cfg.debug.Load()
 	go func() {
-		upstreamErrCh <- pumpFrames(roundCtx, s.upstreamCh, s.clientWriter, s.opts.LogLabel, "upstream->client", debug, s.inspectUpstream, s.markUpstreamForwarded, activityCh)
+		upstreamErrCh <- pumpFrames(roundCtx, s.upstreamCh, s.clientWriter, "upstream->client", s.inspectUpstream, s.markUpstreamForwarded, activityCh)
 	}()
 	go func() {
-		clientErrCh <- pumpFrames(roundCtx, s.clientCh, upstreamWriter, s.opts.LogLabel, "client->upstream", debug, s.inspectClient, s.markClientForwarded, activityCh)
+		clientErrCh <- pumpFrames(roundCtx, s.clientCh, upstreamWriter, "client->upstream", s.inspectClient, s.markClientForwarded, activityCh)
 	}()
 
 	var idleTimer *time.Timer
@@ -279,8 +278,7 @@ func pumpFrames(
 	ctx context.Context,
 	src <-chan wsFrame,
 	dst *webSocketWriter,
-	logLabel, label string,
-	debug bool,
+	label string,
 	inspect func([]byte) ([]byte, error),
 	afterForward func([]byte),
 	activity chan<- struct{},
@@ -301,9 +299,6 @@ func pumpFrames(
 			default:
 			}
 			data := frame.data
-			if debug {
-				logRelayFrame(logLabel, label, frame.msgType, data)
-			}
 			if inspect != nil {
 				rewritten, err := inspect(data)
 				if err != nil {
@@ -497,9 +492,6 @@ func applyModelAliasToJSONFrame(h *proxyHandler, reqID string, data []byte) []by
 		return data
 	}
 	if rewritten := rewriteModelInBody(data, resolved); rewritten != nil {
-		if h.cfg != nil && h.cfg.debug.Load() {
-			log.Printf("[%s] ws model alias: %s -> %s", reqID, model, resolved)
-		}
 		return rewritten
 	}
 	return data
@@ -636,11 +628,8 @@ func (h *proxyHandler) dialSwappedUpstream(
 	acc *ProviderConnection,
 	subprotocols []string,
 ) (*websocket.Conn, *http.Response, error) {
-	if !h.cfg.disableRefresh && h.needsRefresh(acc) {
+	if h.needsRefresh(acc) {
 		if err := h.refreshAccount(ctx, acc); err != nil {
-			if h.cfg.debug.Load() {
-				log.Printf("[%s] swap account %s refresh failed: %v", opts.ReqID, acc.ID, err)
-			}
 		}
 	}
 

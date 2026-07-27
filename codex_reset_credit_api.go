@@ -10,8 +10,8 @@ const codexResetCreditsDashboardURL = "https://chatgpt.com/codex/settings/usage"
 // refreshCodexResetCredits refreshes provider-owned inventory for one connection
 // without exposing provider credit identifiers to the browser.
 func (h *proxyHandler) refreshCodexResetCredits(w http.ResponseWriter, _ *http.Request, connectionID string) {
-	if h == nil || h.cfg == nil || h.cfg.disableRefresh {
-		respondJSONError(w, http.StatusConflict, "provider-state management is unavailable in this environment")
+	if h == nil || h.cfg == nil || h.pool == nil {
+		respondJSONError(w, http.StatusServiceUnavailable, "reset-credit inventory is unavailable")
 		return
 	}
 	var connection *ProviderConnection
@@ -42,8 +42,8 @@ func (h *proxyHandler) refreshCodexResetCredits(w http.ResponseWriter, _ *http.R
 // redeemCodexResetCredit consumes the earliest-expiring credit owned by the
 // selected Codex connection. The browser never supplies a provider credit ID.
 func (h *proxyHandler) redeemCodexResetCredit(w http.ResponseWriter, r *http.Request, connectionID string) {
-	if h == nil || h.cfg == nil || h.cfg.disableRefresh {
-		respondJSONError(w, http.StatusConflict, "this gateway is not the provider-state authority; use the official Codex dashboard")
+	if h == nil || h.cfg == nil || h.pool == nil {
+		respondJSONError(w, http.StatusServiceUnavailable, "reset-credit redemption is unavailable")
 		return
 	}
 	var connection *ProviderConnection

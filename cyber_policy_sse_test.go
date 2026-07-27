@@ -17,7 +17,7 @@ func TestCyberPolicySSESuppressorForwardsAndPins(t *testing.T) {
 	h := &proxyHandler{
 		cfg:     &config{},
 		metrics: newMetrics(),
-		pool:    newProviderPool([]*Account{plain, cyber}, false),
+		pool:    newProviderPool([]*Account{plain, cyber}),
 	}
 
 	var clientOut bytes.Buffer

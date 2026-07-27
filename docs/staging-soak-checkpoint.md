@@ -11,7 +11,7 @@ Updated: 2026-07-25
 | Compose project | `codex-pool-staging` |
 | Image | `codex-pool:staging-0291cc0` |
 | Image revision | `0291cc0bbbb2` |
-| Authentication | Real Google OAuth; `LOCAL_DEV_SESSION=false` |
+| Authentication | Real Google OAuth |
 | OAuth callback | `http://127.0.0.1:18990/auth/callback/google` |
 | Persistent state | `staging/pool`, `staging/data`, `staging/provider-specs` |
 | Canonical events after recovery | 5,285 total; 5,284 with canonical connection/request identity |

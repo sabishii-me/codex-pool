@@ -319,14 +319,11 @@ func TestGrokPassThroughSSESkipsResponseSampling(t *testing.T) {
 	provider := NewGrokProvider(base)
 	resp := &http.Response{Header: http.Header{"Content-Type": []string{"text/event-stream"}}}
 
-	if shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeGrok}, "/v1/responses", resp, TranslateNone, "conv", false) {
+	if shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeGrok}, "/v1/responses", resp, TranslateNone, "conv") {
 		t.Fatal("grok pass-through SSE should skip response sampling")
 	}
-	if !shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeGrok}, "/v1/responses", resp, TranslateChatToResponses, "conv", false) {
+	if !shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeGrok}, "/v1/responses", resp, TranslateChatToResponses, "conv") {
 		t.Fatal("translated SSE should still sample/inspect response body")
-	}
-	if !shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeGrok}, "/v1/responses", resp, TranslateNone, "conv", true) {
-		t.Fatal("body logging should keep response sampling enabled")
 	}
 }
 
@@ -335,10 +332,10 @@ func TestCodexSSEStillSamplesWhenCyberPolicyMayInspect(t *testing.T) {
 	provider := NewCodexProvider(base, base, nil)
 	resp := &http.Response{Header: http.Header{"Content-Type": []string{"text/event-stream"}}}
 
-	if !shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeCodex}, "/v1/responses", resp, TranslateNone, "conv", false) {
+	if !shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeCodex}, "/v1/responses", resp, TranslateNone, "conv") {
 		t.Fatal("codex non-cyber SSE should keep sampling for cyber policy inspection")
 	}
-	if shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeCodex, CyberAccess: true}, "/v1/responses", resp, TranslateNone, "conv", false) {
+	if shouldSampleResponseBodyForRequest(provider, &Account{Type: AccountTypeCodex, CyberAccess: true}, "/v1/responses", resp, TranslateNone, "conv") {
 		t.Fatal("codex cyber-access SSE with conversation ID can skip response sampling")
 	}
 }
@@ -413,7 +410,7 @@ func TestCodexClientClaudeModelStaysOnCodexAccount(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{codex, claude}, false),
+		pool:    newProviderPool([]*Account{codex, claude}),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -465,7 +462,7 @@ func TestClaudePoolTranslatesResponsesClientFormat(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{claude}, false),
+		pool:    newProviderPool([]*Account{claude}),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -562,7 +559,7 @@ func TestClaudePoolTokenAcceptedViaXAPIKeyPreservesNativeClaudeRequest(t *testin
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{acc}, false),
+		pool:    newProviderPool([]*Account{acc}),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -664,7 +661,7 @@ func TestClaudeSDKRequestToGPTMapsReasoningEffort(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{acc}, false),
+		pool:    newProviderPool([]*Account{acc}),
 		metrics: newMetrics(),
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
@@ -752,7 +749,7 @@ func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
@@ -807,7 +804,7 @@ func TestCyberPolicyErrorRetriesOnCyberAccessAccount(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
@@ -1035,7 +1032,7 @@ func TestReplaceUsageHeadersEmitsWeeklyOnlyPoolInPrimarySlot(t *testing.T) {
 			SecondaryWindowMinutes: 10080,
 		},
 	}
-	h := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
+	h := &proxyHandler{pool: newProviderPool([]*Account{account})}
 	headers := mapToHeader(map[string]string{
 		"X-Codex-Primary-Used-Percent":     "82",
 		"X-Codex-Primary-Window-Minutes":   "10080",
@@ -1069,7 +1066,7 @@ func TestHandleAggregatedUsageMatchesWeeklyOnlyUpstreamShape(t *testing.T) {
 	}
 	h := &proxyHandler{
 		cfg:  &config{},
-		pool: newProviderPool([]*Account{account}, false),
+		pool: newProviderPool([]*Account{account}),
 	}
 	recorder := httptest.NewRecorder()
 
@@ -1169,7 +1166,7 @@ func TestClaudePremiumRequestSkipsPinnedProAccount(t *testing.T) {
 
 	pro := &Account{Type: AccountTypeClaude, ID: "pro", PlanType: "pro"}
 	team := &Account{Type: AccountTypeClaude, ID: "team", PlanType: "team"}
-	pool := newProviderPool([]*Account{pro, team}, false)
+	pool := newProviderPool([]*Account{pro, team})
 	pool.bindAffinity("conv", pro.ID)
 
 	got := pool.candidate("conv", nil, AccountTypeClaude, "claude_premium", "")

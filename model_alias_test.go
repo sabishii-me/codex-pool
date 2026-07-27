@@ -60,7 +60,7 @@ func TestApplyModelAliasRewritesBody(t *testing.T) {
 
 	aliases := newModelAliases(nil)
 	body := []byte(`{"model":"gpt-5.6","input":"hi"}`)
-	resolved, out := applyModelAlias(aliases, "gpt-5.6", body, false, "req")
+	resolved, out := applyModelAlias(aliases, "gpt-5.6", body)
 	if resolved != "gpt-5.6-sol" {
 		t.Fatalf("resolved = %q, want gpt-5.6-sol", resolved)
 	}

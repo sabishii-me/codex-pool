@@ -93,16 +93,13 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		if !hasToken || (dead && !accountUsesStaticAPIKey(accType)) {
 			continue
 		}
-		// Reset-credit inventory and redemption mutate provider-owned state and
-		// therefore run only on the credential-refresh authority.
-		if accType == AccountTypeCodex && !h.cfg.disableRefresh {
+		// Inventory checks and provider redemption are ordinary Codex behavior.
+		// The same path runs in Test, Staging, and Production.
+		if accType == AccountTypeCodex {
 			resetCreditsFresh := !resetCreditsRetrievedAt.IsZero() && now.Sub(resetCreditsRetrievedAt) < resetCreditPollInterval
 			resetCreditsReady := resetCreditsFresh
 			if !resetCreditsFresh {
 				if err := h.fetchCodexResetCredits(a); err != nil {
-					if h.cfg.debug.Load() {
-						log.Printf("reset credit fetch %s failed: %v", a.ID, err)
-					}
 				} else {
 					resetCreditsReady = true
 				}
@@ -119,7 +116,7 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 
 		// Gemini accounts don't have WHAM usage endpoint, but still need refresh
 		if accType == AccountTypeGemini || accType == AccountTypeAntigravity {
-			if !h.cfg.disableRefresh && h.needsRefresh(a) {
+			if h.needsRefresh(a) {
 				if err := h.refreshAccount(context.Background(), a); err != nil {
 					if isRateLimitError(err) {
 						h.applyRateLimit(a, nil)
@@ -145,18 +142,14 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 			// A dead static key must be revalidated; successful provider traffic is
 			// authoritative and clears stale retirement state.
 			if dead || retrievedAt.IsZero() {
-				if err := h.seedMinimaxUsage(now, a); err != nil && h.cfg.debug.Load() {
-					log.Printf("minimax usage seed %s failed: %v", a.ID, err)
-				}
+				_ = h.seedMinimaxUsage(now, a)
 			}
 			continue
 		}
 
 		if accType == AccountTypeZAI {
 			if dead || retrievedAt.IsZero() {
-				if err := h.seedZAIUsage(now, a); err != nil && h.cfg.debug.Load() {
-					log.Printf("zai usage seed %s failed: %v", a.ID, err)
-				}
+				_ = h.seedZAIUsage(now, a)
 			}
 			continue
 		}
@@ -164,9 +157,7 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		// Kimi has a dedicated usage endpoint
 		if accType == AccountTypeKimi {
 			if dead || retrievedAt.IsZero() || now.Sub(retrievedAt) >= h.cfg.usageRefresh {
-				if err := h.fetchKimiUsage(now, a); err != nil && h.cfg.debug.Load() {
-					log.Printf("kimi usage fetch %s failed: %v", a.ID, err)
-				}
+				_ = h.fetchKimiUsage(now, a)
 			}
 			continue
 		}
@@ -181,21 +172,16 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		}
 
 		if accType == AccountTypeGrok {
-			if !h.cfg.disableRefresh && h.needsRefresh(a) {
+			if h.needsRefresh(a) {
 				if err := h.refreshAccount(context.Background(), a); err != nil {
 					if isRateLimitError(err) {
 						h.applyRateLimit(a, nil)
-					}
-					if h.cfg.debug.Load() {
-						log.Printf("grok refresh %s failed: %v", a.ID, err)
 					}
 					continue
 				}
 			}
 			if retrievedAt.IsZero() || now.Sub(retrievedAt) >= h.cfg.usageRefresh {
-				if err := h.fetchGrokUsage(now, a); err != nil && h.cfg.debug.Load() {
-					log.Printf("grok usage fetch %s failed: %v", a.ID, err)
-				}
+				_ = h.fetchGrokUsage(now, a)
 			}
 			continue
 		}
@@ -203,7 +189,7 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		// Claude accounts have their own usage endpoint
 		if accType == AccountTypeClaude {
 			// Proactive refresh for OAuth tokens
-			if !h.cfg.disableRefresh && h.needsRefresh(a) {
+			if h.needsRefresh(a) {
 				if err := h.refreshAccount(context.Background(), a); err != nil {
 					if isRateLimitError(err) {
 						h.applyRateLimit(a, nil)
@@ -218,16 +204,11 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 						a.Penalty = 0
 					}
 					a.mu.Unlock()
-					if h.cfg.debug.Load() {
-						log.Printf("claude refresh %s: success", a.ID)
-					}
 				}
 			}
 			// Fetch Claude usage if stale
 			if retrievedAt.IsZero() || now.Sub(retrievedAt) >= h.cfg.usageRefresh {
-				if err := h.fetchClaudeUsage(now, a); err != nil && h.cfg.debug.Load() {
-					log.Printf("claude usage fetch %s failed: %v", a.ID, err)
-				}
+				_ = h.fetchClaudeUsage(now, a)
 			}
 			continue
 		}
@@ -235,9 +216,7 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		if !retrievedAt.IsZero() && now.Sub(retrievedAt) < h.cfg.usageRefresh {
 			continue
 		}
-		if err := h.fetchUsage(now, a); err != nil && h.cfg.debug.Load() {
-			log.Printf("usage fetch %s failed: %v", a.ID, err)
-		}
+		_ = h.fetchUsage(now, a)
 	}
 }
 
@@ -298,12 +277,9 @@ func (h *proxyHandler) fetchGrokBillingPart(a *ProviderConnection, weekly bool) 
 func (h *proxyHandler) fetchUsage(now time.Time, a *ProviderConnection) error {
 	// Proactively refresh expired tokens before making the request.
 	// This ensures tokens stay fresh even if access tokens outlive ID token expiry.
-	if !h.cfg.disableRefresh && h.needsRefresh(a) {
+	if h.needsRefresh(a) {
 		if err := h.refreshAccount(context.Background(), a); err != nil {
 			errStr := err.Error()
-			if h.cfg.debug.Load() {
-				log.Printf("proactive refresh for %s failed: %v", a.ID, errStr)
-			}
 			if isRateLimitError(err) {
 				h.applyRateLimit(a, nil)
 				return nil
@@ -372,7 +348,7 @@ func (h *proxyHandler) fetchUsage(now time.Time, a *ProviderConnection) error {
 		hasRefreshToken := a.RefreshToken != ""
 		a.mu.Unlock()
 
-		if !h.cfg.disableRefresh && hasRefreshToken {
+		if hasRefreshToken {
 			if err := h.refreshAccount(context.Background(), a); err == nil {
 				// Refresh succeeded - retry the usage fetch
 				resp.Body.Close()
@@ -742,18 +718,12 @@ func (h *proxyHandler) fetchClaudeUsage(now time.Time, a *ProviderConnection) er
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		// Try refresh once
-		refreshAttempted := false
-		refreshSucceeded := false
 		hasRefreshToken := false
-		if !h.cfg.disableRefresh {
-			a.mu.Lock()
-			hasRefreshToken = a.RefreshToken != ""
-			a.mu.Unlock()
-		}
-		if !h.cfg.disableRefresh && hasRefreshToken {
-			refreshAttempted = true
+		a.mu.Lock()
+		hasRefreshToken = a.RefreshToken != ""
+		a.mu.Unlock()
+		if hasRefreshToken {
 			if err := h.refreshAccount(context.Background(), a); err == nil {
-				refreshSucceeded = true
 				resp.Body.Close()
 				// Update token after refresh
 				a.mu.Lock()
@@ -775,13 +745,6 @@ func (h *proxyHandler) fetchClaudeUsage(now time.Time, a *ProviderConnection) er
 			a.mu.Lock()
 			a.Penalty += 0.3
 			a.mu.Unlock()
-			if h.cfg.debug.Load() {
-				if refreshAttempted && refreshSucceeded {
-					log.Printf("claude usage fetch %s got 401/403 even after refresh; keeping account alive and adding penalty", a.ID)
-				} else {
-					log.Printf("claude usage fetch %s got 401/403, refresh not attempted or rate limited, adding penalty", a.ID)
-				}
-			}
 			return fmt.Errorf("claude usage unauthorized (not marking dead): %s", resp.Status)
 		}
 	}

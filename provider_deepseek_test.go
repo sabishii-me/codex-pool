@@ -79,7 +79,7 @@ func TestDeepSeekAdminAddValidatesAndSavesAccount(t *testing.T) {
 	validationCalled := false
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, deepseekBase: deepseekBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
@@ -144,7 +144,7 @@ func TestDeepSeekUsagePollerSkipsGenericFetch(t *testing.T) {
 	calls := 0
 	h := &proxyHandler{
 		cfg:  &config{usageRefresh: time.Minute},
-		pool: newProviderPool([]*Account{acc}, false),
+		pool: newProviderPool([]*Account{acc}),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			calls++
 			t.Fatalf("DeepSeek usage poller should not call transport, got %s %s", req.Method, req.URL.String())
@@ -271,7 +271,7 @@ func TestDeepSeekAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	deepseekBase, _ := url.Parse("https://api.deepseek.com/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, deepseekBase: deepseekBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{

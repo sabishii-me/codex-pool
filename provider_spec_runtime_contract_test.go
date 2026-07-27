@@ -42,7 +42,7 @@ func TestRuntimeDeclarativeProviderLoadsRoutesAndPublishesModels(t *testing.T) {
 		t.Fatalf("route provider=%v base=%v body=%s", provider, base, rewritten)
 	}
 
-	pool := newProviderPool(connections, false)
+	pool := newProviderPool(connections)
 	recorder := httptest.NewRecorder()
 	servePoolModelsWithRegistry(recorder, pool, registry)
 	if recorder.Code != http.StatusOK {

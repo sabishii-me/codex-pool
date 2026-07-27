@@ -211,7 +211,7 @@ func TestRequestRoutingContextDoesNotRetainRawValueInPool(t *testing.T) {
 	if context.AffinityKey == "" || context.SoftAffinity.Value == "" {
 		t.Fatal("active request context did not retain request-scoped declaration")
 	}
-	pool := newProviderPool(nil, false)
+	pool := newProviderPool(nil)
 	if !pool.bindAffinity(context.AffinityKey, "account") {
 		t.Fatal("private affinity binding was rejected")
 	}

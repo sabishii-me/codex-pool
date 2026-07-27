@@ -17,7 +17,7 @@ func TestRenameProviderConnectionPersistsWithoutChangingStableID(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := &Account{Type: AccountTypeDeepSeek, ID: "stable-id", File: file, AccessToken: "secret", Identity: ConnectionIdentity{DisplayName: "Old name"}, Label: "Old name"}
-	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account})}
 	request := httptest.NewRequest(http.MethodPatch, "/admin/accounts/stable-id/identity", bytes.NewBufferString(`{"display_name":"New operator label"}`))
 	recorder := httptest.NewRecorder()
 	handler.renameProviderConnection(recorder, request, account.ID)
@@ -42,7 +42,7 @@ func TestRenameProviderConnectionPersistsWithoutChangingStableID(t *testing.T) {
 
 func TestRenameProviderConnectionValidatesDisplayName(t *testing.T) {
 	account := &Account{Type: AccountTypeCodex, ID: "stable", Identity: ConnectionIdentity{DisplayName: "Original"}, Label: "Original"}
-	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account})}
 	for name, payload := range map[string]string{
 		"empty":   `{"display_name":"  "}`,
 		"control": `{"display_name":"bad\nname"}`,
@@ -63,7 +63,7 @@ func TestRenameProviderConnectionValidatesDisplayName(t *testing.T) {
 
 func TestRenameProviderConnectionRollsBackOnPersistenceFailure(t *testing.T) {
 	account := &Account{Type: AccountTypeDeepSeek, ID: "stable", File: filepath.Join(t.TempDir(), "missing", "connection.json"), Identity: ConnectionIdentity{DisplayName: "Original"}, Label: "Original"}
-	handler := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{account})}
 	recorder := httptest.NewRecorder()
 	handler.renameProviderConnection(recorder, httptest.NewRequest(http.MethodPatch, "/", bytes.NewBufferString(`{"display_name":"Changed"}`)), account.ID)
 	if recorder.Code != http.StatusInternalServerError {

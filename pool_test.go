@@ -74,7 +74,7 @@ func TestPenaltyDecay(t *testing.T) {
 }
 
 func TestProviderPoolReplaceClearsLocalAffinity(t *testing.T) {
-	pool := newProviderPool(nil, false)
+	pool := newProviderPool(nil)
 	if !pool.bindAffinity("aff", "account") {
 		t.Fatal("expected affinity assignment")
 	}
@@ -85,7 +85,7 @@ func TestProviderPoolReplaceClearsLocalAffinity(t *testing.T) {
 }
 
 func TestBindAffinityReassignsAtomically(t *testing.T) {
-	pool := newProviderPool(nil, false)
+	pool := newProviderPool(nil)
 	if !pool.bindAffinity("aff", "first") || !pool.bindAffinity("aff", "second") {
 		t.Fatal("expected affinity assignment")
 	}
@@ -98,7 +98,7 @@ func TestBindAffinityBoundsStore(t *testing.T) {
 	if providerAffinityMaxEntries > 20000 {
 		t.Skip("store bound is too large for a unit allocation test")
 	}
-	pool := newProviderPool(nil, false)
+	pool := newProviderPool(nil)
 	if pool.bindAffinity("", "account") || pool.bindAffinity("aff", "") {
 		t.Fatal("empty affinity assignment should be rejected")
 	}
@@ -118,7 +118,7 @@ func TestBindAffinityBoundsStore(t *testing.T) {
 
 func TestCandidateBreaksDeletedAffinityOwner(t *testing.T) {
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
-	pool := newProviderPool([]*Account{healthy}, false)
+	pool := newProviderPool([]*Account{healthy})
 	pool.bindAffinity("aff", "deleted")
 	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate=%v, want healthy after deleted owner", got)
@@ -131,7 +131,7 @@ func TestCandidateBreaksDeletedAffinityOwner(t *testing.T) {
 func TestCandidateBreaksDeadAffinity(t *testing.T) {
 	dead := &Account{ID: "dead", Type: AccountTypeCodex, PlanType: "plus", Dead: true}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
-	pool := newProviderPool([]*Account{dead, healthy}, false)
+	pool := newProviderPool([]*Account{dead, healthy})
 	pool.bindAffinity("aff", dead.ID)
 	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate=%v, want healthy after dead binding", got)
@@ -144,7 +144,7 @@ func TestCandidateBreaksDeadAffinity(t *testing.T) {
 func TestCandidateBreaksDisabledAffinity(t *testing.T) {
 	disabled := &Account{ID: "disabled", Type: AccountTypeCodex, PlanType: "plus", Disabled: true}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus"}
-	pool := newProviderPool([]*Account{disabled, healthy}, false)
+	pool := newProviderPool([]*Account{disabled, healthy})
 	pool.bindAffinity("aff", disabled.ID)
 	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate=%v, want healthy after disabled binding", got)
@@ -157,7 +157,7 @@ func TestCandidateBreaksDisabledAffinity(t *testing.T) {
 func TestCandidateExpiresStaleAffinity(t *testing.T) {
 	stale := &Account{ID: "stale", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.6, primarySet: true}}
 	fresh := &Account{ID: "fresh", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, primarySet: true}}
-	pool := newProviderPool([]*Account{stale, fresh}, false)
+	pool := newProviderPool([]*Account{stale, fresh})
 	pool.convPin["aff"] = affinityBinding{AccountID: stale.ID, TouchedAt: time.Now().Add(-providerAffinityTTL - time.Minute)}
 
 	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != fresh {
@@ -171,7 +171,7 @@ func TestCandidateExpiresStaleAffinity(t *testing.T) {
 func TestCandidateUsesAffinityUnlessExcluded(t *testing.T) {
 	a1 := &Account{ID: "a1", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	a2 := &Account{ID: "a2", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newProviderPool([]*Account{a1, a2}, true)
+	p := newProviderPool([]*Account{a1, a2})
 	p.bindAffinity("c1", "a1")
 
 	if got := p.candidate("c1", nil, "", "", ""); got == nil || got.ID != "a1" {
@@ -189,7 +189,7 @@ func TestCandidateSkipsDeadOrDisabled(t *testing.T) {
 	dead := &Account{ID: "dead", Type: AccountTypeCodex, Dead: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.0}}
 	disabled := &Account{ID: "disabled", Type: AccountTypeCodex, Disabled: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.0}}
 	ok := &Account{ID: "ok", Type: AccountTypeCodex, Usage: UsageSnapshot{PrimaryUsedPercent: 0.5}}
-	p := newProviderPool([]*Account{dead, disabled, ok}, false)
+	p := newProviderPool([]*Account{dead, disabled, ok})
 
 	got := p.candidate("", nil, "", "", "")
 	if got == nil || got.ID != "ok" {
@@ -205,7 +205,7 @@ func TestCandidateSkipsRateLimitedCodexAccount(t *testing.T) {
 		RateLimitUntil: time.Now().Add(time.Hour),
 	}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro"}
-	pool := newProviderPool([]*Account{rateLimited, healthy}, false)
+	pool := newProviderPool([]*Account{rateLimited, healthy})
 
 	if got := pool.candidate("", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate = %v, want healthy account", got)
@@ -215,7 +215,7 @@ func TestCandidateSkipsRateLimitedCodexAccount(t *testing.T) {
 func TestCandidateBreaksHardQuotaAffinity(t *testing.T) {
 	exhausted := &Account{ID: "exhausted", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 1, secondarySet: true}}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{SecondaryUsedPercent: 0.1, secondarySet: true}}
-	pool := newProviderPool([]*Account{exhausted, healthy}, false)
+	pool := newProviderPool([]*Account{exhausted, healthy})
 	pool.bindAffinity("aff", exhausted.ID)
 	if got := pool.candidate("aff", nil, AccountTypeCodex, "", ""); got != healthy {
 		t.Fatalf("candidate=%v, want healthy after hard quota", got)
@@ -233,7 +233,7 @@ func TestCandidateBreaksRateLimitedCodexAffinity(t *testing.T) {
 		RateLimitUntil: time.Now().Add(time.Hour),
 	}
 	healthy := &Account{ID: "healthy", Type: AccountTypeCodex, PlanType: "pro"}
-	pool := newProviderPool([]*Account{rateLimited, healthy}, false)
+	pool := newProviderPool([]*Account{rateLimited, healthy})
 	pool.bindAffinity("conversation", rateLimited.ID)
 
 	if got := pool.candidate("conversation", nil, AccountTypeCodex, "", ""); got != healthy {
@@ -247,7 +247,7 @@ func TestCandidateBreaksRateLimitedCodexAffinity(t *testing.T) {
 func TestCandidateRequiredPlanFiltersAccounts(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newProviderPool([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro})
 
 	got := p.candidate("", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "pro" {
@@ -274,7 +274,7 @@ func TestCodexPlansShareOrdinaryCapacityTier(t *testing.T) {
 func TestCandidateUsesCodexProLiteAlongsidePro(t *testing.T) {
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.7, SecondaryUsedPercent: 0.7}}
 	proLite := &Account{ID: "prolite", Type: AccountTypeCodex, PlanType: "prolite", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1}}
-	p := newProviderPool([]*Account{pro, proLite}, false)
+	p := newProviderPool([]*Account{pro, proLite})
 
 	got := p.candidate("", nil, AccountTypeCodex, "pro", "")
 	if got == nil || got.ID != "prolite" {
@@ -285,7 +285,7 @@ func TestCandidateUsesCodexProLiteAlongsidePro(t *testing.T) {
 func TestCandidateKeepsBoundCodexProLite(t *testing.T) {
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1}}
 	proLite := &Account{ID: "prolite", Type: AccountTypeCodex, PlanType: "prolite", Usage: UsageSnapshot{PrimaryUsedPercent: 0.5, SecondaryUsedPercent: 0.5}}
-	p := newProviderPool([]*Account{pro, proLite}, false)
+	p := newProviderPool([]*Account{pro, proLite})
 	p.bindAffinity("conversation", proLite.ID)
 
 	got := p.candidate("conversation", nil, AccountTypeCodex, "pro", "")
@@ -302,7 +302,7 @@ func TestCandidatePrefersClaudeMaxOverPro(t *testing.T) {
 	proAcc := &Account{ID: "pro1", Type: AccountTypeClaude, PlanType: "pro", Usage: UsageSnapshot{
 		PrimaryUsedPercent: 0.0, SecondaryUsedPercent: 0.1,
 	}}
-	p := newProviderPool([]*Account{proAcc, maxAcc}, false)
+	p := newProviderPool([]*Account{proAcc, maxAcc})
 
 	got := p.candidate("", nil, AccountTypeClaude, "", "")
 	if got == nil || got.ID != "max1" {
@@ -318,7 +318,7 @@ func TestCandidateFallsBackToClaudeProWhenMaxExhausted(t *testing.T) {
 	proAcc := &Account{ID: "pro1", Type: AccountTypeClaude, PlanType: "pro", Usage: UsageSnapshot{
 		PrimaryUsedPercent: 0.1, SecondaryUsedPercent: 0.1,
 	}}
-	p := newProviderPool([]*Account{proAcc, maxAcc}, false)
+	p := newProviderPool([]*Account{proAcc, maxAcc})
 
 	got := p.candidate("", nil, AccountTypeClaude, "", "")
 	if got == nil || got.ID != "pro1" {
@@ -329,7 +329,7 @@ func TestCandidateFallsBackToClaudeProWhenMaxExhausted(t *testing.T) {
 func TestCandidateRequiredPlanOverridesBoundAffinity(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newProviderPool([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro})
 	p.bindAffinity("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "pro", "")
@@ -344,7 +344,7 @@ func TestCandidateRequiredPlanOverridesBoundAffinity(t *testing.T) {
 func TestCandidateKeepsBoundCodexPlus(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.6, SecondaryUsedPercent: 0.6}}
-	p := newProviderPool([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro})
 	p.bindAffinity("c1", "plus")
 
 	got := p.candidate("c1", nil, AccountTypeCodex, "", "")
@@ -356,7 +356,7 @@ func TestCandidateKeepsBoundCodexPlus(t *testing.T) {
 func TestCandidateAllCodexPlansCompeteByQuota(t *testing.T) {
 	plus := &Account{ID: "plus", Type: AccountTypeCodex, PlanType: "plus", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	pro := &Account{ID: "pro", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.8, SecondaryUsedPercent: 0.8}}
-	p := newProviderPool([]*Account{plus, pro}, false)
+	p := newProviderPool([]*Account{plus, pro})
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "plus" {
@@ -367,7 +367,7 @@ func TestCandidateAllCodexPlansCompeteByQuota(t *testing.T) {
 func TestCandidateWithCyberAccessOnlyReturnsMarkedAccounts(t *testing.T) {
 	ordinary := &Account{ID: "ordinary", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.01, SecondaryUsedPercent: 0.01}}
 	cyber := &Account{ID: "cyber", Type: AccountTypeCodex, PlanType: "pro", CyberAccess: true, Usage: UsageSnapshot{PrimaryUsedPercent: 0.2, SecondaryUsedPercent: 0.2}}
-	p := newProviderPool([]*Account{ordinary, cyber}, false)
+	p := newProviderPool([]*Account{ordinary, cyber})
 
 	got := p.candidateWithCyberAccess(nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "cyber" {
@@ -390,7 +390,7 @@ func TestCandidateWithCyberAccessReturnsExpiredAccount(t *testing.T) {
 		ExpiresAt:   time.Now().Add(-5 * time.Minute),
 		Usage:       UsageSnapshot{PrimaryUsedPercent: 0.05, SecondaryUsedPercent: 0.05},
 	}
-	p := newProviderPool([]*Account{expired}, false)
+	p := newProviderPool([]*Account{expired})
 	got := p.candidateWithCyberAccess(nil, AccountTypeCodex, "", "")
 	if got == nil || got.ID != "cyber-expired" {
 		t.Fatalf("expected expired cyber account to still be picked, got %+v", got)
@@ -419,7 +419,7 @@ func TestCandidateDoesNotPileTrafficOntoHighWeeklyProLiteAccount(t *testing.T) {
 			SecondaryResetAt:       now.Add(6 * 24 * time.Hour),
 		},
 	}
-	pool := newProviderPool([]*Account{proLite, pro}, false)
+	pool := newProviderPool([]*Account{proLite, pro})
 
 	got := pool.candidate("", nil, AccountTypeCodex, "", "")
 	if got == nil {
@@ -433,7 +433,7 @@ func TestCandidateDoesNotPileTrafficOntoHighWeeklyProLiteAccount(t *testing.T) {
 func TestCandidateSkipsAccountWhenClientIPNotAllowed(t *testing.T) {
 	restricted := &Account{ID: "restricted", Type: AccountTypeCodex, PlanType: "pro", AllowedSourceIPs: []string{"199.45.144.95"}, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.2}}
-	p := newProviderPool([]*Account{restricted, fallback}, false)
+	p := newProviderPool([]*Account{restricted, fallback})
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "203.0.113.10")
 	if got == nil || got.ID != "fallback" {
@@ -444,7 +444,7 @@ func TestCandidateSkipsAccountWhenClientIPNotAllowed(t *testing.T) {
 func TestCandidateAllowsRestrictedAccountWhenClientIPMatches(t *testing.T) {
 	restricted := &Account{ID: "restricted", Type: AccountTypeCodex, PlanType: "pro", AllowedSourceIPs: []string{"199.45.144.95"}, Usage: UsageSnapshot{PrimaryUsedPercent: 0.1}}
 	fallback := &Account{ID: "fallback", Type: AccountTypeCodex, PlanType: "pro", Usage: UsageSnapshot{PrimaryUsedPercent: 0.4}}
-	p := newProviderPool([]*Account{restricted, fallback}, false)
+	p := newProviderPool([]*Account{restricted, fallback})
 
 	got := p.candidate("", nil, AccountTypeCodex, "", "199.45.144.95")
 	if got == nil || got.ID != "restricted" {

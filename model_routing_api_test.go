@@ -14,7 +14,7 @@ func TestModelRoutingProjectionReportsEligibilityAndExactExclusions(t *testing.T
 	disabled := &ProviderConnection{ID: "disabled", Type: AccountTypeCodex, Identity: ConnectionIdentity{DisplayName: "Off"}, Disabled: true}
 	cooldown := &ProviderConnection{ID: "cooldown", Type: AccountTypeCodex, Identity: ConnectionIdentity{DisplayName: "Cooling"}, RateLimitUntil: now.Add(time.Hour)}
 	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
-	h := &proxyHandler{pool: newProviderPool([]*ProviderConnection{eligible, disabled, cooldown}, false), registry: registry, modelRoutes: NewModelRouteRegistry(registry)}
+	h := &proxyHandler{pool: newProviderPool([]*ProviderConnection{eligible, disabled, cooldown}), registry: registry, modelRoutes: NewModelRouteRegistry(registry)}
 	response := httptest.NewRecorder()
 	h.serveModelRouting(response, httptest.NewRequest(http.MethodGet, "/api/v2/models/gpt-5.6-sol/routing", nil))
 	if response.Code != http.StatusOK {
@@ -38,7 +38,7 @@ func TestModelRoutingProjectionReportsEligibilityAndExactExclusions(t *testing.T
 
 func TestModelRoutingProjectionRejectsUnknownModel(t *testing.T) {
 	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
-	h := &proxyHandler{pool: newProviderPool(nil, false), registry: registry, modelRoutes: NewModelRouteRegistry(registry)}
+	h := &proxyHandler{pool: newProviderPool(nil), registry: registry, modelRoutes: NewModelRouteRegistry(registry)}
 	response := httptest.NewRecorder()
 	h.serveModelRouting(response, httptest.NewRequest(http.MethodGet, "/api/v2/models/not-real/routing", nil))
 	if response.Code != http.StatusNotFound {

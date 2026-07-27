@@ -12,12 +12,11 @@ type accessAttemptTracker interface {
 // decisions. OAuth callbacks and session decoding remain separate concerns;
 // this policy consumes only a resolved gateway identity.
 type AccessPolicy struct {
-	openSessionAccess bool
-	adminEmails       []string
-	resolveUser       func(*http.Request) (*GatewayUser, bool)
-	isElevated        func(*http.Request, string) bool
-	attempts          accessAttemptTracker
-	clientIP          func(*http.Request) string
+	adminEmails []string
+	resolveUser func(*http.Request) (*GatewayUser, bool)
+	isElevated  func(*http.Request, string) bool
+	attempts    accessAttemptTracker
+	clientIP    func(*http.Request) string
 }
 
 func (policy *AccessPolicy) RequireAdmin(w http.ResponseWriter, r *http.Request) bool {
@@ -55,9 +54,6 @@ func (policy *AccessPolicy) RequireSession(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "too many failed attempts, try again later", http.StatusTooManyRequests)
 		return false
 	}
-	if policy.openSessionAccess {
-		return true
-	}
 	if _, ok := policy.user(r); ok {
 		if policy.attempts != nil {
 			policy.attempts.recordSuccess(ip)
@@ -89,26 +85,15 @@ func (h *proxyHandler) accessPolicy() *AccessPolicy {
 	if h.access != nil {
 		return h.access
 	}
-	openSessionAccess := h.cfg == nil || h.cfg.oauthGoogleClientID == ""
 	var adminEmails []string
 	if h.cfg != nil {
 		adminEmails = h.cfg.adminEmails
 	}
 	policy := &AccessPolicy{
-		openSessionAccess: openSessionAccess,
-		adminEmails:       adminEmails,
-		resolveUser:       h.sessionUser,
-		isElevated: func(r *http.Request, userID string) bool {
-			// Local development has no OAuth/MFA ceremony. Permit the synthetic
-			// loopback admin to inspect admin surfaces, but never bypass MFA for
-			// production or non-local sessions.
-			if h.cfg != nil && h.cfg.localDevSession {
-				user, ok := h.localDevelopmentUser(r)
-				return ok && user.ID == userID && adminEmailAllowed(h.cfg.adminEmails, user.Email)
-			}
-			return adminElevated(r, userID)
-		},
-		clientIP:          getClientIP,
+		adminEmails: adminEmails,
+		resolveUser: h.sessionUser,
+		isElevated:  adminElevated,
+		clientIP:    getClientIP,
 	}
 	if h.bruteForce != nil {
 		policy.attempts = h.bruteForce

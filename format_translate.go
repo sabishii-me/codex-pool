@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 )
 
@@ -1354,27 +1353,6 @@ var translateCallCounter int64
 func generateToolCallID() string {
 	translateCallCounter++
 	return fmt.Sprintf("call_%d", translateCallCounter)
-}
-
-// logTranslation logs format translation at debug level.
-func logTranslation(reqID string, direction TranslateDirection, debug bool) {
-	if !debug {
-		return
-	}
-	switch direction {
-	case TranslateClaudeToOAI:
-		log.Printf("[%s] format translation: claude -> openai", reqID)
-	case TranslateOAIToClaude:
-		log.Printf("[%s] format translation: openai -> claude", reqID)
-	case TranslateChatToResponses:
-		log.Printf("[%s] format translation: chat completions -> responses api", reqID)
-	case TranslateCompletionsToResponses:
-		log.Printf("[%s] format translation: completions -> responses api", reqID)
-	case TranslateResponsesToClaude:
-		log.Printf("[%s] format translation: responses api -> claude", reqID)
-	case TranslateClaudeToResponses:
-		log.Printf("[%s] format translation: claude -> responses api", reqID)
-	}
 }
 
 func claudeModelEntry(slug, displayName string, contextWindow int) map[string]any {

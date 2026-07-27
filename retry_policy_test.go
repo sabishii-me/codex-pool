@@ -62,7 +62,7 @@ func TestLongProviderCooldownReturns429WithoutSleeping(t *testing.T) {
 	}
 	handler := &proxyHandler{
 		cfg:  &config{maxAttempts: 3, maxInMemoryBodyBytes: 1024 * 1024},
-		pool: newProviderPool([]*ProviderConnection{connection}, false), registry: anthropicContractRegistry(base),
+		pool: newProviderPool([]*ProviderConnection{connection}), registry: anthropicContractRegistry(base),
 		metrics: newMetrics(), recent: newRecentErrors(5),
 		retryPolicy: RetryPolicy{ConfiguredAttempts: 3, MaxCooldownWait: 10 * time.Second},
 	}

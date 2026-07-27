@@ -7,10 +7,10 @@ import (
 
 func TestOrderedMarshal(t *testing.T) {
 	m := map[string]any{
-		"stream":  true,
-		"model":   "claude-sonnet-4-5",
+		"stream":     true,
+		"model":      "claude-sonnet-4-5",
 		"max_tokens": 1024,
-		"messages": []any{},
+		"messages":   []any{},
 	}
 
 	order := []string{"model", "messages", "max_tokens", "stream"}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestSystemAdminAPIProjectionReportsMeasuredRuntime(t *testing.T) {
-	handler := &proxyHandler{startTime: time.Now().Add(-time.Minute), pool: newProviderPool(nil, false), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})}
+	handler := &proxyHandler{startTime: time.Now().Add(-time.Minute), pool: newProviderPool(nil), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})}
 	response := httptest.NewRecorder()
 	handler.serveSystemProjection(response, httptest.NewRequest(http.MethodGet, "/api/v2/system", nil))
 	var projection systemProjection

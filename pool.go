@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -490,7 +489,6 @@ type ProviderPool struct {
 	mu            sync.RWMutex
 	accounts      []*ProviderConnection
 	convPin       map[string]affinityBinding // private typed affinity key -> bounded local binding
-	debug         bool
 	rr            uint64
 	tierThreshold float64 // secondary usage % at which we stop preferring a tier (default 0.50)
 }
@@ -499,14 +497,14 @@ type ProviderPool struct {
 // Deprecated: use ProviderPool.
 type poolState = ProviderPool
 
-func newProviderPool(connections []*ProviderConnection, debug bool) *ProviderPool {
-	return &ProviderPool{accounts: connections, convPin: map[string]affinityBinding{}, debug: debug, tierThreshold: 0.50}
+func newProviderPool(connections []*ProviderConnection) *ProviderPool {
+	return &ProviderPool{accounts: connections, convPin: map[string]affinityBinding{}, tierThreshold: 0.50}
 }
 
 // newPoolState is retained for source compatibility.
 // Deprecated: use newProviderPool.
-func newPoolState(connections []*ProviderConnection, debug bool) *ProviderPool {
-	return newProviderPool(connections, debug)
+func newPoolState(connections []*ProviderConnection) *ProviderPool {
+	return newProviderPool(connections)
 }
 
 // replace swaps the pool accounts (used on reload).
@@ -707,35 +705,20 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 				ok := !a.Dead && !a.Disabled && (accountType == "" || a.Type == accountType) && planMatchesRequired(a.PlanType, requiredPlan) && accountAllowsClientIPLocked(a, clientIP)
 				if ok && !a.RateLimitUntil.IsZero() && a.RateLimitUntil.After(now) {
 					ok = false
-					if p.debug {
-						log.Printf("breaking private affinity from rate-limited account %s (until %s)",
-							id, a.RateLimitUntil.Format(time.RFC3339))
-					}
 				}
 				// Break at the secondary hard limit.
 				secondaryUsed := accountSecondaryUsageLocked(a)
 				if ok && secondaryUsed >= secondaryHardExcludeThreshold {
 					ok = false
-					if p.debug {
-						log.Printf("breaking private affinity from exhausted account %s (%.0f%% secondary >= %.0f%%)",
-							id, secondaryUsed*100, secondaryHardExcludeThreshold*100)
-					}
 				}
 				// Also break if primary usage is at/above its hard limit.
 				primaryUsed := accountPrimaryUsageLocked(a)
 				if ok && primaryUsed >= primaryHardExcludeThreshold {
 					ok = false
-					if p.debug {
-						log.Printf("breaking private affinity from account %s (%.0f%% primary >= %.0f%%)",
-							id, primaryUsed*100, primaryHardExcludeThreshold*100)
-					}
 				}
 				// Also break if the token is expired; do not wait for a failed request.
 				if ok && !a.ExpiresAt.IsZero() && a.ExpiresAt.Before(now) {
 					ok = false
-					if p.debug {
-						log.Printf("breaking private affinity from expired account %s", id)
-					}
 				}
 				a.mu.Unlock()
 				if ok {
@@ -781,32 +764,22 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 			tier := accountTier(a.Type, a.PlanType)
 			score := scoreAccountLocked(a, now)
 			telemetrySet := a.Usage.primarySet || a.Usage.secondarySet || usagePrimaryWindowAvailable(a.Usage) || usageSecondaryWindowAvailable(a.Usage)
-			rateLimitUntil := a.RateLimitUntil
 			a.mu.Unlock()
 			// Prefer less-loaded accounts
 			score -= float64(atomic.LoadInt64(&a.Inflight)) * 0.02
 			rateLimited = append(rateLimited, scoredAccount{acc: a, tier: tier, secondaryPct: secondaryUsed, score: score, telemetrySet: telemetrySet})
-			if p.debug {
-				log.Printf("skipping account %s: rate limited until %s", a.ID, rateLimitUntil.Format(time.RFC3339))
-			}
 			continue
 		}
 		// Hard exclusion: >=95% primary usage
 		primaryUsed := accountPrimaryUsageLocked(a)
 		if primaryUsed >= primaryHardExcludeThreshold {
 			a.mu.Unlock()
-			if p.debug {
-				log.Printf("excluding account %s: primary usage %.1f%% >= %.0f%%", a.ID, primaryUsed*100, primaryHardExcludeThreshold*100)
-			}
 			continue
 		}
 		// Hard exclusion: >=99% secondary usage
 		secondaryUsed := accountSecondaryUsageLocked(a)
 		if secondaryUsed >= secondaryHardExcludeThreshold {
 			a.mu.Unlock()
-			if p.debug {
-				log.Printf("excluding account %s: secondary usage %.1f%% >= %.0f%%", a.ID, secondaryUsed*100, secondaryHardExcludeThreshold*100)
-			}
 			continue
 		}
 		tier := accountTier(a.Type, a.PlanType)
@@ -902,9 +875,6 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 		return choose(all)
 	}
 	if len(eligible) == 0 {
-		if len(rateLimited) > 0 && p.debug {
-			log.Printf("no non-rate-limited %s accounts available; refusing to route to rate-limited accounts", accountType)
-		}
 		return nil
 	}
 
@@ -2347,11 +2317,4 @@ func decayPenaltyLocked(a *ProviderConnection, now time.Time) {
 		a.Penalty = 0
 	}
 	a.LastPenalty = now
-}
-
-func (p *ProviderPool) debugf(format string, args ...any) {
-	if p == nil || !p.debug {
-		return
-	}
-	log.Printf(format, args...)
 }

@@ -105,13 +105,11 @@ type poolStatsConnectionSnapshot struct {
 // mutable ProviderConnection state. It snapshots under the connection lock and
 // returns detached DTO values to HTTP/data consumers.
 type ConnectionViewService struct {
-	pool                  *ProviderPool
-	providerStateWritable bool
+	pool *ProviderPool
 }
 
-func NewConnectionViewService(pool *ProviderPool, providerStateWritable ...bool) *ConnectionViewService {
-	writable := len(providerStateWritable) > 0 && providerStateWritable[0]
-	return &ConnectionViewService{pool: pool, providerStateWritable: writable}
+func NewConnectionViewService(pool *ProviderPool) *ConnectionViewService {
+	return &ConnectionViewService{pool: pool}
 }
 
 func (service *ConnectionViewService) OperatorConnections() []OperatorProviderConnectionView {
@@ -134,7 +132,7 @@ func (service *ConnectionViewService) LegacyOperatorConnections() []LegacyOperat
 	return views
 }
 
-func (service *ConnectionViewService) PoolStatsConnections(now time.Time, disableRefresh bool) []poolStatsConnectionSnapshot {
+func (service *ConnectionViewService) PoolStatsConnections(now time.Time) []poolStatsConnectionSnapshot {
 	if service == nil || service.pool == nil {
 		return []poolStatsConnectionSnapshot{}
 	}
@@ -190,7 +188,7 @@ func (service *ConnectionViewService) PoolStatsConnections(now time.Time, disabl
 			view.ResetCreditExpirations = append(view.ResetCreditExpirations, credit.ExpiresAt.UTC().Format(time.RFC3339Nano))
 		}
 		cyberEligible := connection.CyberAccess && !connection.Dead && !connection.Disabled &&
-			(connection.ExpiresAt.IsZero() || connection.ExpiresAt.After(now) || disableRefresh)
+			(connection.ExpiresAt.IsZero() || connection.ExpiresAt.After(now))
 		out = append(out, poolStatsConnectionSnapshot{View: view, ConnectionID: connection.ID, AddedAt: connection.AddedAt,
 			PrimaryUsage: primaryUsage, SecondaryUsage: secondaryUsage, CyberEligible: cyberEligible})
 		connection.mu.Unlock()
@@ -299,9 +297,9 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 		resetCredits := ProviderConnectionResetCreditsView{
 			Known: !connection.ResetCreditsRetrievedAt.IsZero(), AvailableCount: connection.ResetCreditsAvailable,
 			RetrievedAt:               optionalTime(connection.ResetCreditsRetrievedAt),
-			ManagementAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable,
-			InventoryRefreshAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable,
-			RedemptionAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
+			ManagementAvailable:       connection.Type == AccountTypeCodex,
+			InventoryRefreshAvailable: connection.Type == AccountTypeCodex,
+			RedemptionAvailable:       connection.Type == AccountTypeCodex && len(connection.RateLimitResetCredits) > 0,
 			DashboardURL:              codexResetCreditsDashboardURL,
 			Expirations:               make([]time.Time, 0, len(connection.RateLimitResetCredits)),
 		}

@@ -17,7 +17,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 		RateLimitResetCredits: []RateLimitResetCredit{{ID: "credit", ExpiresAt: time.Now().Add(time.Hour)}},
 		Usage:                 UsageSnapshot{SecondaryUsedPercent: 0.99, SecondaryWindowMinutes: 10080, SecondaryResetAt: time.Now().Add(6 * time.Hour), RetrievedAt: time.Now(), Source: "wham", secondarySet: true},
 	}
-	handler := &proxyHandler{pool: newProviderPool([]*Account{connection}, false)}
+	handler := &proxyHandler{pool: newProviderPool([]*Account{connection})}
 	recorder := httptest.NewRecorder()
 	handler.serveProviderConnectionsV2(recorder)
 	if recorder.Code != 200 {
@@ -37,7 +37,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 	if got.Runtime.Status != "cooldown" || got.Runtime.StatusDetail != "Secondary quota is exhausted" || got.Runtime.SecondaryUsedPercent == nil || *got.Runtime.SecondaryUsedPercent != 99 || got.Runtime.SecondaryWindowMinutes == nil || *got.Runtime.SecondaryWindowMinutes != 10080 || got.Runtime.SecondaryResetAt == nil || got.Runtime.UsageRetrievedAt == nil || got.Runtime.UsageSource != "wham" {
 		t.Fatalf("runtime projection = %#v", got.Runtime)
 	}
-	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || got.ResetCredits.ManagementAvailable || got.ResetCredits.InventoryRefreshAvailable || got.ResetCredits.RedemptionAvailable {
+	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || !got.ResetCredits.ManagementAvailable || !got.ResetCredits.InventoryRefreshAvailable || !got.ResetCredits.RedemptionAvailable {
 		t.Fatalf("reset credit projection = %#v", got.ResetCredits)
 	}
 	if got.ResetCredits.DashboardURL != codexResetCreditsDashboardURL {
@@ -53,7 +53,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 
 func TestProviderConnectionsV2ReturnsEmptyArray(t *testing.T) {
 	recorder := httptest.NewRecorder()
-	(&proxyHandler{pool: newProviderPool(nil, false)}).serveProviderConnectionsV2(recorder)
+	(&proxyHandler{pool: newProviderPool(nil)}).serveProviderConnectionsV2(recorder)
 	if strings.TrimSpace(recorder.Body.String()) != "[]" {
 		t.Fatalf("body=%s, want []", recorder.Body.String())
 	}

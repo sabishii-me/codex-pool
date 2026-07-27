@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -221,9 +220,6 @@ func isRemovedFrontendPath(path string) bool {
 // ServeHTTP routes incoming requests to the appropriate handler.
 func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	reqID := randomID()
-	if h.cfg.debug.Load() {
-		log.Printf("[%s] incoming %s %s", reqID, r.Method, r.URL.Path)
-	}
 
 	// Removed frontend paths are tombstoned before authentication, API, and
 	// proxy dispatch. They must never become compatibility aliases or expose an

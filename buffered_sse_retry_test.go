@@ -106,12 +106,11 @@ func TestResponsesNonStreamingBufferedRetriesOnCyberPolicy(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
 	}
-	h.cfg.debug.Store(true)
 
 	reqBody := []byte(`{"model":"gpt-5.5","input":[{"type":"message","role":"user","content":[{"type":"input_text","text":"hi"}]}],"stream":false}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(reqBody))
@@ -226,12 +225,11 @@ func TestClaudeSDKBufferedTranslationRetriesOnCyberPolicy(t *testing.T) {
 			}, nil
 		}),
 		refreshTransport: http.DefaultTransport,
-		pool:             newProviderPool([]*Account{ordinary, cyber}, false),
+		pool:             newProviderPool([]*Account{ordinary, cyber}),
 		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
 	}
-	h.cfg.debug.Store(true)
 
 	// Non-streaming Claude SDK request hitting a Codex model — this is
 	// the buffered-translation path (TranslateClaudeToResponses).

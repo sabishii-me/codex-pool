@@ -76,7 +76,7 @@ func TestOpenRouterAdminAddValidatesAndSavesAccount(t *testing.T) {
 	validationCalled := false
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, openrouterBase: openrouterBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
@@ -128,7 +128,7 @@ func TestOpenRouterAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	openrouterBase, _ := url.Parse("https://openrouter.ai/api")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, openrouterBase: openrouterBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{

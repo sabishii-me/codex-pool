@@ -71,7 +71,7 @@ func TestLargeNonStreamingDeepSeekResponseRecordsUsageExactlyOnce(t *testing.T) 
 	defer analytics.db.Close()
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
-		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}, false), registry: registry,
+		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: registry,
 		analyticsStore: analytics, metrics: newMetrics(), recent: newRecentErrors(5),
 	}
 	request := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"review"}],"stream":false}`))

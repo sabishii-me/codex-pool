@@ -34,7 +34,7 @@ func TestProxyStreamedRequestClaude(t *testing.T) {
 	registry := NewProviderRegistry(codex, claude, gemini)
 
 	acc := &Account{Type: AccountTypeClaude, ID: "claude_test", AccessToken: "sk-ant-api-test"}
-	pool := newProviderPool([]*Account{acc}, false)
+	pool := newProviderPool([]*Account{acc})
 
 	h := &proxyHandler{
 		cfg: &config{
@@ -120,7 +120,7 @@ func TestProxyClaude429FallsThroughToNextAccount(t *testing.T) {
 
 	acc1 := &Account{Type: AccountTypeClaude, ID: "claude_first", AccessToken: "sk-ant-api-first", PlanType: "max"}
 	acc2 := &Account{Type: AccountTypeClaude, ID: "claude_second", AccessToken: "sk-ant-api-second", PlanType: "max"}
-	pool := newProviderPool([]*Account{acc1, acc2}, false)
+	pool := newProviderPool([]*Account{acc1, acc2})
 
 	h := &proxyHandler{
 		cfg: &config{

@@ -26,17 +26,10 @@ services:
       # DEV_* interpolation names intentionally differ from production names.
       # This prevents Compose's automatic root .env loading from importing live
       # secrets or behavior when --env-file is accidentally omitted.
-      PROXY_MAX_ATTEMPTS: ${DEV_PROXY_MAX_ATTEMPTS:-1}
-      PROXY_USAGE_REFRESH_SECONDS: ${DEV_PROXY_USAGE_REFRESH_SECONDS:-300}
-      # Prevent a copied credential from being refreshed or mutated by default.
-      # Set this to false explicitly only when exercising a real dev connection.
-      PROXY_DISABLE_REFRESH: ${DEV_PROXY_DISABLE_REFRESH:-true}
-      PROXY_DEBUG: ${DEV_PROXY_DEBUG:-false}
+      PROXY_MAX_ATTEMPTS: 3
+      PROXY_USAGE_REFRESH_SECONDS: 300
       PUBLIC_URL: ${DEV_PUBLIC_URL:-http://127.0.0.1:18991}
-      # Serve the current React UI with an isolated synthetic member session.
-      # The backend refuses this mode unless PUBLIC_URL and request Host are loopback.
-      LOCAL_DEV_SESSION: ${DEV_LOCAL_SESSION:-true}
-      FRIEND_NAME: ${DEV_FRIEND_NAME:-Codex Pool Active Development}
+      FRIEND_NAME: ${DEV_FRIEND_NAME:-Codex Pool Test}
       POOL_JWT_SECRET: ${DEV_POOL_JWT_SECRET:-active-development-only-change-before-sharing}
       OAUTH_GOOGLE_CLIENT_ID: ${DEV_OAUTH_GOOGLE_CLIENT_ID:-}
       OAUTH_GOOGLE_CLIENT_SECRET: ${DEV_OAUTH_GOOGLE_CLIENT_SECRET:-}

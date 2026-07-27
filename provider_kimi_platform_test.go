@@ -279,7 +279,7 @@ func TestKimiPlatformAdminAddValidatesAndSavesAccount(t *testing.T) {
 	validationCalled := false
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
@@ -340,7 +340,7 @@ func TestKimiPlatformAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -374,7 +374,7 @@ func TestKimiPlatformAdminPreservesUpstreamDiagnostics(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			// Simulate a 404 from a wrong-endpoint scenario - the response
@@ -413,7 +413,7 @@ func TestKimiPlatformAdminNetworkFailureDoesNotSave(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return nil, &url.Error{Op: "Get", URL: req.URL.String(), Err: os.ErrDeadlineExceeded}
@@ -442,7 +442,7 @@ func TestKimiPlatformAdminRejectsForbiddenKeyWithoutSaving(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -476,7 +476,7 @@ func TestKimiPlatformAdminNon401ErrorDoesNotClaimInvalidKey(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -535,7 +535,7 @@ func TestKimiPlatformAdminValidatesUsingGETV1Models(t *testing.T) {
 	var gotReq *http.Request
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			gotReq = req
@@ -582,7 +582,7 @@ func TestKimiPlatformAdminAuthErrorIncludesUpstreamBody(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -622,7 +622,7 @@ func TestKimiPlatformAdminWrongEndpoint403PreservesBody(t *testing.T) {
 	kimiPlatformBase, _ := url.Parse("https://api.moonshot.ai/anthropic")
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},
-		pool:     newProviderPool(nil, false),
+		pool:     newProviderPool(nil),
 		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
@@ -680,7 +680,7 @@ func TestKimiPlatformProductModelConflationEndToEnd(t *testing.T) {
 		PlanType:    "kimi",
 	}
 
-	pool := newProviderPool([]*Account{platformAcc, codingAcc}, false)
+	pool := newProviderPool([]*Account{platformAcc, codingAcc})
 
 	handler := &proxyHandler{
 		cfg:  &config{poolDir: poolDir, kimiPlatformBase: kimiPlatformBase},

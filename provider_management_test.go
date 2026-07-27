@@ -13,7 +13,7 @@ import (
 
 func TestProviderAdminRoutesRequireElevatedAdminSession(t *testing.T) {
 	h, user, secret := newTestHandlerWithSession(t)
-	h.pool = newProviderPool([]*Account{{ID: "kimi", Type: AccountTypeKimi}}, false)
+	h.pool = newProviderPool([]*Account{{ID: "kimi", Type: AccountTypeKimi}})
 
 	// Signed in, but not admin-listed at all.
 	notAdminRequest := httptest.NewRequest(http.MethodGet, "/admin/kimi", nil)
@@ -75,7 +75,7 @@ func TestSetAccountDisabledPersistsAndReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	account := &Account{ID: "kimi", Type: AccountTypeKimi, File: file, AccessToken: "secret"}
-	h := &proxyHandler{pool: newProviderPool([]*Account{account}, false)}
+	h := &proxyHandler{pool: newProviderPool([]*Account{account})}
 
 	recorder := httptest.NewRecorder()
 	h.setAccountDisabled(recorder, account.ID, true)

@@ -13,7 +13,7 @@ export function ProfilePage({ session, capability, onCapabilityRefresh }: { sess
   const beginEnrollment = async () => { setBusy(true); setError(""); try { setEnrollment(await enrollMFA()); } catch (failure) { setError(failure instanceof Error ? failure.message : "Enrollment failed"); } finally { setBusy(false); } };
   const confirm = async () => { if (code.length !== 6) return; setBusy(true); setError(""); try { const result = await confirmMFA(code); setRecoveryCodes(result.recovery_codes); setEnrollment(null); setCode(""); await onCapabilityRefresh(); } catch (failure) { setError(failure instanceof Error ? failure.message : "Confirmation failed"); } finally { setBusy(false); } };
   return <PageFrame kicker="Workspace" title="Profile" description="Identity, role, and session security.">
-    <section className="profile-new"><div><span>Signed in as</span><b>{session.email}</b></div><div><span>Role</span><b>{session.is_admin ? "Admin" : "Member"}</b></div><div><span>Session origin</span><b>{session.origin_id}</b></div></section>
+    <section className="profile-new"><div><span>Signed in as</span><b>{session.email}</b></div><div><span>Role</span><b>{session.is_admin ? "Admin" : "Member"}</b></div></section>
     {session.is_admin ? <section className="security-panel">
       <h2>Admin security</h2>
       {capability.status === "idle" || capability.status === "checking" ? <div className="security-state"><StatusBadge tone="warning">Checking</StatusBadge></div> : null}

@@ -76,12 +76,13 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
   const available = credits.available_count > 0;
   const managedHere = credits.management_available;
   const state = !managedHere
-    ? { tone: "unknown", eyebrow: "Managed in Production", title: "Reset credits", description: "Check and redeem credits from the Production gateway." }
+    ? null
     : !credits.known
       ? { tone: "unknown", eyebrow: "Not checked", title: "Reset credits", description: "Check Codex for available credits." }
       : available
       ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is ready" : "Reset credits are ready", description: "A credit can reset eligible Codex rate-limit windows for this connection." }
       : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "Codex has not reported an available reset credit for this connection." };
+  if (!state) return <a className="reset-credit-standalone-link" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>;
   return <section className={`reset-credit-card ${state.tone}`} aria-labelledby={`reset-credit-${connection.public_id}`}>
     <header className="reset-credit-heading">
       <div className="reset-credit-icon" aria-hidden="true">↻</div>

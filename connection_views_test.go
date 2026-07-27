@@ -31,6 +31,17 @@ func TestPoolStatsConnectionsReturnsDetachedReadModels(t *testing.T) {
 	}
 }
 
+func TestOperatorConnectionsExposeProviderStateManagementCapability(t *testing.T) {
+	connection := &ProviderConnection{
+		ID: "codex", Type: AccountTypeCodex, ResetCreditsRetrievedAt: time.Now(), ResetCreditsAvailable: 1,
+		RateLimitResetCredits: []RateLimitResetCredit{{ID: "private", ExpiresAt: time.Now().Add(time.Hour)}},
+	}
+	view := NewConnectionViewService(newProviderPool([]*ProviderConnection{connection}, false), true).OperatorConnections()[0]
+	if !view.ResetCredits.ManagementAvailable || !view.ResetCredits.InventoryRefreshAvailable || !view.ResetCredits.RedemptionAvailable {
+		t.Fatalf("reset-credit management projection = %#v", view.ResetCredits)
+	}
+}
+
 func TestPoolStatsConnectionsMarksPrimaryAndCyberEligibility(t *testing.T) {
 	now := time.Now()
 	low := &ProviderConnection{ID: "low", Type: AccountTypeCodex, Penalty: 1}

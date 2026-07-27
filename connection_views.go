@@ -6,12 +6,14 @@ import (
 )
 
 type ProviderConnectionResetCreditsView struct {
-	Known               bool        `json:"known"`
-	AvailableCount      int         `json:"available_count"`
-	Expirations         []time.Time `json:"expirations"`
-	RetrievedAt         *time.Time  `json:"retrieved_at,omitempty"`
-	RedemptionAvailable bool        `json:"redemption_available"`
-	DashboardURL        string      `json:"dashboard_url"`
+	Known                     bool        `json:"known"`
+	AvailableCount            int         `json:"available_count"`
+	Expirations               []time.Time `json:"expirations"`
+	RetrievedAt               *time.Time  `json:"retrieved_at,omitempty"`
+	ManagementAvailable       bool        `json:"management_available"`
+	InventoryRefreshAvailable bool        `json:"inventory_refresh_available"`
+	RedemptionAvailable       bool        `json:"redemption_available"`
+	DashboardURL              string      `json:"dashboard_url"`
 }
 
 type ProviderConnectionRuntimeView struct {
@@ -296,10 +298,12 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 		}
 		resetCredits := ProviderConnectionResetCreditsView{
 			Known: !connection.ResetCreditsRetrievedAt.IsZero(), AvailableCount: connection.ResetCreditsAvailable,
-			RetrievedAt:         optionalTime(connection.ResetCreditsRetrievedAt),
-			RedemptionAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
-			DashboardURL:        "https://chatgpt.com/",
-			Expirations:         make([]time.Time, 0, len(connection.RateLimitResetCredits)),
+			RetrievedAt:               optionalTime(connection.ResetCreditsRetrievedAt),
+			ManagementAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable,
+			InventoryRefreshAvailable: connection.Type == AccountTypeCodex && service.providerStateWritable,
+			RedemptionAvailable:       connection.Type == AccountTypeCodex && service.providerStateWritable && len(connection.RateLimitResetCredits) > 0,
+			DashboardURL:              "https://chatgpt.com/",
+			Expirations:               make([]time.Time, 0, len(connection.RateLimitResetCredits)),
 		}
 		for _, credit := range connection.RateLimitResetCredits {
 			resetCredits.Expirations = append(resetCredits.Expirations, credit.ExpiresAt.UTC())

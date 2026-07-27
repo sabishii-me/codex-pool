@@ -36,6 +36,9 @@ func TestProviderAdminAPIRoutesLifecycleActions(t *testing.T) {
 		},
 		resurrect: func(_ http.ResponseWriter, gotID string) { action, id = "resurrect", gotID },
 		refresh:   func(_ http.ResponseWriter, gotID string) { action, id = "refresh", gotID },
+		refreshReset: func(_ http.ResponseWriter, _ *http.Request, gotID string) {
+			action, id = "refresh-reset", gotID
+		},
 		redeemReset: func(_ http.ResponseWriter, _ *http.Request, gotID string) {
 			action, id = "redeem", gotID
 		},
@@ -52,6 +55,7 @@ func TestProviderAdminAPIRoutesLifecycleActions(t *testing.T) {
 		{"/api/v2/provider-connections/c1/disable", "disabled", true},
 		{"/api/v2/provider-connections/c1/recover", "resurrect", false},
 		{"/api/v2/provider-connections/c1/refresh", "refresh", false},
+		{"/api/v2/provider-connections/c1/refresh-reset-credits", "refresh-reset", false},
 		{"/api/v2/provider-connections/c1/redeem-reset-credit", "redeem", false},
 	}
 	for _, test := range cases {

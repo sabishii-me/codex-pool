@@ -173,7 +173,7 @@ export async function renameProviderConnection(accountID: string, displayName: s
   }));
 }
 
-export async function mutateProviderConnection(accountID: string, action: "enable" | "disable" | "recover" | "refresh" | "redeem-reset-credit") {
+export async function mutateProviderConnection(accountID: string, action: "enable" | "disable" | "recover" | "refresh" | "refresh-reset-credits" | "redeem-reset-credit") {
   return decode<Record<string, unknown>>(await fetch(`/api/v2/provider-connections/${encodeURIComponent(accountID)}/${action}`, {
     method: "POST",
   }));

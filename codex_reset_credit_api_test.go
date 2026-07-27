@@ -10,6 +10,16 @@ import (
 	"time"
 )
 
+func TestRefreshCodexResetCreditsRejectsEnvironmentWithoutProviderStateManagement(t *testing.T) {
+	connection := &ProviderConnection{ID: "codex", Type: AccountTypeCodex, AccessToken: "token"}
+	h := &proxyHandler{cfg: &config{disableRefresh: true}, pool: newProviderPool([]*ProviderConnection{connection}, false)}
+	response := httptest.NewRecorder()
+	h.refreshCodexResetCredits(response, httptest.NewRequest(http.MethodPost, "/", nil), connection.ID)
+	if response.Code != http.StatusConflict || !strings.Contains(response.Body.String(), "provider-state management is unavailable") {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestRedeemCodexResetCreditRejectsReadOnlyGateway(t *testing.T) {
 	connection := &ProviderConnection{ID: "codex", Type: AccountTypeCodex, RateLimitResetCredits: []RateLimitResetCredit{{ID: "secret-credit", ExpiresAt: time.Now().Add(time.Hour)}}}
 	h := &proxyHandler{cfg: &config{disableRefresh: true}, pool: newProviderPool([]*ProviderConnection{connection}, false)}

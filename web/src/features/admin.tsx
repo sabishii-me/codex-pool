@@ -74,9 +74,12 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
 }) {
   const credits = connection.reset_credits;
   const available = credits.available_count > 0;
-  const state = !credits.known
-    ? { tone: "unknown", eyebrow: "Inventory unavailable", title: "Reset-credit status has not been checked", description: "This gateway does not have fresh provider inventory for this connection." }
-    : available
+  const managedHere = credits.management_available;
+  const state = !managedHere
+    ? { tone: "unknown", eyebrow: "Managed by provider-state authority", title: "Reset credits are managed in Production", description: "This environment cannot check or consume provider-owned credits for these shared credentials." }
+    : !credits.known
+      ? { tone: "unknown", eyebrow: "Inventory not loaded", title: "Check for reset credits", description: "Request the latest reset-credit inventory from Codex for this connection." }
+      : available
       ? { tone: "available", eyebrow: `${credits.available_count} available`, title: credits.available_count === 1 ? "A reset credit is ready" : "Reset credits are ready", description: "A credit can reset eligible Codex rate-limit windows for this connection." }
       : { tone: "empty", eyebrow: "None available", title: "No reset credit is available", description: "Codex has not reported an available reset credit for this connection." };
   return <section className={`reset-credit-card ${state.tone}`} aria-labelledby={`reset-credit-${connection.public_id}`}>
@@ -89,9 +92,10 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
       {credits.retrieved_at ? <div><dt>Inventory checked</dt><dd>{formatTimestamp(credits.retrieved_at)}</dd></div> : null}
     </dl> : null}
     <footer className="reset-credit-actions">
-      <a className="secondary-button" href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a>
+      {credits.inventory_refresh_available ? <button className={available ? "secondary-button" : "primary-button"} disabled={busy} onClick={() => void onRun("Check reset credits", () => mutateProviderConnection(connection.id, "refresh-reset-credits"))}>{operation === "Check reset credits" ? "Checking…" : credits.known ? "Check again" : "Check for credits"}</button> : null}
       {available && credits.redemption_available ? <ConfirmDialog open={confirmOpen} onOpenChange={onConfirmOpenChange} title="Redeem Codex reset credit?" description="The backend will consume the earliest-expiring credit owned by this connection and refresh its quota windows. This provider action cannot be undone." confirmLabel="Redeem reset credit" busy={operation === "Redeem reset credit"} onConfirm={() => void onRun("Redeem reset credit", () => mutateProviderConnection(connection.id, "redeem-reset-credit")).then(() => onConfirmOpenChange(false))}><button className="primary-button" disabled={busy}>{operation === "Redeem reset credit" ? "Redeeming…" : "Redeem now"}</button></ConfirmDialog> : null}
-      {available && !credits.redemption_available ? <span className="reset-credit-readonly">Redeem from ChatGPT on this read-only gateway</span> : null}
+      {available && !credits.redemption_available && managedHere ? <span className="reset-credit-readonly">Redemption is temporarily unavailable</span> : null}
+      <span className="reset-credit-fallback">Optional fallback: <a href={credits.dashboard_url} target="_blank" rel="noreferrer">Open ChatGPT <span aria-hidden="true">↗</span></a></span>
     </footer>
   </section>;
 }

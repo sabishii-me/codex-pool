@@ -13,6 +13,7 @@ test("reset-credit state is a contained responsive product card", async ({ page 
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading")).toBeVisible();
   await expect(panel.getByRole("link", { name: /Open ChatGPT/ })).toBeVisible();
+  await expect(panel.getByText("Optional fallback:")).toBeVisible();
   const result = await panel.evaluate(element => {
     const box = element.getBoundingClientRect();
     const link = element.querySelector("a");
@@ -22,7 +23,7 @@ test("reset-credit state is a contained responsive product card", async ({ page 
       contained: box.left >= 0 && box.right <= document.documentElement.clientWidth,
       noHorizontalOverflow: element.scrollWidth <= element.clientWidth,
       hasCardBorder: parseFloat(style.borderTopWidth) > 0 && parseFloat(style.borderTopLeftRadius) > 0,
-      linkDesigned: Boolean(linkStyle && parseFloat(linkStyle.minHeight) >= 40 && parseFloat(linkStyle.borderTopWidth) > 0 && parseFloat(linkStyle.borderTopLeftRadius) > 0 && linkStyle.textDecorationLine === "none"),
+      linkDesigned: Boolean(linkStyle && linkStyle.textDecorationLine !== "none" && parseFloat(linkStyle.fontSize) <= 10),
     };
   });
   expect(result).toEqual({ contained: true, noHorizontalOverflow: true, hasCardBorder: true, linkDesigned: true });

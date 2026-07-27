@@ -46,6 +46,8 @@ export interface OperatorProviderConnectionV2 {
   available_count: number;
   expirations: string[];
   retrieved_at?: string;
+  management_available: boolean;
+  inventory_refresh_available: boolean;
   redemption_available: boolean;
   dashboard_url: string;
 };

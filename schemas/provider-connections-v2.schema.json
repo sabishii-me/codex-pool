@@ -60,12 +60,14 @@
         "reset_credits": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["known", "available_count", "expirations", "redemption_available", "dashboard_url"],
+          "required": ["known", "available_count", "expirations", "management_available", "inventory_refresh_available", "redemption_available", "dashboard_url"],
           "properties": {
             "known": { "type": "boolean" },
             "available_count": { "type": "integer" },
             "expirations": { "type": "array", "items": { "type": "string", "format": "date-time" } },
             "retrieved_at": { "type": "string", "format": "date-time" },
+            "management_available": { "type": "boolean" },
+            "inventory_refresh_available": { "type": "boolean" },
             "redemption_available": { "type": "boolean" },
             "dashboard_url": { "type": "string", "format": "uri" }
           }

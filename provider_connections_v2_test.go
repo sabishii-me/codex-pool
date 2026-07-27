@@ -37,7 +37,7 @@ func TestProviderConnectionsV2UsesCanonicalDomainContract(t *testing.T) {
 	if got.Runtime.Status != "cooldown" || got.Runtime.StatusDetail != "Secondary quota is exhausted" || got.Runtime.SecondaryUsedPercent == nil || *got.Runtime.SecondaryUsedPercent != 99 || got.Runtime.SecondaryWindowMinutes == nil || *got.Runtime.SecondaryWindowMinutes != 10080 || got.Runtime.SecondaryResetAt == nil || got.Runtime.UsageRetrievedAt == nil || got.Runtime.UsageSource != "wham" {
 		t.Fatalf("runtime projection = %#v", got.Runtime)
 	}
-	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || got.ResetCredits.RedemptionAvailable {
+	if !got.ResetCredits.Known || got.ResetCredits.AvailableCount != 1 || len(got.ResetCredits.Expirations) != 1 || got.ResetCredits.ManagementAvailable || got.ResetCredits.InventoryRefreshAvailable || got.ResetCredits.RedemptionAvailable {
 		t.Fatalf("reset credit projection = %#v", got.ResetCredits)
 	}
 	body := recorder.Body.String()

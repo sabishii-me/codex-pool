@@ -29,7 +29,6 @@ export default defineConfig({
       "/auth": "http://127.0.0.1:18991",
       "/setup": "http://127.0.0.1:18991",
       "/config": "http://127.0.0.1:18991",
-      "/hero.webp": "http://127.0.0.1:18991",
     },
   },
 });

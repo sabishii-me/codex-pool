@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { checkMFAStatus, loadDashboardResources, loadGatewayMembers, loadPoolUsers, loadProviderConnectionsV2, loadSession, loadSystemProjection, logout, verifyMFA } from "./api";
-import type { FriendSession, GatewayMember, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "./types";
+import type { GatewaySession, GatewayMember, ModelDescriptor, OperatorProviderConnectionV2, PoolStats, PoolUserStats, SignalAnalytics, SystemProjection } from "./types";
 import type { ResourceState } from "./resource-state";
 import { capabilityPending, currentRoute, initialCapability, isElevated, navigateTo, routeForPath, type AppRoute, type CapabilityStatus } from "./routes";
 import { Page } from "./features/pages";
@@ -12,7 +12,7 @@ export function providerPresentation(provider: string) {
 }
 
 export function App() {
-  const [session, setSession] = useState<FriendSession | null>(null);
+  const [session, setSession] = useState<GatewaySession | null>(null);
   const [booting, setBooting] = useState(true);
   const [route, setRoute] = useState(routeForPath(window.location.pathname));
   const [stats, setStats] = useState<PoolStats | null>(null);
@@ -150,7 +150,7 @@ export function App() {
 }
 
 function AccessGate() { return <div className="new-access"><div className="access-card"><span className="logo-mark">AI</span><p className="kicker">Private model gateway</p><h1>Welcome to AI Pool</h1><p>Sign in to use your gateway membership and authorized Admin capabilities.</p><a className="primary-button" href="/auth/login/google">Continue with Google</a></div></div>; }
-function Topbar({ session, isAdmin, elevated, loading, onRefresh }: { session: FriendSession; isAdmin: boolean; elevated: boolean; loading: boolean; onRefresh: () => void }) { return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context">{elevated ? "Administration" : "Workspace"}<strong>{elevated ? "Gateway administration" : "Gateway workspace"}</strong></div><div className="topbar-tools">{isAdmin ? <span className="identity-badge">Admin</span> : null}<span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>; }
+function Topbar({ session, isAdmin, elevated, loading, onRefresh }: { session: GatewaySession; isAdmin: boolean; elevated: boolean; loading: boolean; onRefresh: () => void }) { return <header className="new-topbar"><div className="brand"><span className="logo-mark">AI</span><span><b>AI Pool</b><small>Model gateway</small></span></div><div className="topbar-context">{elevated ? "Administration" : "Workspace"}<strong>{elevated ? "Gateway administration" : "Gateway workspace"}</strong></div><div className="topbar-tools">{isAdmin ? <span className="identity-badge">Admin</span> : null}<span className="updated">{session.email}</span><button className="icon-button" onClick={onRefresh} disabled={loading} aria-label="Refresh data">↻</button></div></header>; }
 function Sidebar({ route, isAdmin, onNavigate, onSignOut, email }: { route: string; isAdmin: boolean; onNavigate: (path: AppRoute) => void; onSignOut: () => void; email: string }) {
   const member = [["/", "Home", "⌂"], ["/models", "Models", "◇"], ["/usage", "Usage", "▥"], ["/setup", "Setup", "↗"], ["/profile", "Profile", "●"]] as const;
   const admin = [["/admin/connections", "Connections", "⇄"], ["/admin/members", "Members", "◎"], ["/admin/system", "System", "⚙"]] as const;

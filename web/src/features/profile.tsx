@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { confirmMFA, enrollMFA } from "../api";
 import type { CapabilityStatus } from "../routes";
-import type { FriendSession } from "../types";
+import type { GatewaySession } from "../types";
 import { PageFrame, StatusBadge } from "../components/ui";
 
-export function ProfilePage({ session, capability, onCapabilityRefresh }: { session: FriendSession; capability: CapabilityStatus; onCapabilityRefresh: () => Promise<void> }) {
+export function ProfilePage({ session, capability, onCapabilityRefresh }: { session: GatewaySession; capability: CapabilityStatus; onCapabilityRefresh: () => Promise<void> }) {
   const [enrollment, setEnrollment] = useState<{ secret: string; otpauth_url: string } | null>(null);
   const [code, setCode] = useState("");
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);

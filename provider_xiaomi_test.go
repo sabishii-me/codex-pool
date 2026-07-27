@@ -476,15 +476,6 @@ func TestXiaomiAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	}
 }
 
-func TestLegacyLandingTemplatesAreNotTracked(t *testing.T) {
-	t.Parallel()
-	for _, name := range []string{"friend_landing.html", "local_landing.html"} {
-		if _, err := os.Stat(filepath.Join("templates", name)); !os.IsNotExist(err) {
-			t.Fatalf("legacy frontend %s must not exist, err=%v", name, err)
-		}
-	}
-}
-
 func TestXiaomiAdminReportsNonAuthValidationFailureWithoutSaving(t *testing.T) {
 	t.Parallel()
 

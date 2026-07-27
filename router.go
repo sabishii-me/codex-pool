@@ -195,11 +195,9 @@ func isFrontendNavigationPath(path string) bool {
 	case "/", "/models", "/usage", "/setup", "/profile",
 		"/admin/connections", "/admin/members", "/admin/system":
 		return true
+	default:
+		return false
 	}
-	// Discarded development routes still receive the SPA shell so React can
-	// render its explicit not-found page. They are not aliases or redirects.
-	return strings.HasPrefix(path, "/operator") ||
-		path == "/admin/routes" || path == "/admin/usage" || path == "/admin/monitor"
 }
 
 func isFrontendNavigationRequest(r *http.Request) bool {
@@ -221,7 +219,7 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Fingerprinted frontend assets are embedded by the Go binary.
 	if strings.HasPrefix(r.URL.Path, "/assets/") {
-		h.serveSignalRoomAsset(w, r)
+		h.serveProductAsset(w, r)
 		return
 	}
 
@@ -262,35 +260,23 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// routing. Canonical product routes serve the embedded SPA directly,
 	// including signed-out deep links and page reloads.
 	if isFrontendNavigationRequest(r) {
-		h.serveFriendLanding(w, r)
+		h.serveProductShell(w, r)
 		return
 	}
 
 	// Static routes
 	switch r.URL.Path {
 	case "/":
-		h.serveFriendLanding(w, r)
+		h.serveProductShell(w, r)
 		return
 	case "/status":
 		h.serveStatusPage(w, r)
-		return
-	case "/og-image.png":
-		h.serveOGImage(w, r)
-		return
-	case "/hero.png", "/hero.webp":
-		h.serveHeroImage(w, r)
 		return
 	case "/favicon.ico":
 		http.NotFound(w, r)
 		return
 	case "/healthz":
 		h.serveHealth(w)
-		return
-	}
-
-	// Friend landing page with code
-	if strings.HasPrefix(r.URL.Path, "/friend/") {
-		h.serveFriendLanding(w, r)
 		return
 	}
 

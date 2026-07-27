@@ -1,6 +1,6 @@
 export type Provider = string;
 
-export interface FriendSession {
+export interface GatewaySession {
   public_url: string;
   email: string;
   is_admin: boolean;

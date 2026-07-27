@@ -53,7 +53,7 @@ func TestLocalDevSessionAcceptsLoopbackHostAcrossDockerBridge(t *testing.T) {
 func TestLocalDevModeServesCurrentReactShellWithoutOAuth(t *testing.T) {
 	handler := &proxyHandler{cfg: &config{localDevSession: true}}
 	response := httptest.NewRecorder()
-	handler.serveFriendLanding(response, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:18990/", nil))
+	handler.serveProductShell(response, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:18990/", nil))
 	body := response.Body.String()
 	for _, expected := range []string{`<div id="root"></div>`, `AI Pool — Model Gateway`, `src="/assets/`} {
 		if !strings.Contains(body, expected) {

@@ -32,10 +32,11 @@ test.describe("frontend navigation boundary", () => {
     });
   }
 
-  test("discarded routes render React not-found without redirect aliases", async ({ page }) => {
-    await loginAs(page, "member");
-    for (const route of ["/operator", "/operator/monitor", "/admin/routes", "/admin/usage", "/admin/monitor"]) {
-      const response = await page.goto(route); expect(response?.status()).toBe(200); expect(page.url()).toContain(route); await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
+  test("removed frontend routes return HTTP 404 rather than compatibility shells", async ({ request }) => {
+    for (const route of ["/friend/code", "/operator", "/operator/monitor", "/admin/routes", "/admin/usage", "/admin/monitor"]) {
+      const response = await request.get(route, { headers: { Accept: "text/html" } });
+      expect(response.status()).toBe(404);
+      expect(response.headers()["content-type"] ?? "").not.toContain("text/html");
     }
   });
 

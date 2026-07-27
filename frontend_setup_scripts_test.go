@@ -245,7 +245,7 @@ func TestFrontendAlwaysServesReactProductShell(t *testing.T) {
 	for _, cfg := range []*config{{}, {oauthGoogleClientID: "configured"}, {localDevSession: true}} {
 		h := &proxyHandler{cfg: cfg}
 		rr := httptest.NewRecorder()
-		h.serveFriendLanding(rr, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+		h.serveProductShell(rr, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
@@ -263,19 +263,19 @@ func TestFrontendAlwaysServesReactProductShell(t *testing.T) {
 	}
 }
 
-func TestOAuthClientSecretIsNotEmbeddedInPublicSignalRoom(t *testing.T) {
+func TestOAuthClientSecretIsNotEmbeddedInProductFrontend(t *testing.T) {
 	const secret = "google-client-secret-that-must-never-ship"
 	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee", oauthGoogleClientSecret: secret}}
 	page := httptest.NewRecorder()
-	h.serveFriendLanding(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	h.serveProductShell(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 	if strings.Contains(page.Body.String(), secret) {
 		t.Fatal("OAuth client secret leaked into public HTML")
 	}
-	if err := fs.WalkDir(signalRoomContent, "web/dist", func(path string, entry fs.DirEntry, err error) error {
+	if err := fs.WalkDir(productFrontendContent, "web/dist", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
-		data, err := signalRoomContent.ReadFile(path)
+		data, err := productFrontendContent.ReadFile(path)
 		if err != nil {
 			return err
 		}
@@ -288,24 +288,24 @@ func TestOAuthClientSecretIsNotEmbeddedInPublicSignalRoom(t *testing.T) {
 	}
 }
 
-func TestServeSignalRoomAsset(t *testing.T) {
+func TestServeProductAsset(t *testing.T) {
 	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
 	page := httptest.NewRecorder()
-	h.serveFriendLanding(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
+	h.serveProductShell(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
 	body := page.Body.String()
 	start := strings.Index(body, `src="/assets/`)
 	if start < 0 {
-		t.Fatal("signal room script asset missing")
+		t.Fatal("product script asset missing")
 	}
 	start += len(`src="`)
 	end := strings.Index(body[start:], `"`)
 	if end < 0 {
-		t.Fatal("signal room script asset is malformed")
+		t.Fatal("product script asset is malformed")
 	}
 	assetPath := body[start : start+end]
 
 	rr := httptest.NewRecorder()
-	h.serveSignalRoomAsset(rr, httptest.NewRequest(http.MethodGet, "http://example.com"+assetPath, nil))
+	h.serveProductAsset(rr, httptest.NewRequest(http.MethodGet, "http://example.com"+assetPath, nil))
 	if rr.Code != http.StatusOK || rr.Body.Len() == 0 {
 		t.Fatalf("asset response status=%d bytes=%d", rr.Code, rr.Body.Len())
 	}
@@ -314,25 +314,6 @@ func TestServeSignalRoomAsset(t *testing.T) {
 	}
 	if got := rr.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
 		t.Fatalf("Cache-Control = %q, want immutable", got)
-	}
-}
-
-func TestServeHeroImageWebP(t *testing.T) {
-	h := &proxyHandler{}
-	req := httptest.NewRequest(http.MethodGet, "http://example.com/hero.webp", nil)
-	rr := httptest.NewRecorder()
-
-	h.serveHeroImage(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if got := rr.Header().Get("Content-Type"); got != "image/webp" {
-		t.Fatalf("Content-Type = %q, want image/webp", got)
-	}
-	body := rr.Body.Bytes()
-	if len(body) < 12 || string(body[:4]) != "RIFF" || string(body[8:12]) != "WEBP" {
-		t.Fatalf("hero response is not WebP: %q", body[:min(len(body), 12)])
 	}
 }
 

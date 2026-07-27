@@ -20,8 +20,8 @@ func TestFrontendNavigationBoundary(t *testing.T) {
 	}
 }
 
-func TestFrontendNavigationBoundaryRejectsAPIsAndProxyTraffic(t *testing.T) {
-	paths := []string{"/api/pool/session", "/api/pool/stats", "/auth/login/google", "/config/pi/token", "/setup/pi/token", "/v1/responses", "/backend-api/wham/usage", "/healthz", "/assets/index.js"}
+func TestFrontendNavigationBoundaryRejectsAPIsProxyTrafficAndRemovedUIRoutes(t *testing.T) {
+	paths := []string{"/api/pool/session", "/api/pool/stats", "/auth/login/google", "/config/pi/token", "/setup/pi/token", "/v1/responses", "/backend-api/wham/usage", "/healthz", "/assets/index.js", "/friend/code", "/operator", "/operator/monitor", "/admin/routes", "/admin/usage", "/admin/monitor", "/unknown"}
 	for _, path := range paths {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Accept", "text/html")
@@ -43,7 +43,7 @@ func TestFrontendNavigationBoundaryRequiresHTMLIntent(t *testing.T) {
 
 func TestFrontendNavigationBoundaryServesEmbeddedShell(t *testing.T) {
 	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "configured"}}
-	for _, path := range []string{"/usage", "/models", "/admin/system", "/operator/monitor"} {
+	for _, path := range []string{"/usage", "/models", "/admin/system"} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Accept", "text/html")
 		recorder := httptest.NewRecorder()

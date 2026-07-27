@@ -14,14 +14,11 @@ import (
 	"time"
 )
 
-//go:embed templates/og-image.png templates/og-image-transparent.webp
-var friendContent embed.FS
-
 //go:embed web/dist/index.html web/dist/assets/*
-var signalRoomContent embed.FS
+var productFrontendContent embed.FS
 
-func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request) {
-	data, err := signalRoomContent.ReadFile("web/dist/index.html")
+func (h *proxyHandler) serveProductShell(w http.ResponseWriter, r *http.Request) {
+	data, err := productFrontendContent.ReadFile("web/dist/index.html")
 	if err != nil {
 		http.Error(w, "internal error: product shell missing", http.StatusInternalServerError)
 		return
@@ -31,9 +28,9 @@ func (h *proxyHandler) serveFriendLanding(w http.ResponseWriter, r *http.Request
 	_, _ = w.Write(data)
 }
 
-func (h *proxyHandler) serveSignalRoomAsset(w http.ResponseWriter, r *http.Request) {
+func (h *proxyHandler) serveProductAsset(w http.ResponseWriter, r *http.Request) {
 	assetPath := strings.TrimPrefix(r.URL.Path, "/")
-	data, err := signalRoomContent.ReadFile("web/dist/" + assetPath)
+	data, err := productFrontendContent.ReadFile("web/dist/" + assetPath)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -45,31 +42,9 @@ func (h *proxyHandler) serveSignalRoomAsset(w http.ResponseWriter, r *http.Reque
 	_, _ = w.Write(data)
 }
 
-func (h *proxyHandler) serveOGImage(w http.ResponseWriter, r *http.Request) {
-	data, err := friendContent.ReadFile("templates/og-image.png")
-	if err != nil {
-		http.Error(w, "image not found", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(data)
-}
-
-func (h *proxyHandler) serveHeroImage(w http.ResponseWriter, r *http.Request) {
-	data, err := friendContent.ReadFile("templates/og-image-transparent.webp")
-	if err != nil {
-		http.Error(w, "image not found", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "image/webp")
-	w.Header().Set("Cache-Control", "public, max-age=86400")
-	w.Write(data)
-}
-
-// friendSessionResponse is the CLI-credential bundle plus identity/admin
+// gatewaySessionResponse is the CLI-credential bundle plus identity/admin
 // status returned by GET /api/pool/session.
-type friendSessionResponse struct {
+type gatewaySessionResponse struct {
 	PublicURL      string `json:"public_url"`
 	Email          string `json:"email"`
 	IsAdmin        bool   `json:"is_admin"`
@@ -83,12 +58,12 @@ type friendSessionResponse struct {
 	PiModelsJSON   string `json:"pi_models_json"`
 }
 
-// writeFriendSessionJSON builds the CLI-credential bundle for an already
+// writeGatewaySessionJSON builds the CLI-credential bundle for an already
 // resolved, already-authorized pool user and writes it as JSON. This is what
 // GET /api/pool/session returns once the Google OAuth gate has established a
 // session (see oauth_login.go) - the identity check happens before this is
 // called, not inside it.
-func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Request, user *GatewayUser) {
+func (h *proxyHandler) writeGatewaySessionJSON(w http.ResponseWriter, r *http.Request, user *GatewayUser) {
 	secret := getPoolJWTSecret()
 	authData, err := generateCodexAuth(secret, user)
 	if err != nil {
@@ -136,7 +111,7 @@ func (h *proxyHandler) writeFriendSessionJSON(w http.ResponseWriter, r *http.Req
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(friendSessionResponse{
+	json.NewEncoder(w).Encode(gatewaySessionResponse{
 		PublicURL:      publicURL,
 		Email:          user.Email,
 		IsAdmin:        isAdmin,

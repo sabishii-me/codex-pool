@@ -10,12 +10,7 @@ export type AppShellProps = {
   children: ReactNode;
 };
 
-/**
- * Stable migration boundary for the Phase 9 shell.
- * Feature pages remain owned by the legacy implementations until each route
- * has a replacement and parity evidence. The shell owns only workspace
- * context, landmarks, and the layout surface around those pages.
- */
+/** The product shell owns workspace context, landmarks, and page layout. */
 export function AppShell({ view, routePath, operator, header, navigation, children }: AppShellProps) {
   return (
     <div

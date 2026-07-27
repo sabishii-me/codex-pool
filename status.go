@@ -3,13 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"net/http"
 	"sort"
 	"time"
 )
 
-// StatusData contains all the data for the status page.
+// StatusData contains the machine-readable gateway status projection.
 type StatusData struct {
 	GeneratedAt     time.Time
 	Uptime          time.Duration
@@ -27,14 +26,14 @@ type StatusData struct {
 	PoolUtilization []PoolUtilization `json:"pool_utilization,omitempty"`
 }
 
-// TokenAnalytics contains capacity estimation data for the status page.
+// TokenAnalytics contains capacity estimation data for status projections.
 type TokenAnalytics struct {
 	PlanCapacities []PlanCapacityView
 	TotalSamples   int64
 	ModelInfo      string
 }
 
-// PlanCapacityView is a display-friendly view of plan capacity.
+// PlanCapacityView is the serialized plan-capacity projection.
 type PlanCapacityView struct {
 	PlanType                   string
 	SampleCount                int64
@@ -51,7 +50,7 @@ type PlanCapacityView struct {
 	EstimatedSecondaryCapacity string
 }
 
-// AccountStatus shows the status of a single account.
+// AccountStatus is the serialized status of one provider connection.
 type AccountStatus struct {
 	ID                 string
 	Type               string
@@ -188,39 +187,8 @@ func (h *proxyHandler) serveStatusPage(w http.ResponseWriter, r *http.Request) {
 	// Compute per-provider time-weighted utilization
 	data.PoolUtilization = h.pool.getPoolUtilization()
 
-	// Check Accept header for JSON
-	if r.Header.Get("Accept") == "application/json" {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(data)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	tmpl := template.Must(template.New("status").Funcs(template.FuncMap{
-		"pct": func(v float64) string {
-			return fmt.Sprintf("%.0f%%", v)
-		},
-		"score": func(v float64) string {
-			return fmt.Sprintf("%.2f", v)
-		},
-		"bar": func(v float64) template.HTML {
-			width := v
-			if width > 100 {
-				width = 100
-			}
-			color := "#4a4"
-			if v > 80 {
-				color = "#a44"
-			} else if v > 50 {
-				color = "#aa4"
-			}
-			return template.HTML(fmt.Sprintf(
-				`<div class="bar"><div class="fill" style="width:%.0f%%;background:%s"></div></div>`,
-				width, color,
-			))
-		},
-	}).Parse(statusHTML))
-	tmpl.Execute(w, data)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
 }
 
 func formatDuration(d time.Duration) string {
@@ -309,280 +277,3 @@ func formatTokenCount(n int64) string {
 	}
 	return fmt.Sprintf("%d", n)
 }
-
-const statusHTML = `<!DOCTYPE html>
-<html>
-<head>
-    <title>Pool Status</title>
-    <meta http-equiv="refresh" content="30">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
-            margin: 0;
-            padding: 20px;
-            background: #0d1117;
-            color: #c9d1d9;
-        }
-        h1 { color: #58a6ff; margin-bottom: 5px; }
-        .meta { color: #8b949e; margin-bottom: 20px; font-size: 14px; }
-        .stats {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-        }
-        .stat {
-            background: #161b22;
-            padding: 15px 20px;
-            border-radius: 6px;
-            border: 1px solid #30363d;
-        }
-        .stat-value { font-size: 28px; font-weight: bold; color: #58a6ff; }
-        .stat-label { font-size: 12px; color: #8b949e; text-transform: uppercase; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #161b22;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-        th, td {
-            padding: 10px 12px;
-            text-align: left;
-            border-bottom: 1px solid #21262d;
-        }
-        th {
-            background: #21262d;
-            color: #8b949e;
-            font-weight: 500;
-            font-size: 12px;
-            text-transform: uppercase;
-        }
-        tr:hover { background: #1c2128; }
-        .bar {
-            width: 80px;
-            height: 8px;
-            background: #21262d;
-            border-radius: 4px;
-            overflow: hidden;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-        .fill { height: 100%; }
-        .status-ok { color: #3fb950; }
-        .status-warn { color: #d29922; }
-        .status-dead { color: #f85149; }
-        .tag {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        .tag-pro { background: #238636; color: #fff; }
-        .tag-prolite { background: #2f7d46; color: #fff; }
-        .tag-plus { background: #1f6feb; color: #fff; }
-        .tag-team { background: #8957e5; color: #fff; }
-        .tag-gemini { background: #ea4335; color: #fff; }
-        .tag-claude { background: #cc785c; color: #fff; }
-        .tag-codex { background: #10a37f; color: #fff; }
-        .tag-disabled { background: #6e7681; color: #fff; }
-        .tag-dead { background: #f85149; color: #fff; }
-        .usage-cell { white-space: nowrap; }
-        .effective { color: #8b949e; font-size: 11px; }
-        .score-cell { cursor: help; text-decoration: underline dotted; text-underline-offset: 2px; }
-        a { color: #58a6ff; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-    </style>
-</head>
-<body>
-    <h1>🏊 Pool Status</h1>
-    <div class="meta">
-        Generated: {{.GeneratedAt.Format "2006-01-02 15:04:05"}} · Uptime: {{.Uptime.Round 1000000000}}
-    </div>
-
-    <div class="stats">
-        <div class="stat">
-            <div class="stat-value">{{.TotalCount}}</div>
-            <div class="stat-label">Total Accounts</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value">{{.CodexCount}}</div>
-            <div class="stat-label">Codex</div>
-        </div>
-        <div class="stat">
-            <div class="stat-value">{{.GeminiCount}}</div>
-            <div class="stat-label">Gemini</div>
-        </div>
-        {{if .ClaudeCount}}
-        <div class="stat">
-            <div class="stat-value">{{.ClaudeCount}}</div>
-            <div class="stat-label">Claude</div>
-        </div>
-        {{end}}
-        {{if .GrokCount}}
-        <div class="stat">
-            <div class="stat-value">{{.GrokCount}}</div>
-            <div class="stat-label">Grok</div>
-        </div>
-        {{end}}
-        {{if .PoolUsers}}
-        <div class="stat">
-            <div class="stat-value">{{.PoolUsers}}</div>
-            <div class="stat-label">Pool Users</div>
-        </div>
-        {{end}}
-    </div>
-
-    {{if .PoolUtilization}}
-    <h2 style="color: #58a6ff; margin-top: 20px; margin-bottom: 10px;">⏱ Time-Weighted Utilization</h2>
-    <p style="color: #8b949e; font-size: 12px; margin-bottom: 15px;">
-        Accounts near reset are discounted — their high usage is about to be wiped.
-        <code style="background: #21262d; padding: 2px 6px; border-radius: 3px;">effective = used% × time_to_reset / window</code>
-    </p>
-    <div class="stats" style="flex-wrap: wrap;">
-        {{range .PoolUtilization}}
-        <div class="stat" style="min-width: 200px;">
-            <div style="margin-bottom: 8px;">
-                {{if eq .Provider "codex"}}<span class="tag tag-codex">codex</span>{{end}}
-                {{if eq .Provider "claude"}}<span class="tag tag-claude">claude</span>{{end}}
-                {{if eq .Provider "gemini"}}<span class="tag tag-gemini">gemini</span>{{end}}
-            </div>
-            <div style="display: flex; gap: 20px; margin-bottom: 4px;">
-                <div>
-                    <div class="stat-value" style="font-size: 22px;">{{printf "%.0f%%" .TimeWeightedSecondaryPct}}</div>
-                    <div class="stat-label">Secondary</div>
-                </div>
-                <div>
-                    <div class="stat-value" style="font-size: 22px;">{{printf "%.0f%%" .TimeWeightedPrimaryPct}}</div>
-                    <div class="stat-label">Primary</div>
-                </div>
-            </div>
-            <div style="color: #8b949e; font-size: 12px; margin-top: 6px;">
-                {{.AvailableAccounts}}/{{.TotalAccounts}} available
-                {{if .NextSecondaryResetIn}} · next reset: {{.NextSecondaryResetIn}}{{end}}
-                {{if .ResetsIn24h}} · {{.ResetsIn24h}} reset in 24h{{end}}
-            </div>
-        </div>
-        {{end}}
-    </div>
-    {{end}}
-
-    <table>
-        <tr>
-            <th>Account</th>
-            <th>Type</th>
-            <th>Plan</th>
-            <th>Primary (5h)</th>
-            <th>Secondary (7d)</th>
-            <th>Score</th>
-            <th>Expires</th>
-            <th>Last Used</th>
-            <th>Tokens</th>
-        </tr>
-        {{range .Accounts}}
-        <tr>
-            <td>
-                {{.ID}}
-                {{if .Disabled}}<span class="tag tag-disabled">disabled</span>{{end}}
-                {{if .Dead}}<span class="tag tag-dead">dead</span>{{end}}
-                {{if .CoolingDown}}<span class="tag tag-disabled">cooldown</span>{{end}}
-            </td>
-            <td>
-                {{if eq .Type "codex"}}<span class="tag tag-codex">codex</span>{{end}}
-                {{if eq .Type "gemini"}}<span class="tag tag-gemini">gemini</span>{{end}}
-                {{if eq .Type "claude"}}<span class="tag tag-claude">claude</span>{{end}}
-            </td>
-            <td>
-                {{if eq .PlanType "pro"}}<span class="tag tag-pro">pro</span>{{end}}
-                {{if eq .PlanType "prolite"}}<span class="tag tag-prolite">prolite</span>{{end}}
-                {{if eq .PlanType "plus"}}<span class="tag tag-plus">plus</span>{{end}}
-                {{if eq .PlanType "team"}}<span class="tag tag-team">team</span>{{end}}
-                {{if eq .PlanType "max"}}<span class="tag tag-claude">max</span>{{end}}
-                {{if eq .PlanType "gemini"}}<span class="tag tag-gemini">gemini</span>{{end}}
-                {{if eq .PlanType "claude"}}<span class="tag tag-claude">claude</span>{{end}}
-            </td>
-            <td class="usage-cell">
-                {{bar .EffectivePrimary}}{{pct .PrimaryUsed}}
-                {{if ne .PlanType "pro"}}{{if ne .PlanType "gemini"}}{{if ne .PlanType "claude"}}{{if ne .PlanType "max"}}<span class="effective">(→{{pct .EffectivePrimary}})</span>{{end}}{{end}}{{end}}{{end}}
-                {{if .CoolingDown}}<br><small>cooldown {{.CooldownIn}}</small>{{else if .PrimaryResetIn}}<br><small>resets in {{.PrimaryResetIn}}</small>{{end}}
-            </td>
-            <td class="usage-cell">
-                {{bar .EffectiveSecondary}}{{pct .SecondaryUsed}}
-                {{if ne .PlanType "pro"}}{{if ne .PlanType "gemini"}}{{if ne .PlanType "claude"}}{{if ne .PlanType "max"}}<span class="effective">(→{{pct .EffectiveSecondary}})</span>{{end}}{{end}}{{end}}{{end}}
-                {{if .SecondaryResetIn}}<br><small>resets in {{.SecondaryResetIn}}</small>{{end}}
-            </td>
-            <td class="score-cell" title="{{.ScoreTooltip}}">
-                {{if .Dead}}<span class="status-dead">—</span>
-                {{else if .Disabled}}<span class="status-warn">—</span>
-                {{else}}{{score .Score}}{{end}}
-            </td>
-            <td>{{.ExpiresIn}}</td>
-            <td>{{.LastUsed}}</td>
-            <td>{{.TotalTokens}}</td>
-        </tr>
-        {{end}}
-    </table>
-
-    {{if .TokenAnalytics}}
-    <h2 style="color: #58a6ff; margin-top: 30px;">📊 Capacity Analysis</h2>
-    <p style="color: #8b949e; font-size: 13px; margin-bottom: 15px;">
-        Estimating capacity from <strong>{{.TokenAnalytics.TotalSamples}}</strong> samples.
-        Formula: <code style="background: #21262d; padding: 2px 6px; border-radius: 3px;">{{.TokenAnalytics.ModelInfo}}</code>
-    </p>
-
-    {{if .TokenAnalytics.PlanCapacities}}
-    <table style="margin-bottom: 20px;">
-        <tr>
-            <th>Plan</th>
-            <th>Samples</th>
-            <th>Confidence</th>
-            <th>Input Tokens</th>
-            <th>Output Tokens</th>
-            <th>Cached</th>
-            <th>Reasoning</th>
-            <th>Output Mult</th>
-            <th>5h Capacity</th>
-            <th>7d Capacity</th>
-        </tr>
-        {{range .TokenAnalytics.PlanCapacities}}
-        <tr>
-            <td>
-                {{if eq .PlanType "pro"}}<span class="tag tag-pro">pro</span>{{end}}
-                {{if eq .PlanType "prolite"}}<span class="tag tag-prolite">prolite</span>{{end}}
-                {{if eq .PlanType "plus"}}<span class="tag tag-plus">plus</span>{{end}}
-                {{if eq .PlanType "team"}}<span class="tag tag-team">team</span>{{end}}
-                {{if eq .PlanType "gemini"}}<span class="tag tag-gemini">gemini</span>{{end}}
-            </td>
-            <td>{{.SampleCount}}</td>
-            <td>
-                {{if eq .Confidence "high"}}<span style="color: #3fb950;">●</span> high{{end}}
-                {{if eq .Confidence "medium"}}<span style="color: #d29922;">●</span> medium{{end}}
-                {{if eq .Confidence "low"}}<span style="color: #8b949e;">●</span> low{{end}}
-            </td>
-            <td>{{.TotalInputTokens}}</td>
-            <td>{{.TotalOutputTokens}}</td>
-            <td>{{.TotalCachedTokens}}</td>
-            <td>{{.TotalReasoningTokens}}</td>
-            <td>{{printf "%.1fx" .OutputMultiplier}}</td>
-            <td>{{if .EstimatedPrimaryCapacity}}{{.EstimatedPrimaryCapacity}}{{else}}—{{end}}</td>
-            <td>{{if .EstimatedSecondaryCapacity}}{{.EstimatedSecondaryCapacity}}{{else}}—{{end}}</td>
-        </tr>
-        {{end}}
-    </table>
-    {{else}}
-    <p style="color: #8b949e;">No capacity data collected yet. Use the pool to gather samples.</p>
-    {{end}}
-    {{end}}
-
-    <p style="margin-top: 20px; color: #8b949e; font-size: 12px;">
-        <strong>Note:</strong> Plus accounts have ~10x less capacity than Pro.
-        "Effective" usage shows the weighted value used for load balancing.
-        <br>
-        <a href="/admin/accounts">Raw account data</a> ·
-        <a href="/admin/tokens">Token analytics API</a> ·
-        <a href="/healthz">Health check</a> ·
-        <a href="/metrics">Prometheus metrics</a>
-    </p>
-</body>
-</html>`

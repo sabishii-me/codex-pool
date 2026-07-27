@@ -1,4 +1,4 @@
-import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, FriendSession, MFAStatus, ModelCatalog, ModelRoutingProjection, PoolStats, PoolUserStats, SetupClientsProjection, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
+import type { GatewayHealth, GatewayMember, OperatorProviderConnection, OperatorProviderConnectionV2, GatewaySession, MFAStatus, ModelCatalog, ModelRoutingProjection, PoolStats, PoolUserStats, SetupClientsProjection, SignalAnalytics, SystemProjection, UsageEconomicsProjection, UsageProjection } from "./types";
 
 export class APIError extends Error {
   constructor(message: string, readonly status: number) { super(message); this.name = "APIError"; }
@@ -27,10 +27,10 @@ async function decode<T>(response: Response): Promise<T> {
 // account (the pool_session httpOnly cookie is sent automatically on this
 // same-origin request). Returns null when there's no valid session instead
 // of throwing, so callers can fall through to the sign-in screen.
-export async function loadSession(): Promise<FriendSession | null> {
+export async function loadSession(): Promise<GatewaySession | null> {
   const response = await fetch("/api/pool/session", { cache: "no-store" });
   if (response.status === 401) return null;
-  return decode<FriendSession>(response);
+  return decode<GatewaySession>(response);
 }
 
 export async function logout() {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { loadSetupClients, loadSetupConfig } from "../api";
-import type { FriendSession, SetupClient, SetupEnvironment } from "../types";
+import type { GatewaySession, SetupClient, SetupEnvironment } from "../types";
 import { PageFrame } from "../components/ui";
 
 function Step({ number, title, summary, active, complete, children }: { number: number; title: string; summary?: string; active: boolean; complete: boolean; children?: React.ReactNode }) {
@@ -21,7 +21,7 @@ function CodeBlock({ label, value, onCopy }: { label: string; value: string; onC
   return <div className="code-panel setup-code"><header><span>{label}</span><button type="button" onClick={onCopy}>Copy</button></header><code>{value}</code></div>;
 }
 
-export function SetupPage({ session: _session }: { session: FriendSession }) {
+export function SetupPage({ session: _session }: { session: GatewaySession }) {
   const [clients, setClients] = useState<SetupClient[]>([]);
   const [clientID, setClientID] = useState("");
   const [environmentID, setEnvironmentID] = useState("");

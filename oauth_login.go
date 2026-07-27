@@ -206,10 +206,8 @@ func (h *proxyHandler) handleLogout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// handlePoolSession returns the CLI-credential bundle for the current
-// session: GET /api/pool/session. This replaces the old POST
-// /api/friend/claim - the SPA calls it on boot to hydrate its session
-// instead of re-submitting a shared secret.
+// handlePoolSession returns the setup-credential bundle for the current
+// authenticated GatewayUser session.
 func (h *proxyHandler) handlePoolSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -220,7 +218,7 @@ func (h *proxyHandler) handlePoolSession(w http.ResponseWriter, r *http.Request)
 		respondJSONError(w, http.StatusUnauthorized, "not signed in")
 		return
 	}
-	h.writeFriendSessionJSON(w, r, user)
+	h.writeGatewaySessionJSON(w, r, user)
 }
 
 // sessionUser resolves the pool_session cookie to a live, enabled GatewayUser.

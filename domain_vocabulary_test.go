@@ -33,6 +33,39 @@ func TestCanonicalDomainVocabularySharesCompatibilityIdentity(t *testing.T) {
 	}
 }
 
+func TestProductionSourceRejectsRemovedFrontendCompatibility(t *testing.T) {
+	forbidden := []string{
+		"serveFriendLanding", "serveSignalRoomAsset", "signalRoomContent", "friendContent",
+		"friend_landing.html", "local_landing.html", "statusHTML", "serveHeroImage", "serveOGImage",
+	}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range files {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, term := range forbidden {
+			if strings.Contains(string(data), term) {
+				t.Errorf("%s retains removed frontend compatibility term %q", path, term)
+			}
+		}
+	}
+	for _, path := range []string{
+		"templates/friend_landing.html", "templates/local_landing.html",
+		"templates/og-image.png", "templates/og-image-transparent.png", "templates/og-image-transparent.webp",
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("removed frontend artifact %s exists, err=%v", path, err)
+		}
+	}
+}
+
 func TestProductionSourceUsesProviderConnectionVocabulary(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {

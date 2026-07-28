@@ -83,13 +83,15 @@ describe("route-level page jobs", () => {
     expect(html).not.toContain("No measured data in this range");
   });
 
-  it("renders a shape-preserving curve with a non-scaling stroke", () => {
+  it("renders D3 curves with fixed-pixel columns", () => {
     const html = renderToStaticMarkup(<MultiSeriesChart ariaLabel="Billable tokens by model over time" xLabels={["10 AM", "11 AM", "12 PM"]} series={[{ id: "codex:gpt", label: "gpt", values: [10, 30, 20] }]} />);
     expect(html).toContain("Billable tokens");
     expect(html).toContain("Time");
     expect(html).toContain("10 AM");
     expect(html).toContain('class="usage-series-line"');
-    expect(html).toMatch(/class="usage-series-line"[^>]+d="M[^"]+ C/);
+    expect(html).toContain('class="usage-series-column"');
+    expect(html).toContain('width="14"');
+    expect(html).toMatch(/class="usage-series-line"[^>]+d="M[^"]+C/);
     expect(html).not.toContain("<circle");
   });
 

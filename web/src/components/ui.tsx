@@ -1,67 +1,70 @@
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { scaleLinear, scalePoint } from "d3-scale";
+import { curveMonotoneX, line } from "d3-shape";
 
 const seriesColors = ["#f87171", "#facc15", "#4ade80", "#60a5fa", "#c084fc", "#fb923c", "#2dd4bf", "#f472b6", "#a3e635"];
 
 export interface ChartSeries { id: string; label: string; values: number[] }
 
-function monotoneCurvePath(points: Array<{ x: number; y: number }>) {
-  if (points.length === 0) return "";
-  if (points.length === 1) return `M${points[0].x},${points[0].y}`;
-  const slopes = points.slice(0, -1).map((point, index) => (points[index + 1].y - point.y) / (points[index + 1].x - point.x));
-  const tangents = points.map((_, index) => {
-    if (index === 0) return slopes[0];
-    if (index === points.length - 1) return slopes.at(-1) ?? 0;
-    const before = slopes[index - 1];
-    const after = slopes[index];
-    return before * after <= 0 ? 0 : 2 * before * after / (before + after);
-  });
-  for (let index = 0; index < slopes.length; index++) {
-    if (slopes[index] === 0) {
-      tangents[index] = 0;
-      tangents[index + 1] = 0;
-      continue;
-    }
-    const before = tangents[index] / slopes[index];
-    const after = tangents[index + 1] / slopes[index];
-    const magnitude = Math.hypot(before, after);
-    if (magnitude > 3) {
-      const scale = 3 / magnitude;
-      tangents[index] = scale * before * slopes[index];
-      tangents[index + 1] = scale * after * slopes[index];
-    }
-  }
-  return points.slice(0, -1).reduce((path, point, index) => {
-    const next = points[index + 1];
-    const third = (next.x - point.x) / 3;
-    return `${path} C${point.x + third},${point.y + tangents[index] * third} ${next.x - third},${next.y - tangents[index + 1] * third} ${next.x},${next.y}`;
-  }, `M${points[0].x},${points[0].y}`);
-}
-
 export function MultiSeriesChart({ series, xLabels, ariaLabel }: { series: ChartSeries[]; xLabels: string[]; ariaLabel: string }) {
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [plotWidth, setPlotWidth] = useState(960);
+  useLayoutEffect(() => {
+    const element = plotRef.current;
+    if (!element) return;
+    const update = () => setPlotWidth(Math.max(320, Math.round(element.getBoundingClientRect().width)));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
   const visible = series.filter(item => item.values.some(value => Number.isFinite(value) && value > 0));
   if (!xLabels.length) return <div className="spline-chart chart-empty" role="img" aria-label={`No ${ariaLabel.toLowerCase()}`}><span>Usage timeline unavailable</span></div>;
   const count = xLabels.length;
-  const maxValue = Math.max(...visible.flatMap(item => item.values.slice(0, count).map(value => Math.max(0, Number.isFinite(value) ? value : 0))), 1);
+  const height = 250;
+  const top = 18;
+  const bottom = 220;
+  const bucketTotals = Array.from({ length: count }, (_, index) => visible.reduce((total, item) => total + Math.max(0, Number.isFinite(item.values[index]) ? item.values[index] : 0), 0));
+  const maxValue = Math.max(...bucketTotals, 1);
   const magnitude = 10 ** Math.floor(Math.log10(maxValue));
   const yMax = Math.ceil(maxValue / magnitude) * magnitude;
   const yTicks = [yMax, yMax / 2, 0];
-  const x = (index: number) => count <= 1 ? 50 : index / (count - 1) * 100;
-  const y = (value: number) => 94 - value / yMax * 84;
+  const side = 10;
+  const bucketIndexes = Array.from({ length: count }, (_, index) => index);
+  const xScale = scalePoint<number>().domain(bucketIndexes).range([side, plotWidth - side]);
+  const yScale = scaleLinear().domain([0, yMax]).range([bottom, top]);
+  const x = (index: number) => xScale(index) ?? plotWidth / 2;
+  const y = (value: number) => yScale(value);
   const xTickIndexes = [...new Set([0, Math.floor((count - 1) / 2), count - 1])];
+  const curve = line<{ x: number; y: number }>().x(point => point.x).y(point => point.y).curve(curveMonotoneX);
+  const columnWidth = 14;
+
   return <div className="multi-series-chart" role="img" aria-label={ariaLabel}>
     {visible.length ? <div className="chart-legend">{visible.map((item, index) => <span key={item.id}><i style={{ background: seriesColors[index % seriesColors.length] }} />{item.label}</span>)}</div> : <div className="chart-zero-summary">No usage in this range</div>}
     <div className="chart-frame">
       <div className="chart-y-axis" aria-hidden="true"><b>Billable tokens</b>{yTicks.map(value => <span key={value}>{compact(value)}</span>)}</div>
-      <div className="chart-plot">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-          {yTicks.map(value => <line key={value} className="chart-grid-line" x1="0" x2="100" y1={y(value)} y2={y(value)} />)}
-          {Array.from({ length: count + 1 }, (_, index) => <line key={`bucket-${index}`} className="chart-bucket-line" x1={index / count * 100} x2={index / count * 100} y1="10" y2="94" />)}
+      <div className="chart-plot" ref={plotRef}>
+        <svg width={plotWidth} height={height} viewBox={`0 0 ${plotWidth} ${height}`} aria-hidden="true">
+          {yTicks.map(value => <line key={value} className="chart-grid-line" x1="0" x2={plotWidth} y1={y(value)} y2={y(value)} />)}
+          {Array.from({ length: count }, (_, index) => <line key={`bucket-${index}`} className="chart-bucket-line" x1={x(index)} x2={x(index)} y1={top} y2={bottom} />)}
+          {Array.from({ length: count }, (_, bucketIndex) => {
+            let stacked = 0;
+            return <g key={`column-${bucketIndex}`}>{visible.map((item, seriesIndex) => {
+              const value = Math.max(0, Number.isFinite(item.values[bucketIndex]) ? item.values[bucketIndex] : 0);
+              if (value === 0) return null;
+              const segmentTop = y(stacked + value);
+              const segmentBottom = y(stacked);
+              stacked += value;
+              return <rect key={item.id} className="usage-series-column" x={x(bucketIndex) - columnWidth / 2} y={segmentTop} width={columnWidth} height={Math.max(1, segmentBottom - segmentTop)} fill={seriesColors[seriesIndex % seriesColors.length]} />;
+            })}</g>;
+          })}
           {visible.map((item, seriesIndex) => {
             const points = item.values.slice(0, count).map((value, index) => ({ x: x(index), y: y(Math.max(0, Number.isFinite(value) ? value : 0)) }));
-            return <path key={item.id} className="usage-series-line" style={{ stroke: seriesColors[seriesIndex % seriesColors.length] }} d={monotoneCurvePath(points)} />;
+            return <path key={item.id} className="usage-series-line" style={{ stroke: seriesColors[seriesIndex % seriesColors.length] }} d={curve(points) ?? ""} />;
           })}
         </svg>
-        <div className="chart-x-axis" aria-hidden="true">{xTickIndexes.map(index => <span key={index} style={{ left: `${x(index)}%` }}>{xLabels[index]}</span>)}</div>
+        <div className="chart-x-axis" aria-hidden="true">{xTickIndexes.map(index => <span key={index} style={{ left: `${x(index) / plotWidth * 100}%` }}>{xLabels[index]}</span>)}</div>
         <b className="chart-x-title">Time</b>
       </div>
     </div>

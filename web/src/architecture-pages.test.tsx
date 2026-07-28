@@ -39,14 +39,59 @@ describe("route-level page jobs", () => {
     const daily = buildModelChart(projection, "7d");
     expect(daily.labels).toHaveLength(7);
     expect(daily.series[0].values.filter(Boolean)).toEqual([50, 100]);
+    expect(daily.labels.at(-1)).toBe(new Date("2026-07-27T00:00:00Z").toLocaleDateString([], { month: "short", day: "numeric" }));
   });
 
-  it("renders token and time axes with a smooth measured path", () => {
+  it("keeps midnight UTC usage in the correct daily bucket", () => {
+    const projection = {
+      range_hours: 168,
+      range_days: 7,
+      evidence: { generated_at: "2026-07-27T23:30:00Z" },
+      model_hourly: [
+        { hour: "2026-07-27T00:00:00Z", model_id: "gpt", provider_id: "codex", billable_tokens: 25, requests: 1 },
+      ],
+    } as UsageProjection;
+    const daily = buildModelChart(projection, "7d");
+    expect(daily.series[0].values).toHaveLength(7);
+    expect(daily.series[0].values.at(-1)).toBe(25);
+    expect(daily.series[0].values.slice(0, -1).every(value => value === 0)).toBe(true);
+  });
+
+  it("falls back to truthful provider buckets when model detail is unavailable", () => {
+    const projection = {
+      range_hours: 24,
+      range_days: 1,
+      evidence: { generated_at: "2026-07-27T23:30:00Z" },
+      model_hourly: [],
+      hourly: [
+        { hour: "2026-07-27T22", account_type: "codex", billable_tokens: 40, input_tokens: 30, cached_tokens: 0, output_tokens: 10, reasoning_tokens: 0, request_count: 1 },
+      ],
+    } as unknown as UsageProjection;
+    const chart = buildModelChart(projection, "24h");
+    expect(chart.granularity).toBe("provider");
+    expect(chart.series).toHaveLength(1);
+    expect(chart.series[0].label).toBe("codex");
+    expect(chart.series[0].values.filter(Boolean)).toEqual([40]);
+  });
+
+  it("keeps an exact timeline and zero baseline for an empty measured range", () => {
+    const html = renderToStaticMarkup(<MultiSeriesChart ariaLabel="Billable tokens by model over time" xLabels={["10 AM", "11 AM", "12 PM"]} series={[]} />);
+    expect(html).toContain("No usage in this range");
+    expect(html).toContain("Billable tokens");
+    expect(html).toContain("10 AM");
+    expect(html).toContain('class="chart-bucket-line"');
+    expect(html).not.toContain("No measured data in this range");
+  });
+
+  it("renders token and time axes with exact stacked bucket bars", () => {
     const html = renderToStaticMarkup(<MultiSeriesChart ariaLabel="Billable tokens by model over time" xLabels={["10 AM", "11 AM", "12 PM"]} series={[{ id: "codex:gpt", label: "gpt", values: [10, 30, 20] }]} />);
     expect(html).toContain("Billable tokens");
     expect(html).toContain("Time");
     expect(html).toContain("10 AM");
-    expect(html).toMatch(/class="chart-line"[^>]+d="M[^\"]+ C/);
+    expect(html).toContain('class="chart-bar"');
+    expect(html).not.toContain('class="chart-line"');
+    expect(html).not.toMatch(/ d="[^"]* C/);
+    expect(html).not.toContain("<circle");
   });
 
   it("Home is orientation and does not render usage analytics", () => {

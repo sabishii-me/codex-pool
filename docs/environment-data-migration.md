@@ -1,5 +1,7 @@
 # Environment data migration
 
+The reusable operational procedure for image promotion, migration review/apply, validation, and rollback is tracked at `.claude/skills/codex-pool-release/SKILL.md`. This document defines the underlying store-ownership contract.
+
 Deployments promote an immutable image through the three environments:
 
 ```text

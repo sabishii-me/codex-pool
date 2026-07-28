@@ -4,17 +4,48 @@ const seriesColors = ["#f87171", "#facc15", "#4ade80", "#60a5fa", "#c084fc", "#f
 
 export interface ChartSeries { id: string; label: string; values: number[] }
 
+function monotoneCurvePath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M${points[0].x},${points[0].y}`;
+  const slopes = points.slice(0, -1).map((point, index) => (points[index + 1].y - point.y) / (points[index + 1].x - point.x));
+  const tangents = points.map((_, index) => {
+    if (index === 0) return slopes[0];
+    if (index === points.length - 1) return slopes.at(-1) ?? 0;
+    const before = slopes[index - 1];
+    const after = slopes[index];
+    return before * after <= 0 ? 0 : 2 * before * after / (before + after);
+  });
+  for (let index = 0; index < slopes.length; index++) {
+    if (slopes[index] === 0) {
+      tangents[index] = 0;
+      tangents[index + 1] = 0;
+      continue;
+    }
+    const before = tangents[index] / slopes[index];
+    const after = tangents[index + 1] / slopes[index];
+    const magnitude = Math.hypot(before, after);
+    if (magnitude > 3) {
+      const scale = 3 / magnitude;
+      tangents[index] = scale * before * slopes[index];
+      tangents[index + 1] = scale * after * slopes[index];
+    }
+  }
+  return points.slice(0, -1).reduce((path, point, index) => {
+    const next = points[index + 1];
+    const third = (next.x - point.x) / 3;
+    return `${path} C${point.x + third},${point.y + tangents[index] * third} ${next.x - third},${next.y - tangents[index + 1] * third} ${next.x},${next.y}`;
+  }, `M${points[0].x},${points[0].y}`);
+}
+
 export function MultiSeriesChart({ series, xLabels, ariaLabel }: { series: ChartSeries[]; xLabels: string[]; ariaLabel: string }) {
   const visible = series.filter(item => item.values.some(value => Number.isFinite(value) && value > 0));
   if (!xLabels.length) return <div className="spline-chart chart-empty" role="img" aria-label={`No ${ariaLabel.toLowerCase()}`}><span>Usage timeline unavailable</span></div>;
   const count = xLabels.length;
-  const bucketTotals = Array.from({ length: count }, (_, index) => visible.reduce((total, item) => total + Math.max(0, Number.isFinite(item.values[index]) ? item.values[index] : 0), 0));
-  const maxValue = Math.max(...bucketTotals, 1);
+  const maxValue = Math.max(...visible.flatMap(item => item.values.slice(0, count).map(value => Math.max(0, Number.isFinite(value) ? value : 0))), 1);
   const magnitude = 10 ** Math.floor(Math.log10(maxValue));
   const yMax = Math.ceil(maxValue / magnitude) * magnitude;
   const yTicks = [yMax, yMax / 2, 0];
-  const x = (index: number) => (index + 0.5) / count * 100;
-  const barWidth = Math.min(4, 80 / count);
+  const x = (index: number) => count <= 1 ? 50 : index / (count - 1) * 100;
   const y = (value: number) => 94 - value / yMax * 84;
   const xTickIndexes = [...new Set([0, Math.floor((count - 1) / 2), count - 1])];
   return <div className="multi-series-chart" role="img" aria-label={ariaLabel}>
@@ -25,17 +56,9 @@ export function MultiSeriesChart({ series, xLabels, ariaLabel }: { series: Chart
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {yTicks.map(value => <line key={value} className="chart-grid-line" x1="0" x2="100" y1={y(value)} y2={y(value)} />)}
           {Array.from({ length: count + 1 }, (_, index) => <line key={`bucket-${index}`} className="chart-bucket-line" x1={index / count * 100} x2={index / count * 100} y1="10" y2="94" />)}
-          {Array.from({ length: count }, (_, bucketIndex) => {
-            let stacked = 0;
-            return <g key={bucketIndex}>{visible.map((item, seriesIndex) => {
-              const value = Math.max(0, Number.isFinite(item.values[bucketIndex]) ? item.values[bucketIndex] : 0);
-              if (value === 0) return null;
-              const top = y(stacked + value);
-              const bottom = y(stacked);
-              stacked += value;
-              const color = seriesColors[seriesIndex % seriesColors.length];
-              return <rect key={item.id} className="chart-bar" x={x(bucketIndex) - barWidth / 2} y={top} width={barWidth} height={Math.max(bottom - top, 0.8)} style={{ fill: color }}><title>{`${item.label} · ${xLabels[bucketIndex]} · ${Math.round(value).toLocaleString()} billable tokens`}</title></rect>;
-            })}</g>;
+          {visible.map((item, seriesIndex) => {
+            const points = item.values.slice(0, count).map((value, index) => ({ x: x(index), y: y(Math.max(0, Number.isFinite(value) ? value : 0)) }));
+            return <path key={item.id} className="usage-series-line" style={{ stroke: seriesColors[seriesIndex % seriesColors.length] }} d={monotoneCurvePath(points)} />;
           })}
         </svg>
         <div className="chart-x-axis" aria-hidden="true">{xTickIndexes.map(index => <span key={index} style={{ left: `${x(index)}%` }}>{xLabels[index]}</span>)}</div>

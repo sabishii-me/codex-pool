@@ -112,7 +112,11 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		projection.Hourly = hourly
 		projection.Totals = usageTotalsFromHourly(hourly)
 		if h.analyticsStore != nil {
-			projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", hours, true)
+			projection.Hourly, err = h.analyticsStore.getUsageHourly("", hours)
+			if err == nil {
+				projection.Totals = usageTotalsFromHourly(projection.Hourly)
+				projection.ByModel, projection.ByProvider, projection.ByConnection, err = h.analyticsStore.getUsageDimensions("", hours, true)
+			}
 			if err == nil {
 				projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly("", hours)
 			}
@@ -147,7 +151,11 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.analyticsStore != nil {
-		projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, hours, false)
+		projection.Hourly, err = h.analyticsStore.getUsageHourly(subjectID, hours)
+		if err == nil {
+			projection.Totals = usageTotalsFromHourly(projection.Hourly)
+			projection.ByModel, projection.ByProvider, _, err = h.analyticsStore.getUsageDimensions(subjectID, hours, false)
+		}
 		if err == nil {
 			projection.ModelHourly, err = h.analyticsStore.getUsageModelHourly(subjectID, hours)
 		}

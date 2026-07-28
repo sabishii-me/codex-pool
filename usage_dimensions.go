@@ -59,6 +59,38 @@ func usageRangeStart(now time.Time, hours int) time.Time {
 	return now.UTC().Truncate(time.Hour).Add(-time.Duration(hours-1) * time.Hour)
 }
 
+func (s *AnalyticsStore) getUsageHourly(userID string, hours int) ([]UserHourlyUsage, error) {
+	if s == nil || s.db == nil {
+		return []UserHourlyUsage{}, nil
+	}
+	if hours <= 0 {
+		hours = 24
+	}
+	since := usageRangeStart(time.Now(), hours).Format(time.RFC3339Nano)
+	filter, args := "completed_at >= ?", []any{since}
+	if strings.TrimSpace(userID) != "" {
+		filter += " AND user_id = ?"
+		args = append(args, userID)
+	}
+	rows, err := s.db.Query(fmt.Sprintf(`SELECT substr(completed_at,1,13), provider_id,
+		COALESCE(SUM(input_tokens),0), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(output_tokens),0),
+		COALESCE(SUM(reasoning_tokens),0), COALESCE(SUM(billable_tokens),0), COUNT(*)
+		FROM usage_events WHERE %s GROUP BY substr(completed_at,1,13), provider_id ORDER BY substr(completed_at,1,13), provider_id`, filter), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []UserHourlyUsage{}
+	for rows.Next() {
+		var value UserHourlyUsage
+		if err := rows.Scan(&value.Hour, &value.AccountType, &value.InputTokens, &value.CachedTokens, &value.OutputTokens, &value.ReasoningTokens, &value.BillableTokens, &value.RequestCount); err != nil {
+			return nil, err
+		}
+		out = append(out, value)
+	}
+	return out, rows.Err()
+}
+
 func (s *AnalyticsStore) getUsageModelHourly(userID string, hours int) ([]UsageModelHourly, error) {
 	if s == nil || s.db == nil {
 		return []UsageModelHourly{}, nil

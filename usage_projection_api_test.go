@@ -27,12 +27,19 @@ func TestUsageDimensionsPreserveModelProviderAndConnectionGrain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hourly, err := store.getUsageModelHourly("member", 24)
+	modelHourly, err := store.getUsageModelHourly("member", 24)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(models) != 2 || len(providers) != 2 || len(connections) != 2 || len(hourly) != 2 {
-		t.Fatalf("models=%#v providers=%#v connections=%#v hourly=%#v", models, providers, connections, hourly)
+	hourly, err := store.getUsageHourly("member", 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 2 || len(providers) != 2 || len(connections) != 2 || len(modelHourly) != 2 || len(hourly) != 2 {
+		t.Fatalf("models=%#v providers=%#v connections=%#v modelHourly=%#v hourly=%#v", models, providers, connections, modelHourly, hourly)
+	}
+	if totals := usageTotalsFromHourly(hourly); totals.TotalBillableTokens != 35 || totals.TotalInputTokens != 30 || totals.TotalCachedTokens != 5 || totals.TotalOutputTokens != 10 || totals.RequestCount != 2 {
+		t.Fatalf("hourly totals=%#v", totals)
 	}
 	if models[0].BillableTokens+models[1].BillableTokens != 35 {
 		t.Fatalf("models=%#v", models)

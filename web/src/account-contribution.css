@@ -1,0 +1,32 @@
+
+/* Provider account contribution */
+.account-modal-layer { position:fixed; inset:0; z-index:110; display:grid; place-items:center; padding:24px; }
+.account-modal-backdrop { position:absolute; inset:0; width:100%; height:100%; border:0; border-radius:0; background:rgba(3,3,5,.82); backdrop-filter:blur(10px); }
+.account-modal { position:relative; z-index:1; width:min(640px,100%); max-height:min(760px,calc(100vh - 48px)); display:flex; flex-direction:column; overflow:hidden; border:1px solid var(--border-strong); border-radius:22px; background:var(--surface); box-shadow:0 28px 100px rgba(0,0,0,.7); }
+.account-modal>header { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; padding:26px 28px 20px; border-bottom:1px solid var(--border); }
+.account-modal>header span { color:var(--red); font-size:9px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; }
+.account-modal>header h2 { margin:5px 0 7px; font-size:22px; }
+.account-modal>header p { margin:0; color:var(--muted); font-size:11px; line-height:1.6; }
+.account-modal-body { display:grid; gap:18px; overflow:auto; padding:24px 28px; }
+.account-modal label { display:grid; gap:7px; }
+.account-modal label>span { color:var(--text-secondary); font-size:10px; font-weight:700; }
+.account-modal input,.account-modal select,.account-modal textarea { width:100%; min-height:42px; border:1px solid var(--border-strong); border-radius:11px; outline:0; background:var(--elevated); color:var(--text); padding:10px 12px; }
+.account-modal textarea { min-height:150px; resize:vertical; font-family:monospace; }
+.account-modal input:focus,.account-modal select:focus,.account-modal textarea:focus { border-color:var(--red); }
+.account-modal small { color:var(--muted); font-size:9px; line-height:1.5; }
+.account-oauth { display:grid; justify-items:start; gap:14px; padding:18px; border:1px solid var(--border); border-radius:14px; background:var(--elevated); }
+.account-oauth p { margin:0; color:var(--muted); font-size:10px; line-height:1.6; }
+.account-oauth label { width:100%; }
+.account-oauth-actions { width:100%; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.account-oauth-actions a { overflow-wrap:anywhere; }
+.account-oauth-actions button { flex:0 0 auto; }
+.account-oauth-share { width:100%; display:grid; gap:7px; padding:13px; border:1px solid var(--border-strong); border-radius:11px; background:var(--surface); }
+.account-oauth-share>span { color:var(--text-secondary); font-size:10px; font-weight:750; }
+.account-oauth-share input { font-family:monospace; font-size:9px; }
+.account-oauth a { color:var(--red); font-size:10px; font-weight:700; }
+.reauthorize-identity { display:grid; gap:4px; padding:14px; border:1px solid var(--border-strong); border-radius:12px; background:var(--elevated); }
+.reauthorize-identity span { color:var(--muted); font-size:9px; text-transform:uppercase; }
+.reauthorize-identity b { font-size:13px; }
+.reauthorize-identity small { overflow-wrap:anywhere; }
+.account-modal>footer { display:flex; justify-content:flex-end; gap:9px; padding:18px 28px; border-top:1px solid var(--border); background:var(--elevated); }
+@media(max-width:600px){.account-modal-layer{padding:0}.account-modal{width:100%;height:100%;max-height:none;border:0;border-radius:0}.account-modal>header,.account-modal-body,.account-modal>footer{padding-left:20px;padding-right:20px}.account-modal>footer{margin-top:auto}.account-modal>footer button{flex:1}.account-oauth-actions{align-items:stretch;flex-direction:column}.account-oauth-actions button{width:100%}}

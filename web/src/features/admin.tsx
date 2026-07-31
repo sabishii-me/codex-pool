@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { createGatewayMember, isAuthorizationError, mutateProviderConnection, renameProviderConnection, runSystemOperation, setGatewayMemberEnabled } from "../api";
+import { useEffect, useState, type FormEvent } from "react";
+import { contributeAPIKey, contributeGrok, createGatewayMember, exchangeAccountOAuth, exchangeAntigravityOAuth, isAuthorizationError, loadProviderConnectionsV2, mutateProviderConnection, renameProviderConnection, runSystemOperation, setGatewayMemberEnabled, startAccountOAuth, startAntigravityOAuth } from "../api";
 import type { ResourceState } from "../resource-state";
 import type { GatewayMember, OperatorProviderConnectionV2, SystemProjection } from "../types";
 import { ConfirmDialog } from "../components/confirm-dialog";
@@ -19,6 +19,7 @@ export function AdminLockedPage({ resource, onUnlock }: { resource: "Connections
 
 export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { state: ResourceState<OperatorProviderConnectionV2[]>; onRefresh: () => Promise<void>; onAuthorizationLost: () => void }) {
   const [selectedID, setSelectedID] = useState<string | null>(null);
+  const [contributionTarget, setContributionTarget] = useState<OperatorProviderConnectionV2 | null | undefined>(undefined);
   const [operation, setOperation] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const selected = state.status === "ready" ? state.data.find(connection => connection.id === selectedID) ?? null : null;
@@ -32,17 +33,139 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
       setFeedback({ tone: "error", text: error instanceof Error ? error.message : `${label} failed` });
     } finally { setOperation(null); }
   };
-  return <PageFrame kicker="Administration" title="Connections" description="Accounts, limits, and health.">
+  return <PageFrame kicker="Administration" title="Connections" description="Accounts, limits, and health." action={<button className="primary-button" onClick={() => setContributionTarget(null)}>Add account</button>}>
     <ResourceMessage state={state} loading="Loading provider connections" empty="No provider connections are configured" />
     {feedback ? <div className={`operation-feedback ${feedback.tone}`} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</div> : null}
     {state.status === "ready" ? <section className="connections-workspace">
       <div className="admin-table connection-list" aria-label="Provider connections">{state.data.map(connection => { const runtime = connectionRuntimePresentation(connection); return <button className={`admin-row connection-row ${selectedID === connection.id ? "selected" : ""}`} key={connection.id} onClick={() => setSelectedID(connection.id)} aria-pressed={selectedID === connection.id}><div><b>{connection.identity.display_name || connection.provider_id}</b><small>{connection.provider_id} · {connection.plan_type || "plan unavailable"}{connection.is_primary ? " · Primary" : ""}</small></div><StatusBadge tone={runtime.tone}>{runtime.label}</StatusBadge><span>{runtime.summary || `${connection.inflight} in flight`}</span></button>; })}</div>
-      {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b></div>}
+      {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} onReauthorize={() => setContributionTarget(selected)} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b></div>}
     </section> : null}
+    {contributionTarget !== undefined ? <AccountContribution initialProvider={contributionTarget?.provider_id as ContributableProvider | undefined} reauthorizing={contributionTarget ?? undefined} onClose={() => setContributionTarget(undefined)} onAdded={async () => { await onRefresh(); setContributionTarget(undefined); setFeedback({ tone: "success", text: contributionTarget ? "Account reauthorized." : "Account added." }); }} onAuthorizationLost={onAuthorizationLost} /> : null}
   </PageFrame>;
 }
 
-function ConnectionDetail({ connection, operation, onClose, onRun }: { connection: OperatorProviderConnectionV2; operation: string | null; onClose: () => void; onRun: (label: string, task: () => Promise<unknown>) => Promise<void> }) {
+type ContributableProvider = "codex" | "claude" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia";
+type ContributionMode = "oauth" | "key" | "json";
+const CONTRIBUTION_PROVIDERS: Array<{ id: ContributableProvider; label: string; mode: ContributionMode; hint?: string }> = [
+  { id: "codex", label: "Codex", mode: "oauth" }, { id: "claude", label: "Claude", mode: "oauth" }, { id: "antigravity", label: "Google Antigravity", mode: "oauth" },
+  { id: "kimi", label: "Kimi Coding Plan", mode: "key", hint: "Use a Kimi Code Console coding-plan key." }, { id: "kimi-platform", label: "Kimi Platform", mode: "key" },
+  { id: "minimax", label: "MiniMax", mode: "key" }, { id: "zai", label: "Z.ai", mode: "key", hint: "Use a GLM Coding Plan key." }, { id: "xiaomi", label: "Xiaomi", mode: "key", hint: "Use a MiMo Token Plan key." },
+  { id: "deepseek", label: "DeepSeek", mode: "key" }, { id: "qwen", label: "Qwen", mode: "key" }, { id: "openrouter", label: "OpenRouter", mode: "key" }, { id: "nvidia", label: "NVIDIA", mode: "key" },
+  { id: "grok", label: "Grok", mode: "json" },
+];
+
+function oauthCallbackCode(value: string, expectedState?: string) {
+  const trimmed = value.trim();
+  let callback: URL;
+  try { callback = new URL(trimmed); }
+  catch { throw new Error("Paste the complete final callback URL"); }
+  const code = callback.searchParams.get("code")?.trim();
+  const state = callback.searchParams.get("state")?.trim();
+  if (!code) throw new Error("The callback URL does not contain an authorization code");
+  if (expectedState && state !== expectedState) throw new Error("This callback URL belongs to a different authorization session");
+  return code;
+}
+
+export function OAuthSessionDetails({ providerLabel, oauthURL, phase, copied, showCallbackInput, credential, onOpen, onCopy, onCredentialChange }: { providerLabel: string; oauthURL: string; phase: "idle" | "preparing" | "authorizing" | "exchanging"; copied: boolean; showCallbackInput: boolean; credential: string; onOpen: () => void; onCopy: () => void; onCredentialChange: (value: string) => void }) {
+  return <><div className="account-oauth-actions"><a href={oauthURL} target="_blank" rel="noreferrer" onClick={onOpen}>Open authorization link ↗</a><button type="button" className="secondary-button" onClick={onCopy}>{copied ? "Copied ✓" : "Copy authorization link"}</button></div><div className="account-oauth-share"><span>Authorization link</span><input aria-label="Authorization link" readOnly value={oauthURL} onFocus={event => event.currentTarget.select()} /></div>{showCallbackInput ? <label className="account-callback-field"><span>Paste callback URL</span><p>After signing in elsewhere, copy the complete final localhost URL from that browser’s address bar and paste it here.</p><input autoFocus aria-label="Paste callback URL" placeholder="http://localhost:1455/auth/callback?code=…&amp;state=…" value={credential} onChange={event => onCredentialChange(event.target.value)} autoComplete="off" /></label> : <p>{phase === "exchanging" ? "Finishing authorization…" : `Open the link to continue with ${providerLabel}, or copy it to use another browser.`}</p>}</>;
+}
+
+export async function activateReauthorizedConnection(connection: OperatorProviderConnectionV2, exchangedAccountID: string | undefined) {
+  if (!exchangedAccountID) throw new Error("Authorization succeeded but did not identify the updated account");
+  if (exchangedAccountID !== connection.id) throw new Error("The authorized identity does not match this connection. Its lifecycle state was not changed.");
+  // Production's recover operation clears Dead in memory; reapplying the
+  // existing enabled state then persists that cleared lifecycle state without
+  // changing whether the operator enabled or disabled the connection.
+  await mutateProviderConnection(connection.id, "recover");
+  await mutateProviderConnection(connection.id, connection.disabled ? "disable" : "enable");
+  const connections = await loadProviderConnectionsV2();
+  const restored = connections.find(candidate => candidate.id === connection.id);
+  if (!restored || restored.dead || restored.runtime.status === "dead") throw new Error("Credentials were replaced, but production did not persist the restored account state");
+  return restored;
+}
+
+export function AccountContribution({ onClose, onAdded, onAuthorizationLost, initialProvider = "codex", reauthorizing }: { onClose: () => void; onAdded: () => Promise<void>; onAuthorizationLost?: () => void; initialProvider?: ContributableProvider; reauthorizing?: OperatorProviderConnectionV2 }) {
+  const [provider, setProvider] = useState<ContributableProvider>(initialProvider);
+  const [credential, setCredential] = useState("");
+  const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; relayRequired?: boolean } | null>(null);
+  const [phase, setPhase] = useState<"idle" | "preparing" | "authorizing" | "exchanging">("idle");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [showCallbackInput, setShowCallbackInput] = useState(false);
+  const [error, setError] = useState("");
+  const [exchangedAccountID, setExchangedAccountID] = useState<string | undefined>();
+  const selected = CONTRIBUTION_PROVIDERS.find(item => item.id === provider)!;
+
+  const choose = (next: ContributableProvider) => { setProvider(next); setCredential(""); setOAuth(null); setPhase("idle"); setCopied(false); setShowCallbackInput(false); setError(""); setExchangedAccountID(undefined); };
+  const copyAuthorizationLink = async () => {
+    if (!oauth?.url) return;
+    setShowCallbackInput(true);
+    try {
+      await navigator.clipboard.writeText(oauth.url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      setError("Could not copy automatically. Select and copy the authorization link below.");
+    }
+  };
+  const startOAuth = async () => {
+    setBusy(true); setError(""); setPhase("preparing");
+    try {
+      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude", provider === "codex" ? 1455 : undefined);
+      if (!result.oauth_url || (provider === "antigravity" ? !result.session_id : !result.verifier)) throw new Error("Provider did not return an authorization session");
+      setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url });
+      setPhase("authorizing");
+    } catch (failure) {
+      setPhase("idle"); setError(failure instanceof Error ? failure.message : "Could not start authorization");
+    } finally { setBusy(false); }
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault(); if (busy) return; setBusy(true); setError("");
+    try {
+      if (selected.mode === "oauth") {
+        if (reauthorizing && exchangedAccountID) {
+          await activateReauthorizedConnection(reauthorizing, exchangedAccountID);
+        } else {
+          if (!oauth) { setBusy(false); await startOAuth(); return; }
+          let result;
+          if (provider === "antigravity") {
+            if (!oauth.sessionID || !credential.trim()) throw new Error("Paste the authorization code or callback URL");
+            result = await exchangeAntigravityOAuth(oauth.sessionID, credential, oauth.state || "");
+          } else {
+            const code = oauthCallbackCode(credential, oauth.state); if (!oauth.verifier) throw new Error("Authorization session expired");
+            result = await exchangeAccountOAuth(provider as "codex" | "claude", code, oauth.verifier);
+          }
+          if (reauthorizing) {
+            setExchangedAccountID(result.account_id);
+            await activateReauthorizedConnection(reauthorizing, result.account_id);
+          }
+        }
+      } else if (selected.mode === "json") await contributeGrok(credential);
+      else await contributeAPIKey(provider as Exclude<ContributableProvider, "codex" | "claude" | "antigravity" | "grok">, credential);
+      await onAdded();
+    } catch (failure) {
+      if (isAuthorizationError(failure) && onAuthorizationLost) { onAuthorizationLost(); return; }
+      setError(failure instanceof Error ? failure.message : "Could not add account");
+    } finally { setBusy(false); }
+  };
+  const manualOAuth = oauth && showCallbackInput;
+  return <div className="account-modal-layer" role="presentation">
+    <button className="account-modal-backdrop" aria-label="Close add account" onClick={onClose} />
+    <form className="account-modal" role="dialog" aria-modal="true" aria-labelledby="add-account-title" onSubmit={submit}>
+      <header><div><span>{reauthorizing ? "Existing provider connection" : "New provider connection"}</span><h2 id="add-account-title">{reauthorizing ? "Reauthorize account" : "Add account"}</h2><p>{reauthorizing ? `Sign in to ${reauthorizing.identity.display_name || reauthorizing.provider_id} again to replace its credentials. The same upstream account updates this connection rather than creating a duplicate.` : "Choose a provider and connect credentials to add gateway capacity."}</p></div><button type="button" className="icon-button" aria-label="Close" onClick={onClose}>×</button></header>
+      <div className="account-modal-body">
+        {reauthorizing ? <div className="reauthorize-identity"><span>Connection</span><b>{reauthorizing.identity.display_name || reauthorizing.provider_id}</b><small>{reauthorizing.identity.attributes?.email || reauthorizing.public_id}</small></div> : <label className="account-provider-field"><span>Provider</span><select value={provider} onChange={event => choose(event.target.value as ContributableProvider)}>{CONTRIBUTION_PROVIDERS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+        {selected.mode === "oauth" ? <section className="account-oauth">
+          {!oauth ? <><p>Create a one-time link for this {selected.label} account.</p><button type="button" className="primary-button" disabled={busy} onClick={() => void startOAuth()}>{phase === "preparing" ? "Generating…" : "Generate authorization link"}</button></> : <OAuthSessionDetails providerLabel={selected.label} oauthURL={oauth.url} phase={phase} copied={copied} showCallbackInput={showCallbackInput} credential={credential} onOpen={() => setShowCallbackInput(true)} onCopy={() => void copyAuthorizationLink()} onCredentialChange={setCredential} />}
+        </section> : selected.mode === "json" ? <label className="account-credential-field"><span>Grok auth JSON</span><textarea autoFocus value={credential} onChange={event => setCredential(event.target.value)} spellCheck={false} /></label> : <label className="account-credential-field"><span>{selected.label} API key</span><input autoFocus type="password" value={credential} onChange={event => setCredential(event.target.value)} autoComplete="off" />{selected.hint ? <small>{selected.hint}</small> : null}</label>}
+        {error ? <div className="operation-feedback error" role="alert">{error}</div> : null}
+      </div>
+      <footer><button type="button" className="secondary-button" onClick={onClose}>Cancel</button>{selected.mode !== "oauth" || manualOAuth ? <button className="primary-button" disabled={busy || !credential.trim()}>{busy ? (reauthorizing ? "Reauthorizing…" : "Adding…") : (reauthorizing ? "Reauthorize account" : "Add account")}</button> : null}</footer>
+    </form>
+  </div>;
+}
+
+function ConnectionDetail({ connection, operation, onClose, onRun, onReauthorize }: { connection: OperatorProviderConnectionV2; operation: string | null; onClose: () => void; onRun: (label: string, task: () => Promise<unknown>) => Promise<void>; onReauthorize: () => void }) {
   const [editing, setEditing] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -61,9 +184,12 @@ function ConnectionDetail({ connection, operation, onClose, onRun }: { connectio
     <section><h3>Rate limits</h3><div className="connection-totals">{runtimeQuotaFacts(connection).map(fact => <Fact key={fact.label} label={fact.label} value={fact.value} />)}</div></section>
     {connection.provider_id === "codex" ? <ResetCreditsPanel connection={connection} busy={busy} operation={operation} confirmOpen={confirmReset} onConfirmOpenChange={setConfirmReset} onRun={onRun} /> : null}
     <section><h3>Usage totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
-    <footer className="connection-actions"><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</footer>
+    <footer className="connection-actions">
+      {isOAuthProvider(connection.provider_id) ? <><button className="primary-button" disabled={busy} onClick={onReauthorize}>Reauthorize account</button>{connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</> : <><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</>}
+    </footer>
   </aside>;
 }
+function isOAuthProvider(provider: string): provider is "codex" | "claude" | "antigravity" { return provider === "codex" || provider === "claude" || provider === "antigravity"; }
 function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirmOpenChange, onRun }: {
   connection: OperatorProviderConnectionV2;
   busy: boolean;

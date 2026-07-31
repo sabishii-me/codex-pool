@@ -15,6 +15,18 @@ for (const [route, heading, description] of resources) {
   });
 }
 
+test("Connections exposes the provider account contribution flow", async ({ page }) => {
+  await loginAs(page, "admin-elevated"); await page.goto("/admin/connections");
+  await page.getByRole("button", { name: "Add account" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add account" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByLabel("Provider")).toHaveValue("codex");
+  await dialog.getByLabel("Provider").selectOption("deepseek");
+  await expect(dialog.getByLabel("DeepSeek API key")).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+});
+
 test("Connections inventory shows actionable account status and operations", async ({ page }) => {
   await loginAs(page, "admin-elevated");
   const connections = [{ id: "stable-1", public_id: "public-1", provider_id: "codex", identity: { display_name: "Primary Codex", external_subject: "subject-1", attributes: { email: "owner@example.com" } }, plan_type: "team", disabled: false, dead: false, inflight: 2, last_refresh: "2026-07-22T10:00:00Z", penalty: 0, score: 2, is_primary: true, runtime: { status: "cooldown", status_detail: "Weekly limit is exhausted", secondary_used_percent: 99, secondary_window_minutes: 10080, secondary_reset_at: "2026-07-30T10:00:00Z", usage_retrieved_at: "2026-07-25T10:00:00Z", usage_source: "wham" }, reset_credits: { known: true, available_count: 1, expirations: ["2026-07-29T10:00:00Z"], retrieved_at: "2026-07-25T10:00:00Z", management_available: true, inventory_refresh_available: true, redemption_available: true, dashboard_url: "https://chatgpt.com/codex/settings/usage" }, usage: {}, totals: { total_input_tokens: 10, total_cached_tokens: 4, total_output_tokens: 3, total_billable_tokens: 13 } }];
@@ -46,9 +58,10 @@ test("Connections inventory shows actionable account status and operations", asy
 test("Connections operation failure remains localized", async ({ page }) => {
   await loginAs(page, "admin-elevated"); await page.goto("/admin/connections");
   const first = page.locator(".connection-row").first(); await first.click();
-  await page.route("**/api/v2/provider-connections/*/refresh", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "injected refresh failure" }) }));
-  await page.getByLabel("Connection detail").getByRole("button", { name: "Refresh credentials" }).click();
-  await expect(page.getByRole("alert")).toContainText("injected refresh failure");
+  await page.route("**/api/v2/provider-connections/*/disable", route => route.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "injected disable failure" }) }));
+  await page.getByLabel("Connection detail").getByRole("button", { name: "Disable" }).click();
+  await page.getByRole("alertdialog", { name: "Disable connection?" }).getByRole("button", { name: "Disable connection" }).click();
+  await expect(page.getByRole("alert")).toContainText("injected disable failure");
   await expect(page).toHaveURL(/\/admin\/connections$/);
 });
 

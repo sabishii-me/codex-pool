@@ -17,8 +17,9 @@
 # Desloppify
 .desloppify/
 
-# Local notes (deployment docs, personal notes)
+# Local notes and machine-specific deployment configuration
 .localnotes/
+.local.production-deploy*.json
 
 # Security audit iteration logs (working files)
 security-audit-results.tsv

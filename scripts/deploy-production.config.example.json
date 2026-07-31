@@ -1,0 +1,23 @@
+{
+  "Mode": "InPlace",
+  "TargetSSHIdentityFile": "",
+  "TargetBootstrap": false,
+  "AcceptedImage": "codex-pool:test-REPLACE_COMMIT",
+  "AcceptedRevision": "REPLACE_FULL_OR_12_CHAR_OCI_REVISION",
+  "TargetEndpoint": "http://REPLACE_PRODUCTION_HOST:8989",
+  "TargetPublicURL": "http://REPLACE_PRODUCTION_HOST:8989",
+  "TargetOAuthRedirectURI": "http://REPLACE_PRODUCTION_HOST:8989/auth/callback/google",
+  "TargetComposeProject": "codex-pool",
+  "ConflictPolicy": "Fail",
+  "PiProvider": "REPLACE_PI_PROVIDER",
+  "PiModel": "gpt-5.6-sol",
+  "PiExecutable": "pi.cmd",
+  "PiConfigPath": "C:\\Users\\REPLACE_USER\\.pi\\agent\\models.json",
+  "PiEndpointSwitchMode": "ValidateOnly",
+  "CommandTimeoutSeconds": 1800,
+  "PiTimeoutSeconds": 90,
+  "HealthTimeoutSeconds": 120,
+  "TestEndpoint": "http://127.0.0.1:18991",
+  "StagingEndpoint": "http://127.0.0.1:18990",
+  "SkipAdjacentImageGate": false
+}

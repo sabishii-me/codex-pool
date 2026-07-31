@@ -3,7 +3,10 @@ services:
     build: .
     image: codex-pool:latest
     ports:
-      - "8989:8989"
+      # Publish explicitly on IPv4. Docker Desktop's wildcard publication also
+      # creates a WSL relay on ::1 which accepts localhost connections but does
+      # not forward them reliably. 0.0.0.0 preserves both LAN and IPv4 localhost.
+      - "0.0.0.0:8989:8989"
     volumes:
       - ./pool:/app/pool
       - ./data:/app/data
@@ -18,6 +21,7 @@ services:
       - ALLOWED_EMAILS=${ALLOWED_EMAILS:-}
       - ADMIN_EMAILS=${ADMIN_EMAILS:-}
       - PUBLIC_URL=${PUBLIC_URL:-http://localhost:8989}
+      - OAUTH_GOOGLE_REDIRECT_URI=${OAUTH_GOOGLE_REDIRECT_URI:-}
       - POOL_JWT_SECRET=${POOL_JWT_SECRET:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]

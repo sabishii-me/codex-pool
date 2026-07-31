@@ -73,6 +73,145 @@ Running the same apply twice is a no-op and does not create a second rollback sn
 
 Conflicts are never automatically resolved. In particular, do not rewrite `user_id` to make two records compare equal. A conflict report must be reviewed against request provenance and authentication evidence. If attribution cannot be proven, keep the source quarantined.
 
+## Optional Windows production merge and deployment automation
+
+For installations that use this repository's Windows Docker Compose topology,
+canonical Test/Staging ledgers, Pi acceptance client, and Task Scheduler, use
+`scripts/deploy-production.ps1` for a reviewed Production merge, promotion, or
+machine relocation. Other installation topologies should use their own deployment
+workflow rather than assuming these environment names or Windows facilities.
+Do not reproduce this workflow as ad-hoc shell commands once it has been selected.
+
+The script is self-contained after launch. It does not depend on an LLM, terminal
+session, or API request remaining connected. It writes atomic phase state and local
+evidence, validates native programs by exit code rather than stderr text, and
+rolls back the matching complete Production-owned state and image after any
+post-stop failure.
+
+### Safety and downtime model
+
+1. Verify the immutable image, OCI revision, all source runtimes, Compose files,
+   destination URL, and existing Pi provider configuration.
+2. Take consistent SQLite online snapshots and simulate the complete ordered merge
+   while Production remains available.
+3. For relocation, transfer and verify the immutable image before downtime.
+4. Stop Test and Staging only long enough to freeze the final canonical source
+   ledgers, then restart and verify both exact accepted images immediately.
+   Production remains available throughout this source freeze.
+5. Stop Production only after final source inputs are ready and Test/Staging are
+   healthy again.
+6. Capture a complete stopped Production rollback archive, including data, pool,
+   provider specifications, Compose, and environment configuration.
+7. Apply Test then Staging canonical usage through `usage-migrate`, repeat both
+   applies as idempotency checks, and run SQLite integrity/uniqueness checks.
+8. Start the exact image at the destination and validate the actual configured URL,
+   signed-out API boundary, image/revision, Pi inference, and a durable canonical
+   accounting write.
+9. Any failure after Production stops first checks whether source Production is
+   already healthy and refuses an unnecessary recreate. Otherwise it restores the
+   prior matching Production image/state. Test/Staging restart is idempotent and
+   occurs before Production downtime, not after destination acceptance.
+
+A global local mutex prevents concurrent deployments. No script path modifies Pi
+configuration. The named Pi provider must already point exactly to the destination
+endpoint, otherwise preflight fails before downtime.
+
+### Configuration
+
+Copy `scripts/deploy-production.config.example.json` to an ignored
+`.local.production-deploy*.json` file and fill in the exact artifacts and endpoints.
+Do not commit local hostnames, SSH identity paths, Pi profile paths, or deployment
+configuration. Normal in-place operation uses:
+
+```json
+{
+  "Mode": "InPlace",
+  "AcceptedImage": "codex-pool:test-<commit>",
+  "AcceptedRevision": "<OCI revision>",
+  "TargetEndpoint": "http://<production-lan-ip>:8989",
+  "TargetPublicURL": "http://<production-lan-ip>:8989",
+  "TargetOAuthRedirectURI": "http://<production-lan-ip>:8989/auth/callback/google",
+  "ConflictPolicy": "Fail",
+  "PiProvider": "REPLACE_PI_PROVIDER",
+  "PiModel": "gpt-5.6-sol"
+}
+```
+
+A relocation additionally requires:
+
+```json
+{
+  "Mode": "Relocate",
+  "TargetHost": "ssh-user@new-production-host",
+  "TargetSSHIdentityFile": "C:\\Users\\REPLACE_USER\\.ssh\\target-key",
+  "TargetBootstrap": false,
+  "TargetRoot": "/srv/codex-pool",
+  "TargetEndpoint": "http://new-production-host:8989",
+  "TargetPublicURL": "http://new-production-host:8989",
+  "TargetOAuthRedirectURI": "http://new-production-host:8989/auth/callback/google",
+  "PiEndpointSwitchMode": "UpdateOnCutover"
+}
+```
+
+A relocation with `PiEndpointSwitchMode: UpdateOnCutover` first validates the new
+host using an isolated temporary Pi profile through `PI_CODING_AGENT_DIR`. Only
+after that passes does it atomically update the selected real Pi provider URL and
+retest through the normal Pi profile. The original `models.json` is preserved in
+evidence and restored automatically if the cutover rolls back. `ValidateOnly`
+never edits Pi and requires the provider to already point exactly at the target.
+
+Relocation transfers the complete **Production-owned** authority state only after
+all source writers stop. This is not permission to copy Test/Staging credentials,
+users, MFA, OAuth, or provider state. The target root must be empty of Production
+state; the script refuses to overwrite an existing authority.
+
+Conflict policy defaults to `Fail`. `TestWinsUserIdOnly` is available only for an
+explicitly reviewed recurrence of duplicate canonical identities whose sole payload
+difference is `user_id`; every quarantined identity is written to evidence. It is
+never selected implicitly.
+
+### Trigger and monitor
+
+Run non-destructive preflight in the foreground:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deploy-production.ps1 `
+  -ConfigPath .local.production-deploy.json
+```
+
+Run the complete online snapshot/conflict/simulation path without stopping or
+changing any gateway:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deploy-production.ps1 `
+  -ConfigPath .local.production-deploy.json `
+  -PrepareOnly
+```
+
+Launch the complete autonomous operation and return immediately:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/start-production-deployment.ps1 `
+  -ConfigPath .local.production-deploy.json `
+  -Execute `
+  -Confirmation DEPLOY-PRODUCTION-WITH-CANONICAL-USAGE
+```
+
+Read status without changing anything:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass `
+  -File scripts/deploy-production-status.ps1
+```
+
+Success requires `COMPLETED.json`; failure writes `FAILED.json`. The transcript,
+process stdout/stderr, migration reports, snapshots, integrity reports, quarantine
+evidence, Pi output, accounting evidence, and rollback manifest are under
+`data/backups/production-deploy-<UTC>/`.
+
 ## Promotion procedure
 
 1. Build and validate an immutable image in Test.

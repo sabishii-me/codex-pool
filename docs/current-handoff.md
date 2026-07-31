@@ -11,7 +11,7 @@ Start the next session by reading:
 
 ## Repository state
 
-- Repository: `E:\AI\ideas\codex-pool`
+- Repository: the checkout root containing this document
 - Branch: `feat/ui-ux-redesign`
 - Product release commit: `bd1f27622f8b`
 - Product release subject: `fix: compose usage curves with fixed columns`

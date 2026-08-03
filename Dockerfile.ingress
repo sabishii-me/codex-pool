@@ -1,0 +1,5 @@
+FROM nginx:1.27-alpine
+COPY deploy/nginx/ingress.conf /etc/nginx/conf.d/default.conf
+COPY deploy/nginx/proxy-common.conf /etc/nginx/proxy-common.conf
+EXPOSE 8989
+HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:8989/ingress-healthz || exit 1

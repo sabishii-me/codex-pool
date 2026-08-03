@@ -1,0 +1,64 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    image: ${PRODUCTION_API_IMAGE:-codex-pool-api:latest}
+    volumes:
+      - ./pool:/app/pool
+      - ./data:/app/data
+      - ./provider-specs:/app/provider-specs
+    environment:
+      POOL_DIR: /app/pool
+      PROVIDER_SPECS_DIR: /app/provider-specs
+      PROXY_DB_PATH: /app/data/proxy.db
+      POOL_USERS_PATH: /app/data/pool_users.json
+      ADMIN_MFA_PATH: /app/data/admin_mfa.json
+      CODEX_FINGERPRINT_STATE_PATH: /app/data/codex_fingerprint.json
+      PROXY_LISTEN_ADDR: 0.0.0.0:8989
+      PROXY_MAX_ATTEMPTS: 3
+      PROXY_USAGE_REFRESH_SECONDS: 300
+      OAUTH_GOOGLE_CLIENT_ID: ${OAUTH_GOOGLE_CLIENT_ID:-}
+      OAUTH_GOOGLE_CLIENT_SECRET: ${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8989}
+      OAUTH_GOOGLE_REDIRECT_URI: ${OAUTH_GOOGLE_REDIRECT_URI:-}
+      POOL_JWT_SECRET: ${POOL_JWT_SECRET:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: ${PRODUCTION_WEB_IMAGE:-codex-pool-web:latest}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/web-healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  ingress:
+    build:
+      context: .
+      dockerfile: Dockerfile.ingress
+    image: ${PRODUCTION_INGRESS_IMAGE:-codex-pool-ingress:latest}
+    ports:
+      - "0.0.0.0:8989:8989"
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8989/ingress-healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped

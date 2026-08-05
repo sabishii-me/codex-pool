@@ -115,44 +115,20 @@ func (h *proxyHandler) handleAPIKeyList(w http.ResponseWriter, acctType AccountT
 	})
 }
 
-// handleAPIKeyRemove marks an account as dead.
+// handleAPIKeyRemove permanently removes an account credential file.
 func (h *proxyHandler) handleAPIKeyRemove(w http.ResponseWriter, acctType AccountType, accountID string) {
 	accounts := h.pool.allAccounts()
-	var target *ProviderConnection
-	for _, acc := range accounts {
-		if acc.Type == acctType && acc.ID == accountID {
-			target = acc
-			break
+	for _, account := range accounts {
+		if account.Type == acctType && account.ID == accountID {
+			h.removeProviderConnection(w, accountID)
+			return
 		}
 	}
-
-	if target == nil {
-		respondJSONError(w, http.StatusNotFound, "account not found")
-		return
-	}
-
-	target.mu.Lock()
-	target.Dead = true
-	target.Penalty += 100.0
-	target.LastPenalty = time.Now()
-	target.mu.Unlock()
-
-	if err := saveAccount(target); err != nil {
-		log.Printf("warning: failed to save dead %s account %s: %v", acctType, accountID, err)
-		respondJSONError(w, http.StatusInternalServerError, "failed to persist: "+err.Error())
-		return
-	}
-
-	log.Printf("removed %s account %s (marked dead)", acctType, accountID)
-
-	respondJSON(w, map[string]any{
-		"success":    true,
-		"account_id": accountID,
-	})
+	respondJSONError(w, http.StatusNotFound, "account not found")
 }
 
 // saveAPIKeyAccountFile creates a new API key account file and reloads accounts.
-func (h *proxyHandler) saveAPIKeyAccountFile(w http.ResponseWriter, acctType AccountType, subdir, apiKey string) {
+func (h *proxyHandler) saveAPIKeyAccountFile(w http.ResponseWriter, acctType AccountType, subdir, apiKey string, metadata ...map[string]any) {
 	accountID := subdir + "_" + randomHex(4)
 
 	poolDir := filepath.Join(h.cfg.poolDir, subdir)
@@ -177,6 +153,13 @@ func (h *proxyHandler) saveAPIKeyAccountFile(w http.ResponseWriter, acctType Acc
 	authJSON := map[string]any{
 		"api_key":  apiKey,
 		"added_at": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	if len(metadata) > 0 {
+		for key, value := range metadata[0] {
+			if key != "api_key" && key != "added_at" {
+				authJSON[key] = value
+			}
+		}
 	}
 
 	data, err := json.MarshalIndent(authJSON, "", "  ")

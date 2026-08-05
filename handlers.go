@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode"
@@ -186,6 +188,59 @@ func (h *proxyHandler) setAccountDisabled(w http.ResponseWriter, accountID strin
 	}
 	log.Printf("%s account %s", action, accountID)
 	respondJSON(w, map[string]any{"status": "ok", "account": accountID, "disabled": disabled})
+}
+
+func (h *proxyHandler) removeProviderConnection(w http.ResponseWriter, accountID string) {
+	h.pool.mu.RLock()
+	var target *ProviderConnection
+	for _, account := range h.pool.accounts {
+		if account.ID == accountID {
+			target = account
+			break
+		}
+	}
+	h.pool.mu.RUnlock()
+	if target == nil {
+		respondJSONError(w, http.StatusNotFound, "account not found")
+		return
+	}
+
+	target.mu.Lock()
+	file := target.File
+	wasDisabled := target.Disabled
+	target.Disabled = true
+	target.mu.Unlock()
+	if strings.TrimSpace(file) == "" {
+		target.mu.Lock()
+		target.Disabled = wasDisabled
+		target.mu.Unlock()
+		respondJSONError(w, http.StatusConflict, "connection has no removable credential file")
+		return
+	}
+	root, rootErr := filepath.Abs(h.cfg.poolDir)
+	credential, fileErr := filepath.Abs(file)
+	relative, relErr := filepath.Rel(root, credential)
+	if rootErr != nil || fileErr != nil || relErr != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		target.mu.Lock()
+		target.Disabled = wasDisabled
+		target.mu.Unlock()
+		respondJSONError(w, http.StatusConflict, "connection credential file is outside the pool")
+		return
+	}
+	if err := os.Remove(credential); err != nil {
+		target.mu.Lock()
+		target.Disabled = wasDisabled
+		target.mu.Unlock()
+		if os.IsNotExist(err) {
+			respondJSONError(w, http.StatusNotFound, "connection credential file not found")
+		} else {
+			respondJSONError(w, http.StatusInternalServerError, "failed to delete connection credential")
+		}
+		return
+	}
+	h.reloadAccounts()
+	log.Printf("removed provider connection %s and deleted its credential file", accountID)
+	respondJSON(w, map[string]any{"status": "ok", "connection_id": accountID, "removed": true})
 }
 
 // resurrectAccount marks a dead account as alive and resets its penalty.

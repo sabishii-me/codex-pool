@@ -7,26 +7,32 @@ import (
 )
 
 type poolModelDescriptor struct {
-	ID                 string          `json:"id"`
-	Name               string          `json:"name,omitempty"`
-	Protocol           string          `json:"protocol"`
-	ContextWindow      int             `json:"contextWindow,omitempty"`
-	Description        string          `json:"description,omitempty"`
-	Provider           string          `json:"provider,omitempty"`
-	UpstreamID         string          `json:"upstream_id,omitempty"`
-	MaxOutputTokens    int             `json:"max_output_tokens,omitempty"`
-	Protocols          []string        `json:"protocols,omitempty"`
-	Modalities         []string        `json:"modalities,omitempty"`
-	Capabilities       map[string]bool `json:"capabilities,omitempty"`
-	SupportedMimeTypes []string        `json:"supported_mime_types,omitempty"`
-	Recommended        bool            `json:"recommended,omitempty"`
-	QuotaRemaining     *float64        `json:"quota_remaining_fraction,omitempty"`
-	Aliases            []string        `json:"aliases,omitempty"`
-	SupportingAccounts int             `json:"supporting_accounts,omitempty"`
-	AvailableAccounts  int             `json:"available_accounts,omitempty"`
-	AvailableNow       bool            `json:"available_now"`
-	NextResetAt        *time.Time      `json:"next_reset_at,omitempty"`
-	Stale              bool            `json:"stale,omitempty"`
+	ID                   string          `json:"id"`
+	Name                 string          `json:"name,omitempty"`
+	Protocol             string          `json:"protocol"`
+	ContextWindow        int             `json:"contextWindow,omitempty"`
+	Description          string          `json:"description,omitempty"`
+	Provider             string          `json:"provider,omitempty"`
+	UpstreamID           string          `json:"upstream_id,omitempty"`
+	MaxOutputTokens      int             `json:"max_output_tokens,omitempty"`
+	Protocols            []string        `json:"protocols,omitempty"`
+	Modalities           []string        `json:"modalities,omitempty"` // deprecated: input modalities
+	ModelKind            WorkloadKind    `json:"model_kind,omitempty"`
+	InputModalities      []string        `json:"input_modalities,omitempty"`
+	OutputModalities     []string        `json:"output_modalities,omitempty"`
+	Capabilities         map[string]bool `json:"capabilities,omitempty"`
+	SupportedMimeTypes   []string        `json:"supported_mime_types,omitempty"`
+	Recommended          bool            `json:"recommended,omitempty"`
+	QuotaRemaining       *float64        `json:"quota_remaining_fraction,omitempty"`
+	Aliases              []string        `json:"aliases,omitempty"`
+	SupportingAccounts   int             `json:"supporting_accounts,omitempty"`
+	AvailableAccounts    int             `json:"available_accounts,omitempty"`
+	AvailableNow         bool            `json:"available_now"`
+	NextResetAt          *time.Time      `json:"next_reset_at,omitempty"`
+	Stale                bool            `json:"stale,omitempty"`
+	CapabilityProvenance string          `json:"capability_provenance,omitempty"`
+	CapabilitySourceURL  string          `json:"capability_source_url,omitempty"`
+	CapabilityVerifiedAt string          `json:"capability_verified_at,omitempty"`
 }
 
 func poolModelDescriptors(pools ...*ProviderPool) []poolModelDescriptor {
@@ -92,6 +98,17 @@ func poolModelDescriptors(pools ...*ProviderPool) []poolModelDescriptor {
 			SupportedMimeTypes: append([]string(nil), model.SupportedMimeTypes...), Recommended: model.Recommended, QuotaRemaining: model.Quota.RemainingFraction,
 			Aliases: aliases, SupportingAccounts: model.SupportingAccounts, AvailableAccounts: model.AvailableAccounts,
 			AvailableNow: model.AvailableNow, NextResetAt: optionalModelReset(model.NextResetAt), Stale: model.Stale,
+		})
+	}
+	for _, model := range nativeImageModels {
+		supportingAccounts, availableAccounts, availableNow := poolModelAvailability(pool, model.ProviderID)
+		models = append(models, poolModelDescriptor{
+			ID: model.ID, Name: model.UpstreamID, Protocol: "openai-images", Provider: string(model.ProviderID), UpstreamID: model.UpstreamID,
+			Protocols: []string{"openai-images"}, ModelKind: model.Kind,
+			InputModalities: append([]string(nil), model.InputModalities...), OutputModalities: append([]string(nil), model.OutputModalities...),
+			Capabilities: map[string]bool{"native_image_generation": true}, SupportedMimeTypes: append([]string(nil), model.OutputMIMETypes...),
+			SupportingAccounts: supportingAccounts, AvailableAccounts: availableAccounts, AvailableNow: availableNow,
+			CapabilityProvenance: model.Provenance, CapabilitySourceURL: model.ProvenanceURL, CapabilityVerifiedAt: model.VerifiedAt,
 		})
 	}
 	return models

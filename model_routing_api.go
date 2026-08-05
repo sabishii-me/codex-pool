@@ -74,12 +74,24 @@ func (h *proxyHandler) serveModelRouting(w http.ResponseWriter, r *http.Request)
 			break
 		}
 	}
-	route, ok := h.routeRegistry().Resolve("/v1/responses", modelID)
-	if !known || !ok || route.Provider == nil {
+	nativeModel, native := resolveNativeModel(modelID, WorkloadImageGeneration)
+	route, routeOK := h.routeRegistry().Resolve("/v1/responses", modelID)
+	var canonicalModel string
+	var providerID ProviderID
+	switch {
+	case native:
+		canonicalModel, providerID = nativeModel.ID, nativeModel.ProviderID
+	case routeOK && route.Provider != nil:
+		canonicalModel, providerID = route.CanonicalModel, route.Provider.Type()
+	default:
 		respondJSONError(w, http.StatusNotFound, "model route not found")
 		return
 	}
-	projection := ModelRoutingProjection{RequestedModel: modelID, CanonicalModel: route.CanonicalModel, ProviderID: route.Provider.Type(), SelectionMode: "request_time", EligibleConnections: []ModelRoutingConnection{}, ExcludedConnections: []ModelRoutingConnection{}}
+	if !known {
+		respondJSONError(w, http.StatusNotFound, "model route not found")
+		return
+	}
+	projection := ModelRoutingProjection{RequestedModel: modelID, CanonicalModel: canonicalModel, ProviderID: providerID, SelectionMode: "request_time", EligibleConnections: []ModelRoutingConnection{}, ExcludedConnections: []ModelRoutingConnection{}}
 	projection.Evidence.Kind, projection.Evidence.Source, projection.Evidence.GeneratedAt = "runtime", "connection_selector_policy", time.Now().UTC()
 	views := h.connectionViewService().OperatorConnections()
 	primary := map[string]bool{}
@@ -94,7 +106,7 @@ func (h *proxyHandler) serveModelRouting(w http.ResponseWriter, r *http.Request)
 		}
 		identity := connection.connectionIdentityLocked()
 		item := ModelRoutingConnection{PublicID: hashAccountID(connection.ID), DisplayName: identity.DisplayName, PlanType: connection.PlanType, Inflight: atomic.LoadInt64(&connection.Inflight), Primary: primary[connection.ID]}
-		item.Reason = routingExclusionReasonLocked(connection, projection.ProviderID, route.CanonicalModel, projection.Evidence.GeneratedAt)
+		item.Reason = routingExclusionReasonLocked(connection, projection.ProviderID, canonicalModel, projection.Evidence.GeneratedAt)
 		connection.mu.Unlock()
 		if item.Reason == "" {
 			projection.EligibleConnections = append(projection.EligibleConnections, item)

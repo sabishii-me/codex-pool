@@ -49,6 +49,8 @@ type config struct {
 	qwenBase               *url.URL // Qwen (DashScope Coding Plan) Anthropic-compatible endpoint
 	openrouterBase         *url.URL // OpenRouter Anthropic-compatible endpoint
 	nvidiaBase             *url.URL // NVIDIA NIM OpenAI Chat Completions endpoint
+	googleAIImageBase      *url.URL // Google AI Studio native image-generation endpoint
+	bflBase                *url.URL // Black Forest Labs native image-generation endpoint
 	poolDir                string
 	providerSpecsDir       string
 
@@ -130,6 +132,8 @@ func buildConfig() *config {
 	cfg.qwenBase = mustParse(getenv("UPSTREAM_QWEN_BASE", "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic"))
 	cfg.openrouterBase = mustParse(getenv("UPSTREAM_OPENROUTER_BASE", "https://openrouter.ai/api"))
 	cfg.nvidiaBase = mustParse(getenv("UPSTREAM_NVIDIA_BASE", "https://integrate.api.nvidia.com/v1"))
+	cfg.googleAIImageBase = mustParse(getenv("UPSTREAM_GOOGLE_AI_IMAGE_BASE", "https://generativelanguage.googleapis.com"))
+	cfg.bflBase = mustParse(getenv("UPSTREAM_BFL_BASE", "https://api.bfl.ai"))
 	cfg.grokBase = mustParse(getConfigString("UPSTREAM_GROK_BASE", fileCfg.GrokBase, "https://cli-chat-proxy.grok.com/v1"))
 	cfg.poolDir = getConfigString("POOL_DIR", fileCfg.PoolDir, "pool")
 	cfg.providerSpecsDir = strings.TrimSpace(getenv("PROVIDER_SPECS_DIR", ""))
@@ -260,7 +264,9 @@ func main() {
 	qwenProvider := NewQwenProvider(cfg.qwenBase)
 	openrouterProvider := NewOpenRouterProvider(cfg.openrouterBase)
 	nvidiaProvider := NewNvidiaProvider(cfg.nvidiaBase)
-	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider)
+	googleAIImageProvider := NewGoogleAIImageProvider(cfg.googleAIImageBase)
+	bflProvider := NewBFLProvider(cfg.bflBase)
+	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider, googleAIImageProvider, bflProvider)
 	if cfg.providerSpecsDir != "" {
 		if err := ReloadProviderSpecs(registry, cfg.providerSpecsDir); err != nil {
 			log.Fatalf("load provider specs: %v", err)
@@ -289,6 +295,8 @@ func main() {
 	qwenCount := pool.countByType(AccountTypeQwen)
 	openrouterCount := pool.countByType(AccountTypeOpenRouter)
 	nvidiaCount := pool.countByType(AccountTypeNvidia)
+	googleAIImageCount := pool.countByType(AccountTypeGoogleAIImage)
+	bflCount := pool.countByType(AccountTypeBFL)
 	if pool.count() == 0 {
 		log.Printf("warning: loaded 0 accounts from %s", cfg.poolDir)
 	}
@@ -535,8 +543,8 @@ func main() {
 	} else {
 		log.Printf("WARNING: no admin emails configured, operator controls are unreachable")
 	}
-	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
-		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
+	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, google_ai_image=%d, bfl=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
+		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, googleAIImageCount, bflCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
 	serveErr := serveUntilShutdown(srv, h, processCtx.Done(), cfg.shutdownGrace)
 	stopProcess()
 	jobs.Wait()
@@ -1725,6 +1733,9 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	bodyBytes, bodySample, err := readBodyForReplay(r.Body, false, int64(16*1024))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v1/images/generations") && h.handleNativeImageGeneration(w, r, bodyBytes, userID, originID, reqID) {
 		return
 	}
 	if strings.HasPrefix(r.URL.Path, "/v1/images/generations") {

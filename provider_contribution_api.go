@@ -62,6 +62,8 @@ func (h *proxyHandler) providerContributionAPIService() *ProviderContributionAPI
 			"/api/pool/accounts/qwen/add":             h.handleQwenAdd,
 			"/api/pool/accounts/openrouter/add":       h.handleOpenRouterAdd,
 			"/api/pool/accounts/nvidia/add":           h.handleNvidiaAdd,
+			"/api/pool/accounts/google-ai-image/add":  h.handleGoogleAIImageAdd,
+			"/api/pool/accounts/bfl/add":              h.handleBFLAdd,
 		},
 	}
 }

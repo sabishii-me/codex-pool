@@ -101,6 +101,7 @@ func (h *proxyHandler) providerOperationsAPIService() *ProviderOperationsAPI {
 			{prefix: "/admin/qwen", handler: h.serveQwenAdmin},
 			{prefix: "/admin/openrouter", handler: h.serveOpenRouterAdmin},
 			{prefix: "/admin/nvidia", handler: h.serveNvidiaAdmin},
+			{prefix: "/admin/bfl", handler: h.serveBFLAdmin},
 		},
 	}
 }

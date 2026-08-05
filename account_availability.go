@@ -58,6 +58,9 @@ func accountAvailableForRoutingLocked(a *ProviderConnection, now time.Time) bool
 	if accountCoolingDownLocked(a, now) {
 		return false
 	}
+	if a.Type == AccountTypeBFL && a.Usage.HasCredits && a.Usage.CreditsBalance <= 0 {
+		return false
+	}
 	return !accountUsageExhaustedLocked(a)
 }
 

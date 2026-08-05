@@ -52,6 +52,8 @@ type OperatorProviderConnectionView struct {
 	ScoreTooltip      string                             `json:"score_tooltip,omitempty"`
 	IsPrimary         bool                               `json:"is_primary"`
 	Runtime           ProviderConnectionRuntimeView      `json:"runtime"`
+	CreditBalance     *float64                           `json:"credit_balance,omitempty"`
+	CreditRetrievedAt *time.Time                         `json:"credit_retrieved_at,omitempty"`
 	ResetCredits      ProviderConnectionResetCreditsView `json:"reset_credits"`
 	Usage             UsageSnapshot                      `json:"usage"`
 	Totals            AccountUsage                       `json:"totals"`
@@ -317,6 +319,11 @@ func (service *ConnectionViewService) snapshots(now time.Time) []connectionViewS
 			Runtime:      providerConnectionRuntimeLocked(connection, now),
 			ResetCredits: resetCredits,
 			Usage:        connection.Usage, Totals: connection.Totals,
+		}
+		if connection.Type == AccountTypeBFL && connection.Usage.HasCredits {
+			balance := connection.Usage.CreditsBalance
+			canonical.CreditBalance = &balance
+			canonical.CreditRetrievedAt = optionalTime(connection.Usage.RetrievedAt)
 		}
 		legacy := LegacyOperatorConnectionView{
 			ID: canonical.ID, PublicID: canonical.PublicID, Type: canonical.ProviderID,

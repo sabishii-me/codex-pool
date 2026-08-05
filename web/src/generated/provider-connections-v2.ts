@@ -41,6 +41,8 @@ export interface OperatorProviderConnectionV2 {
   score_tooltip?: string;
   is_primary: boolean;
   runtime: ProviderConnectionRuntimeView;
+  credit_balance?: number;
+  credit_retrieved_at?: string;
   reset_credits: {
   known: boolean;
   available_count: number;

@@ -167,7 +167,8 @@ func (h *proxyHandler) pollUpstreamUsageContext(ctx context.Context) {
 		// Never send their credentials to the Codex WHAM endpoint below.
 		if accType == AccountTypeXiaomi || accType == AccountTypeKimiPlatform ||
 			accType == AccountTypeDeepSeek || accType == AccountTypeQwen ||
-			accType == AccountTypeOpenRouter || accType == AccountTypeNvidia {
+			accType == AccountTypeOpenRouter || accType == AccountTypeNvidia ||
+			accType == AccountTypeBFL || accType == AccountTypeGoogleAIImage {
 			continue
 		}
 

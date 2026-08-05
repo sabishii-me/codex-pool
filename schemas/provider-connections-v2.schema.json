@@ -57,6 +57,8 @@
         "score_tooltip": { "type": "string" },
         "is_primary": { "type": "boolean" },
         "runtime": { "$ref": "#/$defs/ProviderConnectionRuntimeView" },
+        "credit_balance": { "type": "number" },
+        "credit_retrieved_at": { "type": "string", "format": "date-time" },
         "reset_credits": {
           "type": "object",
           "additionalProperties": false,

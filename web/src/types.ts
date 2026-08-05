@@ -195,6 +195,9 @@ export interface ModelDescriptor {
   max_output_tokens?: number;
   protocols?: string[];
   modalities?: string[];
+  model_kind?: "text_generation" | "image_generation" | "embedding" | "audio" | "video";
+  input_modalities?: string[];
+  output_modalities?: string[];
   capabilities?: Record<string, boolean>;
   supported_mime_types?: string[];
   recommended?: boolean;
@@ -205,6 +208,9 @@ export interface ModelDescriptor {
   available_now: boolean;
   next_reset_at?: string;
   stale?: boolean;
+  capability_provenance?: string;
+  capability_source_url?: string;
+  capability_verified_at?: string;
 }
 
 export interface ModelCatalog {

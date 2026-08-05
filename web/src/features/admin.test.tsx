@@ -37,7 +37,7 @@ describe("provider account contribution UX", () => {
 
   it("includes every backend-supported contribution provider and credential modes", () => {
     const html = renderToStaticMarkup(<AccountContribution onClose={() => {}} onAdded={async () => {}} />);
-    for (const provider of ["Codex", "Claude", "Google Antigravity", "Kimi Coding Plan", "Kimi Platform", "MiniMax", "Z.ai", "Xiaomi", "DeepSeek", "Qwen", "OpenRouter", "NVIDIA", "Grok"]) {
+    for (const provider of ["Codex", "Claude", "Google Antigravity", "Kimi Coding Plan", "Kimi Platform", "MiniMax", "Z.ai", "Xiaomi", "DeepSeek", "Qwen", "OpenRouter", "NVIDIA", "Black Forest Labs", "Grok"]) {
       expect(html).toContain(provider);
     }
     expect(html).toContain("Generate authorization link");

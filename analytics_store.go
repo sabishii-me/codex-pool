@@ -33,6 +33,16 @@ type UsageEvent struct {
 	ReasoningTokens  int64
 	BillableTokens   int64
 	CostUSD          float64
+	WorkloadKind     WorkloadKind
+	Status           string
+	ImageCount       int
+	ImageMIME        string
+	ImageWidth       int
+	ImageHeight      int
+	OperationID      string
+	FailureClass     string
+	MediaCostUSD     *float64
+	EconomicsKnown   bool
 }
 
 func usageEventFromRequest(usage RequestUsage, costUSD float64) UsageEvent {
@@ -149,7 +159,17 @@ func createAnalyticsTables(db *sql.DB) error {
 		output_tokens INTEGER NOT NULL DEFAULT 0,
 		reasoning_tokens INTEGER NOT NULL DEFAULT 0,
 		billable_tokens INTEGER NOT NULL DEFAULT 0,
-		cost_usd REAL NOT NULL DEFAULT 0
+		cost_usd REAL NOT NULL DEFAULT 0,
+		workload_kind TEXT NOT NULL DEFAULT 'text_generation',
+		status TEXT NOT NULL DEFAULT 'success',
+		image_count INTEGER NOT NULL DEFAULT 0,
+		image_mime TEXT,
+		image_width INTEGER NOT NULL DEFAULT 0,
+		image_height INTEGER NOT NULL DEFAULT 0,
+		operation_id TEXT,
+		failure_class TEXT,
+		media_cost_usd REAL,
+		economics_known INTEGER NOT NULL DEFAULT 1
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_events_request ON usage_events(connection_id, request_id) WHERE request_id != '';
 	CREATE INDEX IF NOT EXISTS idx_usage_events_completed ON usage_events(completed_at);
@@ -197,6 +217,16 @@ func createAnalyticsTables(db *sql.DB) error {
 	for _, migration := range []string{
 		`ALTER TABLE request_costs ADD COLUMN request_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE request_costs ADD COLUMN cache_creation_tokens INTEGER DEFAULT 0`,
+		`ALTER TABLE usage_events ADD COLUMN workload_kind TEXT NOT NULL DEFAULT 'text_generation'`,
+		`ALTER TABLE usage_events ADD COLUMN status TEXT NOT NULL DEFAULT 'success'`,
+		`ALTER TABLE usage_events ADD COLUMN image_count INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE usage_events ADD COLUMN image_mime TEXT`,
+		`ALTER TABLE usage_events ADD COLUMN image_width INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE usage_events ADD COLUMN image_height INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE usage_events ADD COLUMN operation_id TEXT`,
+		`ALTER TABLE usage_events ADD COLUMN failure_class TEXT`,
+		`ALTER TABLE usage_events ADD COLUMN media_cost_usd REAL`,
+		`ALTER TABLE usage_events ADD COLUMN economics_known INTEGER NOT NULL DEFAULT 1`,
 	} {
 		if _, migrationErr := db.Exec(migration); migrationErr != nil && !strings.Contains(strings.ToLower(migrationErr.Error()), "duplicate column") {
 			return migrationErr
@@ -263,6 +293,17 @@ func (s *AnalyticsStore) recordRequest(ru RequestUsage, costUSD float64) error {
 // request_costs compatibility projection in the same SQLite transaction.
 // It returns false for an already-persisted connection/request identity.
 func (s *AnalyticsStore) recordUsageEvent(event UsageEvent) (bool, error) {
+	if event.WorkloadKind == "" {
+		event.WorkloadKind = WorkloadTextGeneration
+	}
+	if event.Status == "" {
+		event.Status = "success"
+	}
+	if event.WorkloadKind == WorkloadTextGeneration && !event.EconomicsKnown {
+		// Existing text accounting has authoritative pricing semantics; preserve
+		// compatibility. Native media callers must set unknown economics explicitly.
+		event.EconomicsKnown = true
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tx, err := s.db.Begin()
@@ -274,12 +315,15 @@ func (s *AnalyticsStore) recordUsageEvent(event UsageEvent) (bool, error) {
 		INSERT OR IGNORE INTO usage_events (
 			request_id, started_at, completed_at, user_id, origin_id, provider_id,
 			connection_id, model_id, plan_type, input_tokens, cache_read_tokens,
-			cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd,
+			workload_kind, status, image_count, image_mime, image_width, image_height,
+			operation_id, failure_class, media_cost_usd, economics_known)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.RequestID, event.StartedAt.UTC().Format(time.RFC3339Nano), event.CompletedAt.UTC().Format(time.RFC3339Nano),
 		event.UserID, event.OriginID, string(event.ProviderID), event.ConnectionID, event.ModelID, event.PlanType,
 		event.InputTokens, event.CacheReadTokens, event.CacheWriteTokens, event.OutputTokens,
-		event.ReasoningTokens, event.BillableTokens, event.CostUSD,
+		event.ReasoningTokens, event.BillableTokens, event.CostUSD, string(event.WorkloadKind), event.Status,
+		event.ImageCount, event.ImageMIME, event.ImageWidth, event.ImageHeight, event.OperationID, event.FailureClass, event.MediaCostUSD, event.EconomicsKnown,
 	)
 	if err != nil {
 		return false, err

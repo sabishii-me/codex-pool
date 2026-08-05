@@ -244,7 +244,7 @@ export interface AccountContributionResult {
 	  error?: string;
 }
 
-export async function contributeAPIKey(provider: "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "deepseek" | "qwen" | "openrouter" | "nvidia", apiKey: string) {
+export async function contributeAPIKey(provider: "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "deepseek" | "qwen" | "openrouter" | "nvidia" | "google-ai-image" | "bfl", apiKey: string) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

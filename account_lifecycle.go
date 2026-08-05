@@ -13,7 +13,8 @@ func accountUsesStaticAPIKey(accountType AccountType) bool {
 	switch accountType {
 	case AccountTypeKimi, AccountTypeKimiPlatform, AccountTypeMinimax,
 		AccountTypeZAI, AccountTypeXiaomi, AccountTypeDeepSeek,
-		AccountTypeQwen, AccountTypeOpenRouter, AccountTypeNvidia:
+		AccountTypeQwen, AccountTypeOpenRouter, AccountTypeNvidia, AccountTypeBFL,
+		AccountTypeGoogleAIImage:
 		return true
 	default:
 		return false

@@ -20,20 +20,22 @@ type ProviderID string
 type AccountType = ProviderID
 
 const (
-	AccountTypeCodex        AccountType = "codex"
-	AccountTypeGemini       AccountType = "gemini"
-	AccountTypeAntigravity  AccountType = "antigravity"
-	AccountTypeClaude       AccountType = "claude"
-	AccountTypeKimi         AccountType = "kimi"
-	AccountTypeKimiPlatform AccountType = "kimi-platform"
-	AccountTypeMinimax      AccountType = "minimax"
-	AccountTypeZAI          AccountType = "zai"
-	AccountTypeXiaomi       AccountType = "xiaomi"
-	AccountTypeGrok         AccountType = "grok"
-	AccountTypeDeepSeek     AccountType = "deepseek"
-	AccountTypeQwen         AccountType = "qwen"
-	AccountTypeOpenRouter   AccountType = "openrouter"
-	AccountTypeNvidia       AccountType = "nvidia"
+	AccountTypeCodex         AccountType = "codex"
+	AccountTypeGemini        AccountType = "gemini"
+	AccountTypeAntigravity   AccountType = "antigravity"
+	AccountTypeClaude        AccountType = "claude"
+	AccountTypeKimi          AccountType = "kimi"
+	AccountTypeKimiPlatform  AccountType = "kimi-platform"
+	AccountTypeMinimax       AccountType = "minimax"
+	AccountTypeZAI           AccountType = "zai"
+	AccountTypeXiaomi        AccountType = "xiaomi"
+	AccountTypeGrok          AccountType = "grok"
+	AccountTypeDeepSeek      AccountType = "deepseek"
+	AccountTypeQwen          AccountType = "qwen"
+	AccountTypeOpenRouter    AccountType = "openrouter"
+	AccountTypeNvidia        AccountType = "nvidia"
+	AccountTypeBFL           AccountType = "bfl"
+	AccountTypeGoogleAIImage AccountType = "google-ai-image"
 )
 
 type ProviderConnection struct {
@@ -365,20 +367,22 @@ func loadPool(dir string, registry *ProviderRegistry) ([]*ProviderConnection, er
 
 	// Load accounts from provider subdirectories: pool/codex/, pool/claude/, pool/gemini/
 	providerDirs := map[string]ProviderID{
-		"codex":         AccountTypeCodex,
-		"claude":        AccountTypeClaude,
-		"gemini":        AccountTypeGemini,
-		"antigravity":   AccountTypeAntigravity,
-		"kimi":          AccountTypeKimi,
-		"kimi-platform": AccountTypeKimiPlatform,
-		"minimax":       AccountTypeMinimax,
-		"zai":           AccountTypeZAI,
-		"xiaomi":        AccountTypeXiaomi,
-		"grok":          AccountTypeGrok,
-		"deepseek":      AccountTypeDeepSeek,
-		"qwen":          AccountTypeQwen,
-		"openrouter":    AccountTypeOpenRouter,
-		"nvidia":        AccountTypeNvidia,
+		"codex":           AccountTypeCodex,
+		"claude":          AccountTypeClaude,
+		"gemini":          AccountTypeGemini,
+		"antigravity":     AccountTypeAntigravity,
+		"kimi":            AccountTypeKimi,
+		"kimi-platform":   AccountTypeKimiPlatform,
+		"minimax":         AccountTypeMinimax,
+		"zai":             AccountTypeZAI,
+		"xiaomi":          AccountTypeXiaomi,
+		"grok":            AccountTypeGrok,
+		"deepseek":        AccountTypeDeepSeek,
+		"qwen":            AccountTypeQwen,
+		"openrouter":      AccountTypeOpenRouter,
+		"nvidia":          AccountTypeNvidia,
+		"bfl":             AccountTypeBFL,
+		"google-ai-image": AccountTypeGoogleAIImage,
 	}
 	for _, provider := range registry.All() {
 		if _, ok := provider.(*DeclarativeProvider); ok {
@@ -702,7 +706,7 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 					break
 				}
 				a.mu.Lock()
-				ok := !a.Dead && !a.Disabled && (accountType == "" || a.Type == accountType) && planMatchesRequired(a.PlanType, requiredPlan) && accountAllowsClientIPLocked(a, clientIP)
+				ok := (accountType == "" || a.Type == accountType) && planMatchesRequired(a.PlanType, requiredPlan) && accountAllowsClientIPLocked(a, clientIP) && accountAvailableForRoutingLocked(a, now)
 				if ok && !a.RateLimitUntil.IsZero() && a.RateLimitUntil.After(now) {
 					ok = false
 				}
@@ -755,7 +759,8 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 			continue
 		}
 		a.mu.Lock()
-		if a.Dead || a.Disabled || (accountType != "" && a.Type != accountType) || !planMatchesRequired(a.PlanType, requiredPlan) || !accountAllowsClientIPLocked(a, clientIP) {
+		bflCreditsExhausted := a.Type == AccountTypeBFL && a.Usage.HasCredits && a.Usage.CreditsBalance <= 0
+		if a.Dead || a.Disabled || bflCreditsExhausted || (accountType != "" && a.Type != accountType) || !planMatchesRequired(a.PlanType, requiredPlan) || !accountAllowsClientIPLocked(a, clientIP) {
 			a.mu.Unlock()
 			continue
 		}
@@ -1313,6 +1318,10 @@ func saveAccount(a *ProviderConnection) error {
 		return saveAPIKeyAccount(a)
 	case AccountTypeNvidia:
 		return saveAPIKeyAccount(a)
+	case AccountTypeBFL:
+		return saveAPIKeyAccount(a)
+	case AccountTypeGoogleAIImage:
+		return saveAPIKeyAccount(a)
 	default:
 		return saveCodexAccount(a)
 	}
@@ -1457,6 +1466,12 @@ func saveAPIKeyAccount(a *ProviderConnection) error {
 
 	if a.AccessToken != "" {
 		root["api_key"] = a.AccessToken
+	}
+	if a.Type == AccountTypeBFL && a.Usage.HasCredits {
+		root["credits_balance"] = a.Usage.CreditsBalance
+		if !a.Usage.RetrievedAt.IsZero() {
+			root["credits_retrieved_at"] = a.Usage.RetrievedAt.UTC().Format(time.RFC3339Nano)
+		}
 	}
 	if a.Dead {
 		root["dead"] = true

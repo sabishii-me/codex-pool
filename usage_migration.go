@@ -64,20 +64,26 @@ type usageMigrationReport struct {
 
 type persistedUsageEvent struct {
 	RequestID, StartedAt, CompletedAt, UserID, OriginID, ProviderID, ConnectionID, ModelID, PlanType string
+	WorkloadKind, Status, ImageMIME, OperationID, FailureClass                                       string
 	InputTokens, CacheReadTokens, CacheWriteTokens, OutputTokens, ReasoningTokens, BillableTokens    int64
+	ImageCount, ImageWidth, ImageHeight                                                              int64
 	CostUSD                                                                                          float64
+	MediaCostUSD                                                                                     sql.NullFloat64
+	EconomicsKnown                                                                                   bool
 }
 
 var usageEventFieldNames = []string{
 	"request_id", "started_at", "completed_at", "user_id", "origin_id", "provider_id", "connection_id",
 	"model_id", "plan_type", "input_tokens", "cache_read_tokens", "cache_write_tokens", "output_tokens",
-	"reasoning_tokens", "billable_tokens", "cost_usd",
+	"reasoning_tokens", "billable_tokens", "cost_usd", "workload_kind", "status", "image_count",
+	"image_mime", "image_width", "image_height", "operation_id", "failure_class", "media_cost_usd", "economics_known",
 }
 
 func (e persistedUsageEvent) values() []any {
 	return []any{e.RequestID, e.StartedAt, e.CompletedAt, e.UserID, e.OriginID, e.ProviderID, e.ConnectionID,
 		e.ModelID, e.PlanType, e.InputTokens, e.CacheReadTokens, e.CacheWriteTokens, e.OutputTokens,
-		e.ReasoningTokens, e.BillableTokens, e.CostUSD}
+		e.ReasoningTokens, e.BillableTokens, e.CostUSD, e.WorkloadKind, e.Status, e.ImageCount,
+		e.ImageMIME, e.ImageWidth, e.ImageHeight, e.OperationID, e.FailureClass, e.MediaCostUSD, e.EconomicsKnown}
 }
 
 func usageEventDifferences(a, b persistedUsageEvent) []string {
@@ -94,7 +100,9 @@ func usageEventDifferences(a, b persistedUsageEvent) []string {
 func readUsageEvents(db *sql.DB) (map[string]persistedUsageEvent, int, error) {
 	rows, err := db.Query(`SELECT request_id, started_at, completed_at, COALESCE(user_id,''), COALESCE(origin_id,''),
 		provider_id, connection_id, COALESCE(model_id,''), COALESCE(plan_type,''), input_tokens,
-		cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd
+		cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd,
+		COALESCE(workload_kind,'text_generation'), COALESCE(status,'success'), image_count, COALESCE(image_mime,''),
+		image_width, image_height, COALESCE(operation_id,''), COALESCE(failure_class,''), media_cost_usd, economics_known
 		FROM usage_events ORDER BY connection_id, request_id`)
 	if err != nil {
 		return nil, 0, err
@@ -106,7 +114,9 @@ func readUsageEvents(db *sql.DB) (map[string]persistedUsageEvent, int, error) {
 		var e persistedUsageEvent
 		if err := rows.Scan(&e.RequestID, &e.StartedAt, &e.CompletedAt, &e.UserID, &e.OriginID,
 			&e.ProviderID, &e.ConnectionID, &e.ModelID, &e.PlanType, &e.InputTokens, &e.CacheReadTokens,
-			&e.CacheWriteTokens, &e.OutputTokens, &e.ReasoningTokens, &e.BillableTokens, &e.CostUSD); err != nil {
+			&e.CacheWriteTokens, &e.OutputTokens, &e.ReasoningTokens, &e.BillableTokens, &e.CostUSD,
+			&e.WorkloadKind, &e.Status, &e.ImageCount, &e.ImageMIME, &e.ImageWidth, &e.ImageHeight,
+			&e.OperationID, &e.FailureClass, &e.MediaCostUSD, &e.EconomicsKnown); err != nil {
 			return nil, invalid, err
 		}
 		if strings.TrimSpace(e.RequestID) == "" || strings.TrimSpace(e.ConnectionID) == "" {
@@ -349,7 +359,9 @@ func migrateUsageEvents(opts usageMigrationOptions) (usageMigrationReport, error
 	stmt, err := tx.Prepare(`INSERT INTO usage_events (
 		request_id, started_at, completed_at, user_id, origin_id, provider_id, connection_id, model_id,
 		plan_type, input_tokens, cache_read_tokens, cache_write_tokens, output_tokens, reasoning_tokens,
-		billable_tokens, cost_usd, source_environment) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		billable_tokens, cost_usd, workload_kind, status, image_count, image_mime, image_width, image_height,
+		operation_id, failure_class, media_cost_usd, economics_known, source_environment)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return report, err
 	}

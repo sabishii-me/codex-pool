@@ -188,27 +188,6 @@ func serveNoopCodexAppsMCP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func isFrontendNavigationPath(path string) bool {
-	path = normalizeNoopPath(path)
-	switch path {
-	case "/", "/models", "/usage", "/setup", "/profile",
-		"/admin/connections", "/admin/members", "/admin/system":
-		return true
-	default:
-		return false
-	}
-}
-
-func isFrontendNavigationRequest(r *http.Request) bool {
-	if r == nil || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
-		return false
-	}
-	if !strings.Contains(strings.ToLower(r.Header.Get("Accept")), "text/html") {
-		return false
-	}
-	return isFrontendNavigationPath(r.URL.Path)
-}
-
 func isRemovedFrontendPath(path string) bool {
 	path = normalizeNoopPath(path)
 	return path == "/friend" || strings.HasPrefix(path, "/friend/") ||
@@ -226,12 +205,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// alternate product surface.
 	if isRemovedFrontendPath(r.URL.Path) {
 		http.NotFound(w, r)
-		return
-	}
-
-	// Fingerprinted frontend assets are embedded by the Go binary.
-	if strings.HasPrefix(r.URL.Path, "/assets/") {
-		h.serveProductAsset(w, r)
 		return
 	}
 
@@ -268,18 +241,13 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Browser navigation is a separate boundary from API and model-proxy
-	// routing. Canonical product routes serve the embedded SPA directly,
-	// including signed-out deep links and page reloads.
-	if isFrontendNavigationRequest(r) {
-		h.serveProductShell(w, r)
-		return
-	}
+	// The API gateway never serves browser navigation. Canonical SPA routes
+	// are owned by the dedicated `web` service; any non-API path must 404.
 
 	// Static routes
 	switch r.URL.Path {
 	case "/":
-		h.serveProductShell(w, r)
+		http.NotFound(w, r)
 		return
 	case "/status":
 		h.serveStatusPage(w, r)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -239,82 +238,6 @@ func newTestPoolUserStoreWithUser(t *testing.T, token string) *GatewayUserStore 
 		t.Fatalf("create user: %v", err)
 	}
 	return store
-}
-
-func TestFrontendAlwaysServesReactProductShell(t *testing.T) {
-	for _, cfg := range []*config{{}, {oauthGoogleClientID: "configured"}} {
-		h := &proxyHandler{cfg: cfg}
-		rr := httptest.NewRecorder()
-		h.serveProductShell(rr, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		body := rr.Body.String()
-		for _, want := range []string{`<div id="root"></div>`, `AI Pool — Model Gateway`, `src="/assets/`, `href="/assets/`} {
-			if !strings.Contains(body, want) {
-				t.Fatalf("expected React product shell to contain %q", want)
-			}
-		}
-		for _, forbidden := range []string{`id="access-form"`, `onclick="switchSubTab`, `id="codex-add-section"`, `One-Line Setup`, `--gold-bright`} {
-			if strings.Contains(body, forbidden) {
-				t.Fatalf("frontend returned forbidden legacy markup %q", forbidden)
-			}
-		}
-	}
-}
-
-func TestOAuthClientSecretIsNotEmbeddedInProductFrontend(t *testing.T) {
-	const secret = "google-client-secret-that-must-never-ship"
-	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee", oauthGoogleClientSecret: secret}}
-	page := httptest.NewRecorder()
-	h.serveProductShell(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
-	if strings.Contains(page.Body.String(), secret) {
-		t.Fatal("OAuth client secret leaked into public HTML")
-	}
-	if err := fs.WalkDir(productFrontendContent, "web/dist", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return err
-		}
-		data, err := productFrontendContent.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		if strings.Contains(string(data), secret) {
-			t.Fatalf("friend code leaked into embedded asset %s", path)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestServeProductAsset(t *testing.T) {
-	h := &proxyHandler{cfg: &config{oauthGoogleClientID: "peepee"}}
-	page := httptest.NewRecorder()
-	h.serveProductShell(page, httptest.NewRequest(http.MethodGet, "http://example.com/", nil))
-	body := page.Body.String()
-	start := strings.Index(body, `src="/assets/`)
-	if start < 0 {
-		t.Fatal("product script asset missing")
-	}
-	start += len(`src="`)
-	end := strings.Index(body[start:], `"`)
-	if end < 0 {
-		t.Fatal("product script asset is malformed")
-	}
-	assetPath := body[start : start+end]
-
-	rr := httptest.NewRecorder()
-	h.serveProductAsset(rr, httptest.NewRequest(http.MethodGet, "http://example.com"+assetPath, nil))
-	if rr.Code != http.StatusOK || rr.Body.Len() == 0 {
-		t.Fatalf("asset response status=%d bytes=%d", rr.Code, rr.Body.Len())
-	}
-	if got := rr.Header().Get("Content-Type"); !strings.Contains(got, "javascript") {
-		t.Fatalf("Content-Type = %q, want JavaScript", got)
-	}
-	if got := rr.Header().Get("Cache-Control"); !strings.Contains(got, "immutable") {
-		t.Fatalf("Cache-Control = %q, want immutable", got)
-	}
 }
 
 func TestServeClaudeSetupScript_BashClearsConflictingClaudeAuth(t *testing.T) {

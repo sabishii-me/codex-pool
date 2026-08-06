@@ -5,11 +5,8 @@ ENV GOTOOLCHAIN=auto
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# The backend retains a minimal emergency shell for direct diagnostics, but its
-# release build never installs Node or consumes the independently built UI.
-RUN mkdir -p web/dist/assets \
-    && printf '%s\n' '<!doctype html><html><body>Codex Pool API</body></html>' > web/dist/index.html \
-    && printf '%s\n' '/* backend fallback */' > web/dist/assets/fallback.css
+# The API image is API-only. The SPA is built and served by the independent
+# `web` service; this binary never embeds or consumes the frontend build output.
 ARG BUILD_VERSION=dev
 ARG BUILD_COMMIT=unknown
 ARG BUILD_DATE=unknown

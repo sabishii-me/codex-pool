@@ -7,18 +7,29 @@ import (
 )
 
 func TestDockerWebBuildIncludesAPISchemasAndBuildIdentity(t *testing.T) {
-	data, err := os.ReadFile("Dockerfile")
+	data, err := os.ReadFile("Dockerfile.api")
 	if err != nil {
 		t.Fatal(err)
 	}
 	source := string(data)
-	for _, fragment := range []string{"WORKDIR /workspace/web", "COPY schemas/ ../schemas/", "COPY --from=web-build /workspace/web/dist ./web/dist", "ARG BUILD_COMMIT=unknown", "org.opencontainers.image.revision=$BUILD_COMMIT", "-X main.buildCommit=${BUILD_COMMIT}"} {
+	for _, fragment := range []string{"ARG BUILD_COMMIT=unknown", "org.opencontainers.image.revision=$BUILD_COMMIT", "-X main.buildCommit=${BUILD_COMMIT}", "API-only", "never embeds or consumes the frontend build output"} {
 		if !strings.Contains(source, fragment) {
-			t.Errorf("Dockerfile lacks build contract %q", fragment)
+			t.Errorf("Dockerfile.api lacks build contract %q", fragment)
 		}
 	}
+	for _, forbidden := range []string{"web/dist", "node:22-alpine", "npm run build", "web-build"} {
+		if strings.Contains(source, forbidden) {
+			t.Errorf("Dockerfile.api must not build or embed the frontend, found %q", forbidden)
+		}
+	}
+	combined, err := os.ReadFile("Dockerfile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(combined), "web-build") || strings.Contains(string(combined), "/workspace/web") {
+		t.Errorf("combined Dockerfile must no longer embed the frontend into the gateway")
+	}
 }
-
 func TestReleaseBuildScriptCreatesArtifactWithoutAnotherRuntime(t *testing.T) {
 	data, err := os.ReadFile("scripts/build-release-image.ps1")
 	if err != nil {

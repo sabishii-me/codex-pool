@@ -2,45 +2,18 @@ package main
 
 import (
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"mime"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 )
 
-//go:embed web/dist/index.html web/dist/assets/*
-var productFrontendContent embed.FS
-
-func (h *proxyHandler) serveProductShell(w http.ResponseWriter, r *http.Request) {
-	data, err := productFrontendContent.ReadFile("web/dist/index.html")
-	if err != nil {
-		http.Error(w, "internal error: product shell missing", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache, must-revalidate")
-	_, _ = w.Write(data)
-}
-
-func (h *proxyHandler) serveProductAsset(w http.ResponseWriter, r *http.Request) {
-	assetPath := strings.TrimPrefix(r.URL.Path, "/")
-	data, err := productFrontendContent.ReadFile("web/dist/" + assetPath)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if contentType := mime.TypeByExtension(filepath.Ext(assetPath)); contentType != "" {
-		w.Header().Set("Content-Type", contentType)
-	}
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	_, _ = w.Write(data)
-}
+// The API gateway is API-only. The SPA is served by the dedicated `web`
+// service in front of the gateway; this binary never embeds or serves HTML,
+// scripts, or other frontend assets.
 
 // gatewaySessionResponse is the CLI-credential bundle plus identity/admin
 // status returned by GET /api/pool/session.

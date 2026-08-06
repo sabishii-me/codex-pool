@@ -28,6 +28,8 @@ export function App() {
   const [mfaChallengeOpen, setMFAChallengeOpen] = useState(false);
   const [pendingAdminRoute, setPendingAdminRoute] = useState<AppRoute | null>(null);
   const capabilityGeneration = useRef(0);
+  const refreshGeneration = useRef(0);
+  const protectedGeneration = useRef(0);
 
   const elevated = isElevated(capability);
   const clearProtected = useCallback(() => { setConnections({ status: "idle" }); setUsers({ status: "idle" }); setMembers({ status: "idle" }); setHealth({ status: "idle" }); }, []);
@@ -49,23 +51,44 @@ export function App() {
     }
   }, [session?.is_admin, clearProtected]);
 
+  // Admin resources load independently of the dashboard. They are never gated
+  // behind stats/signal/catalog, so MFA elevation immediately hydrates the
+  // admin pages instead of waiting for the next dashboard refresh. A dedicated
+  // generation counter protects against overlapping admin hydrations only; it
+  // is never invalidated by dashboard refreshes.
+  const hydrateProtected = useCallback(async () => {
+    const generation = ++protectedGeneration.current;
+    setConnections({ status: "loading" }); setUsers({ status: "loading" }); setMembers({ status: "loading" }); setHealth({ status: "loading" });
+    const [connectionResult, userResult, memberResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadGatewayMembers(), loadSystemProjection()]);
+    if (generation !== protectedGeneration.current) return;
+    setConnections(connectionResult.status === "fulfilled" ? (connectionResult.value.length ? { status: "ready", data: connectionResult.value } : { status: "empty" }) : { status: "error", message: connectionResult.reason instanceof Error ? connectionResult.reason.message : "Connections unavailable" });
+    setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Usage identities unavailable" });
+    setMembers(memberResult.status === "fulfilled" ? (memberResult.value.users.length ? { status: "ready", data: memberResult.value.users } : { status: "empty" }) : { status: "error", message: memberResult.reason instanceof Error ? memberResult.reason.message : "Members unavailable" });
+    setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "System unavailable" });
+  }, []);
+
+  // Dashboard refresh touches only stats/signal/catalog. A generation counter
+  // discards stale overlapping refreshes so an older completion can never
+  // overwrite newer state (this was the root of the "admin lost after usage"
+  // symptom). It never touches protected/admin state.
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     setLoading(true);
-    try {
-      const dashboard = await loadDashboardResources();
-      if (dashboard.stats) setStats(dashboard.stats);
-      if (dashboard.signal) setSignal(dashboard.signal);
-      if (dashboard.catalog) setModels(dashboard.catalog.models);
-      setErrors(dashboard.errors);
-      if (!elevated) { clearProtected(); return; }
-      setConnections({ status: "loading" }); setUsers({ status: "loading" }); setMembers({ status: "loading" }); setHealth({ status: "loading" });
-      const [connectionResult, userResult, memberResult, healthResult] = await Promise.allSettled([loadProviderConnectionsV2(), loadPoolUsers(), loadGatewayMembers(), loadSystemProjection()]);
-      setConnections(connectionResult.status === "fulfilled" ? (connectionResult.value.length ? { status: "ready", data: connectionResult.value } : { status: "empty" }) : { status: "error", message: connectionResult.reason instanceof Error ? connectionResult.reason.message : "Connections unavailable" });
-      setUsers(userResult.status === "fulfilled" ? (userResult.value.users.length ? { status: "ready", data: userResult.value.users } : { status: "empty" }) : { status: "error", message: userResult.reason instanceof Error ? userResult.reason.message : "Usage identities unavailable" });
-      setMembers(memberResult.status === "fulfilled" ? (memberResult.value.users.length ? { status: "ready", data: memberResult.value.users } : { status: "empty" }) : { status: "error", message: memberResult.reason instanceof Error ? memberResult.reason.message : "Members unavailable" });
-      setHealth(healthResult.status === "fulfilled" ? { status: "ready", data: healthResult.value } : { status: "error", message: healthResult.reason instanceof Error ? healthResult.reason.message : "System unavailable" });
-    } finally { setLoading(false); }
-  }, [elevated, clearProtected]);
+    const dashboard = await loadDashboardResources();
+    if (generation !== refreshGeneration.current) return;
+    if (dashboard.stats) setStats(dashboard.stats);
+    if (dashboard.signal) setSignal(dashboard.signal);
+    if (dashboard.catalog) setModels(dashboard.catalog.models);
+    setErrors(dashboard.errors);
+    setLoading(false);
+  }, []);
+
+  // Hydrate admin resources as soon as the session is elevated, and re-hydrate
+  // whenever elevation changes. Dashboard refreshes never clear this state.
+  useEffect(() => {
+    if (!session || !elevated) return;
+    void hydrateProtected();
+  }, [session, elevated, hydrateProtected]);
 
   const refreshConnections = useCallback(async () => {
     setConnections({ status: "loading" });

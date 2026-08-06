@@ -28,7 +28,7 @@ func applyUsageCacheDiagnostics(value *UsageDimension) {
 		return
 	}
 	switch ProviderID(strings.ToLower(strings.TrimSpace(value.ProviderID))) {
-	case AccountTypeCodex, AccountTypeClaude, AccountTypeGemini, AccountTypeAntigravity:
+	case AccountTypeCodex, AccountTypeGemini, AccountTypeAntigravity:
 		value.CacheSemantics = "inclusive"
 		if value.InputTokens > 0 {
 			share := float64(value.CachedTokens) * 100 / float64(value.InputTokens)

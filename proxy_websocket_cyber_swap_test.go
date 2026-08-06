@@ -83,9 +83,8 @@ type codexProxyFixture struct {
 func newCodexProxyFixture(t *testing.T, base *url.URL, accounts []*Account) *codexProxyFixture {
 	t.Helper()
 	codex := NewCodexProvider(base, base, base)
-	claude := NewClaudeProvider(base)
 	gemini := NewGeminiProvider(base, base)
-	registry := NewProviderRegistry(codex, claude, gemini)
+	registry := NewProviderRegistry(codex, gemini)
 
 	h := &proxyHandler{
 		cfg: &config{

@@ -60,7 +60,7 @@ type setupEnvironmentProjection struct {
 }
 
 var setupAdapterPaths = map[string]string{
-	"codex": "/setup/codex/", "claude": "/setup/claude/", "gemini": "/setup/gemini/", "grok": "/setup/grok/", "pi": "/setup/pi/",
+	"codex": "/setup/codex/", "gemini": "/setup/gemini/", "grok": "/setup/grok/", "pi": "/setup/pi/",
 }
 
 func loadClientSetupSpecs() ([]clientSetupSpec, string, error) {

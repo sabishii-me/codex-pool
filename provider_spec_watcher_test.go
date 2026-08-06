@@ -12,7 +12,7 @@ func TestProviderSpecsWatcherKeepsRegistryAndPoolOnInvalidReload(t *testing.T) {
 	poolDir := t.TempDir()
 	base, _ := url.Parse("https://initial.example.test/anthropic")
 	provider := NewDeepSeekProvider(base)
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, provider)
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, provider)
 	connection := &ProviderConnection{Type: AccountTypeDeepSeek, ID: "existing"}
 	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool([]*ProviderConnection{connection})}
 	active := registry.ForType(AccountTypeDeepSeek)
@@ -39,7 +39,7 @@ func TestProviderSpecsWatcherPublishesThenReloadsConnections(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(providerDir, "connection.json"), []byte(`{"api_key":"secret"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(nil))
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewDeepSeekProvider(nil))
 	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool(nil)}
 	spec := deepSeekProviderSpec
 	spec.BaseURL = "https://replacement.example.test/anthropic"

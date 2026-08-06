@@ -114,11 +114,6 @@ func extractClientAffinitySignal(path string, body []byte, headers http.Header, 
 		}
 	}
 
-	if path == "/v1/messages" && targetProvider == AccountTypeCodex && headers != nil {
-		if value := affinityHeaderValue(headers, "X-Claude-Code-Session-Id"); value != "" {
-			return ClientAffinitySignal{Kind: AffinityClientSession, Source: "client.claude-code.x-claude-code-session-id", Value: value}
-		}
-	}
 	return ClientAffinitySignal{}
 }
 

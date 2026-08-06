@@ -210,18 +210,6 @@ func TestLooksLikeProviderCredential(t *testing.T) {
 		wantProvider AccountType
 	}{
 		{
-			name:         "Claude API key",
-			authHeader:   "Bearer sk-ant-api03-abc123xyz",
-			wantIsValid:  true,
-			wantProvider: AccountTypeClaude,
-		},
-		{
-			name:         "Claude OAuth token",
-			authHeader:   "Bearer sk-ant-oat01-abc123xyz",
-			wantIsValid:  true,
-			wantProvider: AccountTypeClaude,
-		},
-		{
 			name:         "OpenAI project key",
 			authHeader:   "Bearer sk-proj-abc123xyz",
 			wantIsValid:  true,

@@ -45,12 +45,6 @@ var subscriptionCosts = map[subscriptionKey]struct {
 	monthly float64
 	label   string
 }{
-	{AccountTypeClaude, "pro"}:                    {20, "Claude Pro"},
-	{AccountTypeClaude, "max_5x"}:                 {100, "Claude Max 5x"},
-	{AccountTypeClaude, "default_claude_max_5x"}:  {100, "Claude Max 5x"},
-	{AccountTypeClaude, "max_20x"}:                {200, "Claude Max 20x"},
-	{AccountTypeClaude, "default_claude_max_20x"}: {200, "Claude Max 20x"},
-	{AccountTypeClaude, "team"}:                   {25, "Claude Team"},
 	{AccountTypeCodex, "plus"}:                    {20, "Codex Plus"},
 	{AccountTypeCodex, "prolite"}:                 {100, "Codex Pro Lite"},
 	{AccountTypeCodex, "pro"}:                     {200, "Codex Pro"},
@@ -192,9 +186,6 @@ func (pd *PricingData) startPricingRefresh(ctx context.Context, jobs *background
 }
 
 var pricingModelAliases = map[string]string{
-	"claude-sonnet-5":      "claude-sonnet-4-6",
-	"claude-sonnet-5 [1m]": "claude-sonnet-4-6",
-	"claude-sonnet-5[1m]":  "claude-sonnet-4-6",
 }
 
 // lookupExactPricing returns only an exact active price-sheet entry. It does
@@ -274,7 +265,6 @@ func isAllDigits(s string) bool {
 // defaultModelForProvider returns a fallback model name when the request didn't include one.
 var defaultModelForProvider = map[AccountType]string{
 	AccountTypeCodex:   "gpt-5.2-codex",
-	AccountTypeClaude:  "claude-sonnet-5",
 	AccountTypeKimi:    "moonshot.kimi-k2-thinking",
 	AccountTypeMinimax: "minimax.minimax-m2",
 	AccountTypeZAI:     "zai.glm-5.1",

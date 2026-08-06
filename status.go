@@ -96,8 +96,6 @@ func (h *proxyHandler) serveStatusPage(w http.ResponseWriter, r *http.Request) {
 			data.CodexCount++
 		case AccountTypeGemini:
 			data.GeminiCount++
-		case AccountTypeClaude:
-			data.ClaudeCount++
 		case AccountTypeKimi:
 			data.KimiCount++
 		case AccountTypeMinimax:

@@ -18,7 +18,7 @@ func TestRemoveProviderConnectionDeletesCredentialAndReloadsPool(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := NewGoogleAIImageProvider(nil)
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, provider)
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, provider)
 	accounts, err := loadPool(root, registry)
 	if err != nil {
 		t.Fatal(err)

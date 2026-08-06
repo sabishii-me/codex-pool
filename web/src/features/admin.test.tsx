@@ -11,7 +11,7 @@ describe("provider account contribution UX", () => {
   });
 
   it("renders a copyable one-time authorization link for another browser", () => {
-    const html = renderToStaticMarkup(<OAuthSessionDetails providerLabel="Claude" oauthURL="https://auth.example/authorize?state=one-time" phase="authorizing" copied={true} showCallbackInput={true} credential="" onOpen={() => {}} onCopy={() => {}} onCredentialChange={() => {}} />);
+    const html = renderToStaticMarkup(<OAuthSessionDetails providerLabel="Codex" oauthURL="https://auth.example/authorize?state=one-time" phase="authorizing" copied={true} showCallbackInput={true} credential="" onOpen={() => {}} onCopy={() => {}} onCredentialChange={() => {}} />);
     expect(html).toContain("Copied ✓");
     expect(html).toContain("https://auth.example/authorize?state=one-time");
     expect(html).toContain("Paste callback URL");
@@ -37,7 +37,7 @@ describe("provider account contribution UX", () => {
 
   it("includes every backend-supported contribution provider and credential modes", () => {
     const html = renderToStaticMarkup(<AccountContribution onClose={() => {}} onAdded={async () => {}} />);
-    for (const provider of ["Codex", "Claude", "Google Antigravity", "Kimi Coding Plan", "Kimi Platform", "MiniMax", "Z.ai", "Xiaomi", "DeepSeek", "Qwen", "OpenRouter", "NVIDIA", "Black Forest Labs", "Grok"]) {
+    for (const provider of ["Codex", "Google Antigravity", "Kimi Coding Plan", "Kimi Platform", "MiniMax", "Z.ai", "Xiaomi", "DeepSeek", "Qwen", "OpenRouter", "NVIDIA", "Black Forest Labs", "Grok"]) {
       expect(html).toContain(provider);
     }
     expect(html).toContain("Generate authorization link");

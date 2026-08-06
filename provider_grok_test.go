@@ -51,7 +51,6 @@ func TestGrokClientCatalogIncludesPoolModels(t *testing.T) {
 		backend string
 	}{
 		"gpt-5.6-luna":    {owner: "codex-pool", backend: "chat_completions"},
-		"claude-sonnet-5": {owner: "codex-pool", backend: "messages"},
 		"MiniMax-M3":      {owner: "codex-pool", backend: "messages"},
 		"grok-4.5":        {owner: "xAI", backend: "responses"},
 	}
@@ -70,7 +69,7 @@ func TestGrokClientCatalogIncludesPoolModels(t *testing.T) {
 	}
 
 	ids := grokSetupModelIDs()
-	for _, id := range []string{"grok-build", "gpt-5.6-luna", "claude-sonnet-5"} {
+	for _, id := range []string{"grok-build", "gpt-5.6-luna"} {
 		if !slices.Contains(ids, id) {
 			t.Fatalf("setup model IDs missing %q", id)
 		}

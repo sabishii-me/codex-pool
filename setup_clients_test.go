@@ -17,7 +17,7 @@ func TestLoadClientSetupSpecsUsesProductionAdapters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"codex-cli", "claude-code", "gemini-cli", "grok-build", "pi"}
+	want := []string{"codex-cli", "gemini-cli", "grok-build", "pi"}
 	if len(specs) != len(want) {
 		t.Fatalf("spec count = %d, want %d", len(specs), len(want))
 	}
@@ -80,7 +80,7 @@ func TestSetupClientsProjectionIsAuthenticatedAndPersonalized(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
 		t.Fatal(err)
 	}
-	if len(response.Clients) != 5 {
+	if len(response.Clients) != 4 {
 		t.Fatalf("client count = %d", len(response.Clients))
 	}
 	for _, client := range response.Clients {

@@ -18,7 +18,7 @@ func newCodexAnthropicContractHandler(t *testing.T, upstream http.HandlerFunc) (
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
 		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}),
-		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:  newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
 	return handler, server.Close

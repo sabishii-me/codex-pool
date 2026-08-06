@@ -36,7 +36,6 @@ func TestModelRouteOverrideDeepSeekModelUsesDeepSeekBase(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewDeepSeekProvider(deepseekBase),
 		),
@@ -80,7 +79,7 @@ func TestDeepSeekAdminAddValidatesAndSavesAccount(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, deepseekBase: deepseekBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
 			if req.URL.String() != "https://api.deepseek.com/anthropic/v1/messages" {
@@ -272,7 +271,7 @@ func TestDeepSeekAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, deepseekBase: deepseekBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewDeepSeekProvider(deepseekBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,

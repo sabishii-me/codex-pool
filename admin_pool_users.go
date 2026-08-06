@@ -130,7 +130,6 @@ func (h *proxyHandler) handlePoolUsersCreate(w http.ResponseWriter, r *http.Requ
 		"setup": map[string]string{
 			"codex_config":  baseURL + "/config/codex/" + user.Token,
 			"gemini_config": baseURL + "/config/gemini/" + user.Token,
-			"claude_config": baseURL + "/config/claude/" + user.Token,
 		},
 	})
 }
@@ -175,9 +174,6 @@ func (h *proxyHandler) serveConfigDownload(w http.ResponseWriter, r *http.Reques
 	case strings.HasPrefix(path, "/config/gemini/"):
 		configType = "gemini"
 		token = strings.TrimPrefix(path, "/config/gemini/")
-	case strings.HasPrefix(path, "/config/claude/"):
-		configType = "claude"
-		token = strings.TrimPrefix(path, "/config/claude/")
 	case strings.HasPrefix(path, "/config/pi/"):
 		configType = "pi"
 		token = strings.TrimPrefix(path, "/config/pi/")
@@ -228,20 +224,8 @@ func (h *proxyHandler) serveConfigDownload(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		json.NewEncoder(w).Encode(auth)
-	case "claude":
-		auth, err := generateClaudeAuth(secret, user)
-		if err != nil {
-			respondJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		json.NewEncoder(w).Encode(auth)
 	case "pi":
 		codexAuth, err := generateCodexAuth(secret, user)
-		if err != nil {
-			respondJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-		auth, err := generateClaudeAuth(secret, user)
 		if err != nil {
 			respondJSONError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -251,20 +235,15 @@ func (h *proxyHandler) serveConfigDownload(w http.ResponseWriter, r *http.Reques
 		if codexAuth.Tokens != nil {
 			codexAccessToken = codexAuth.Tokens.AccessToken
 		}
-		modelsJSON, err := generatePiModelsJSON(publicURL, codexAccessToken, auth.AccessToken, h.pricing)
+		modelsJSON, err := generatePiModelsJSON(publicURL, codexAccessToken, generateClaudePoolToken(secret, user.ID), h.pricing)
 		if err != nil {
 			respondJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Write(modelsJSON)
 	case "grok":
-		auth, err := generateClaudeAuth(secret, user)
-		if err != nil {
-			respondJSONError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
 		respondJSON(w, map[string]any{
-			"api_key":        auth.AccessToken,
+			"api_key":        generateClaudePoolToken(secret, user.ID),
 			"base_url":       strings.TrimRight(h.getEffectivePublicURL(r), "/") + "/v1",
 			"model":          "grok-build",
 			"api_backend":    "responses",

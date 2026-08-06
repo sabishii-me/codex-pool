@@ -16,7 +16,7 @@ func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	handler := &proxyHandler{cfg: &config{}, registry: registry, aliases: newModelAliases(nil)}
-	fallback := registry.ForType(AccountTypeClaude)
+	fallback := registry.ForType(AccountTypeKimi)
 
 	tests := []struct {
 		name      string

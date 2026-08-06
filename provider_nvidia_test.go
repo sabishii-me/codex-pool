@@ -47,7 +47,6 @@ func TestModelRouteOverrideNvidiaModelStripsPrefixAndUsesNvidiaBase(t *testing.T
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewNvidiaProvider(nvidiaBase),
 		),
@@ -115,7 +114,7 @@ func TestNvidiaAdminAddValidatesUsingOpenAIChatCompletionsShape(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, nvidiaBase: nvidiaBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
 			if req.URL.String() != "https://integrate.api.nvidia.com/v1/chat/completions" {
@@ -173,7 +172,7 @@ func TestNvidiaAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, nvidiaBase: nvidiaBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewNvidiaProvider(nvidiaBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,

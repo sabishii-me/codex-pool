@@ -29,7 +29,7 @@ func TestGrokProxyCanonicalUsageAndSanitizedResponseIntegrity(t *testing.T) {
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
 	grok := NewGrokProvider(base)
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), grok)
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), grok)
 	account := &Account{Type: AccountTypeGrok, ID: "grok_contract", AccessToken: "contract-key", PlanType: "grok"}
 	analytics, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 	if err != nil {
@@ -75,7 +75,7 @@ func TestGrokLargeBodyIsRejectedBeforeUpstream(t *testing.T) {
 	}))
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), NewGrokProvider(base))
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), NewGrokProvider(base))
 	account := &Account{Type: AccountTypeGrok, ID: "grok_large", AccessToken: "contract-key"}
 	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	body := []byte(`{"model":"grok-composer","input":` + mustJSONContractString(t, strings.Repeat("x", streamedModelRoutePeekBytes+1024)) + `,"metadata":{"must":"not leak"}}`)

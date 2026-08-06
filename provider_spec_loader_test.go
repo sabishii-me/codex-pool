@@ -50,7 +50,7 @@ func TestLoadProviderSpecsDirIsDeterministicAndStrict(t *testing.T) {
 
 func TestReloadProviderSpecsKeepsPreviousSnapshotOnFailure(t *testing.T) {
 	dir := t.TempDir()
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	spec := validProviderSpec()
 	writeProviderSpecTestFile(t, dir, "provider.json", spec)
 	if err := ReloadProviderSpecs(registry, dir); err != nil {

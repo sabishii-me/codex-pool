@@ -35,7 +35,6 @@ func TestModelRouteOverrideQwenModelUsesQwenBase(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewQwenProvider(qwenBase),
 		),
@@ -65,7 +64,7 @@ func TestQwenAdminAddValidatesAndSavesAccount(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, qwenBase: qwenBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
 			if req.Header.Get("Authorization") != "Bearer qw-valid" {
@@ -117,7 +116,7 @@ func TestQwenAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, qwenBase: qwenBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewQwenProvider(qwenBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,

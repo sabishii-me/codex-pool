@@ -18,7 +18,7 @@ func TestRuntimeDeclarativeProviderLoadsRoutesAndPublishesModels(t *testing.T) {
 		ID: "runtime-model", DisplayName: "Runtime Model", Description: "Loaded without recompiling",
 		Aliases: []string{"runtime"}, ContextWindow: 64000, MaxOutputTokens: 8000, Reasoning: true, Input: []string{"text"},
 	}
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	if err := registry.ReplaceDeclarative([]ProviderSpec{spec}); err != nil {
 		t.Fatal(err)
 	}

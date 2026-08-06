@@ -65,7 +65,7 @@ export interface ModelMixRow {
 }
 
 function throughput(row: Pick<HourlyUsage, "account_type" | "input_tokens" | "cached_tokens" | "output_tokens">) {
-  return row.input_tokens + row.output_tokens + (row.account_type === "claude" ? row.cached_tokens : 0);
+  return row.input_tokens + row.output_tokens;
 }
 
 export function weeklyQuotaEstimate(account: ProviderConnectionStats) {

@@ -17,7 +17,7 @@ func TestGrokAdminImportAddsAccount(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, grokBase: base},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(NewCodexProvider(base, base, nil), NewClaudeProvider(base), NewGeminiProvider(base, base), NewGrokProvider(base)),
+		registry: NewProviderRegistry(NewCodexProvider(base, base, nil), NewGeminiProvider(base, base), NewGrokProvider(base)),
 	}
 
 	body := `{"auth_json":"{\"access\":\"access-token\",\"refresh\":\"refresh-token\",\"expires\":1790000000000,\"tokenEndpoint\":\"https://auth.x.ai/oauth2/token\"}"}`

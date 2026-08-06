@@ -25,7 +25,7 @@ func TestCodexProxyStreamingCanonicalUsageAndResponseIntegrity(t *testing.T) {
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
 	codex := NewCodexProvider(base, base, base)
-	registry := NewProviderRegistry(codex, NewClaudeProvider(base), NewGeminiProvider(base, base))
+	registry := NewProviderRegistry(codex, NewGeminiProvider(base, base))
 	account := &Account{Type: AccountTypeCodex, ID: "codex_stream", AccessToken: "contract-key", PlanType: "plus"}
 	analytics, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 	if err != nil {
@@ -60,7 +60,7 @@ func TestCodexToAnthropicStreamFinalizesUnterminatedCompletedEvent(t *testing.T)
 	}))
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base))
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base))
 	connection := &ProviderConnection{Type: AccountTypeCodex, ID: "codex_terminal", AccessToken: "contract-key", PlanType: "plus"}
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
@@ -100,7 +100,7 @@ func TestCodexProxyCanonicalizesSSEContentTypeForImageTool(t *testing.T) {
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
 		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}),
-		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:  newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
 	body := `{"model":"gpt-5.6-sol","instructions":"use image tool","input":"draw a square","tools":[{"type":"image_generation"}],"tool_choice":{"type":"image_generation"},"stream":true}`
@@ -136,7 +136,7 @@ func TestCodexProxyRejectsLargeNativeResponsesBeforeUpstream(t *testing.T) {
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
 	codex := NewCodexProvider(base, base, base)
-	registry := NewProviderRegistry(codex, NewClaudeProvider(base), NewGeminiProvider(base, base))
+	registry := NewProviderRegistry(codex, NewGeminiProvider(base, base))
 	account := &Account{Type: AccountTypeCodex, ID: "codex_large", AccessToken: "contract-key", PlanType: "plus"}
 	analytics, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 	if err != nil {

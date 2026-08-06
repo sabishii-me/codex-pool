@@ -23,7 +23,6 @@ const (
 	AccountTypeCodex         AccountType = "codex"
 	AccountTypeGemini        AccountType = "gemini"
 	AccountTypeAntigravity   AccountType = "antigravity"
-	AccountTypeClaude        AccountType = "claude"
 	AccountTypeKimi          AccountType = "kimi"
 	AccountTypeKimiPlatform  AccountType = "kimi-platform"
 	AccountTypeMinimax       AccountType = "minimax"
@@ -41,7 +40,7 @@ const (
 type ProviderConnection struct {
 	mu sync.Mutex
 
-	Type         AccountType // codex, gemini, or claude
+	Type         AccountType // codex, gemini, or other provider
 	ID           string
 	File         string
 	Label        string // Deprecated compatibility alias for Identity.DisplayName.
@@ -332,43 +331,13 @@ type AntigravityAuthJSON struct {
 	HealthError       string                      `json:"health_error,omitempty"`
 }
 
-// ClaudeAuthJSON is the format for Claude auth files.
-// Files should be named claude_*.json in the pool folder.
-// Supports both API key format and OAuth format (from Claude Code).
-type ClaudeAuthJSON struct {
-	// API key format
-	APIKey   string `json:"api_key,omitempty"`
-	PlanType string `json:"plan_type,omitempty"` // optional: pro, max, etc.
-
-	AllowedIP        string   `json:"allowed_ip,omitempty"`
-	AllowedSourceIPs []string `json:"allowed_source_ips,omitempty"`
-
-	// OAuth format (from Claude Code keychain)
-	ClaudeAiOauth *ClaudeOAuthData `json:"claudeAiOauth,omitempty"`
-
-	// Learned from Anthropic's bootstrap endpoint
-	AccountUUID string `json:"account_uuid,omitempty"`
-	AddedAt     string `json:"added_at,omitempty"`
-}
-
-// ClaudeOAuthData is the OAuth token structure from Claude Code.
-type ClaudeOAuthData struct {
-	AccessToken      string   `json:"accessToken"`
-	RefreshToken     string   `json:"refreshToken"`
-	ExpiresAt        int64    `json:"expiresAt"` // Unix timestamp in milliseconds
-	Scopes           []string `json:"scopes"`
-	SubscriptionType string   `json:"subscriptionType"` // pro, max, etc.
-	RateLimitTier    string   `json:"rateLimitTier"`
-}
-
 func loadPool(dir string, registry *ProviderRegistry) ([]*ProviderConnection, error) {
 	var accs []*ProviderConnection
 	antigravityModels.Reset()
 
-	// Load accounts from provider subdirectories: pool/codex/, pool/claude/, pool/gemini/
+	// Load accounts from provider subdirectories: pool/codex/, pool/gemini/, pool/antigravity/
 	providerDirs := map[string]ProviderID{
 		"codex":           AccountTypeCodex,
-		"claude":          AccountTypeClaude,
 		"gemini":          AccountTypeGemini,
 		"antigravity":     AccountTypeAntigravity,
 		"kimi":            AccountTypeKimi,
@@ -473,7 +442,6 @@ func applyCommonAccountFileState(account *ProviderConnection, data []byte) {
 
 // Note: Individual account loading functions are now in the provider files:
 // - provider_codex.go: CodexProvider.LoadAccount
-// - provider_claude.go: ClaudeProvider.LoadAccount
 // - provider_gemini.go: GeminiProvider.LoadAccount
 
 // ProviderPool coordinates the live connections available for routing.
@@ -533,16 +501,6 @@ func (p *ProviderPool) count() int {
 // Gemini: tier 1 = ultra, tier 2 = everything else
 func accountTier(accType AccountType, planType string) int {
 	switch accType {
-	case AccountTypeClaude:
-		p := strings.ToLower(strings.TrimSpace(planType))
-		switch p {
-		case "max", "team", "max_team":
-			return 1
-		case "pro":
-			return 3
-		default:
-			return 2
-		}
 	case AccountTypeCodex:
 		return 2
 	case AccountTypeGemini, AccountTypeAntigravity:
@@ -1296,8 +1254,6 @@ func saveAccount(a *ProviderConnection) error {
 		return saveGeminiAccount(a)
 	case AccountTypeAntigravity:
 		return saveAntigravityAccount(a)
-	case AccountTypeClaude:
-		return saveClaudeAccount(a)
 	case AccountTypeKimi:
 		return saveAPIKeyAccount(a)
 	case AccountTypeKimiPlatform:
@@ -1873,7 +1829,6 @@ func (p *ProviderPool) getPoolUtilization() []PoolUtilization {
 
 	accums := map[AccountType]*provAccum{
 		AccountTypeCodex:       {},
-		AccountTypeClaude:      {},
 		AccountTypeGemini:      {},
 		AccountTypeAntigravity: {},
 	}
@@ -1942,7 +1897,7 @@ func (p *ProviderPool) getPoolUtilization() []PoolUtilization {
 	}
 
 	var results []PoolUtilization
-	for _, accType := range []AccountType{AccountTypeCodex, AccountTypeClaude, AccountTypeGemini, AccountTypeAntigravity} {
+	for _, accType := range []AccountType{AccountTypeCodex, AccountTypeGemini, AccountTypeAntigravity} {
 		pa := accums[accType]
 		if pa.total == 0 {
 			continue
@@ -1989,7 +1944,6 @@ type UsagePoolStats struct {
 	DeadCount        int            `json:"dead_count"`
 	CodexCount       int            `json:"codex_count"`
 	GeminiCount      int            `json:"gemini_count"`
-	ClaudeCount      int            `json:"claude_count"`
 	ZAICount         int            `json:"zai_count"`
 	AvgPrimaryUsed   float64        `json:"avg_primary_used"`
 	AvgSecondaryUsed float64        `json:"avg_secondary_used"`
@@ -2003,7 +1957,6 @@ type UsagePoolStats struct {
 // ProviderUsageSummary contains usage summaries for each provider type.
 type ProviderUsageSummary struct {
 	Codex  *CodexUsageSummary  `json:"codex,omitempty"`
-	Claude *ClaudeUsageSummary `json:"claude,omitempty"`
 	Gemini *GeminiUsageSummary `json:"gemini,omitempty"`
 }
 
@@ -2016,14 +1969,7 @@ type CodexUsageSummary struct {
 }
 
 // ClaudeUsageSummary contains Claude-specific usage info.
-type ClaudeUsageSummary struct {
-	HealthyCount int              `json:"healthy_count"`
-	TotalCount   int              `json:"total_count"`
-	Tokens       UsageWindowStats `json:"tokens"`   // Token rate limit
-	Requests     UsageWindowStats `json:"requests"` // Request rate limit
-}
 
-// GeminiUsageSummary contains Gemini-specific usage info.
 type GeminiUsageSummary struct {
 	HealthyCount int              `json:"healthy_count"`
 	TotalCount   int              `json:"total_count"`
@@ -2080,7 +2026,6 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 		nextPrimaryReset, nextSecondaryReset time.Time
 	}
 	codexStats := providerStats{primaryMin: 1.0, secondaryMin: 1.0}
-	claudeStats := providerStats{primaryMin: 1.0, secondaryMin: 1.0}
 	geminiStats := providerStats{primaryMin: 1.0, secondaryMin: 1.0}
 
 	for _, a := range p.accounts {
@@ -2092,8 +2037,6 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 			stats.CodexCount++
 		case AccountTypeGemini:
 			stats.GeminiCount++
-		case AccountTypeClaude:
-			stats.ClaudeCount++
 		case AccountTypeZAI:
 			stats.ZAICount++
 		}
@@ -2147,8 +2090,6 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 		switch a.Type {
 		case AccountTypeCodex:
 			ps = &codexStats
-		case AccountTypeClaude:
-			ps = &claudeStats
 		case AccountTypeGemini:
 			ps = &geminiStats
 		}
@@ -2196,9 +2137,6 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 		case AccountTypeCodex:
 			primaryLabel = "5hr"
 			secondaryLabel = "weekly"
-		case AccountTypeClaude:
-			primaryLabel = "tokens"
-			secondaryLabel = "requests"
 		case AccountTypeGemini, AccountTypeAntigravity:
 			primaryLabel = "daily"
 			secondaryLabel = ""
@@ -2261,32 +2199,7 @@ func (p *ProviderPool) getPoolStats() UsagePoolStats {
 		}
 	}
 
-	if claudeStats.total > 0 {
-		stats.Providers.Claude = &ClaudeUsageSummary{
-			TotalCount:   claudeStats.total,
-			HealthyCount: claudeStats.healthy,
-			Tokens: UsageWindowStats{
-				WindowName:     "tokens",
-				AvailableCount: claudeStats.primaryCount,
-			},
-			Requests: UsageWindowStats{
-				WindowName:     "requests",
-				AvailableCount: claudeStats.secondaryCount,
-			},
-		}
-		if claudeStats.primaryCount > 0 {
-			stats.Providers.Claude.Tokens.AvgUsedPct = (claudeStats.primarySum / float64(claudeStats.primaryCount)) * 100
-			stats.Providers.Claude.Tokens.MinUsedPct = claudeStats.primaryMin * 100
-			stats.Providers.Claude.Tokens.MaxUsedPct = claudeStats.primaryMax * 100
-			stats.Providers.Claude.Tokens.NextResetAt = claudeStats.nextPrimaryReset
-		}
-		if claudeStats.secondaryCount > 0 {
-			stats.Providers.Claude.Requests.AvgUsedPct = (claudeStats.secondarySum / float64(claudeStats.secondaryCount)) * 100
-			stats.Providers.Claude.Requests.MinUsedPct = claudeStats.secondaryMin * 100
-			stats.Providers.Claude.Requests.MaxUsedPct = claudeStats.secondaryMax * 100
-			stats.Providers.Claude.Requests.NextResetAt = claudeStats.nextSecondaryReset
-		}
-	}
+
 
 	if geminiStats.total > 0 {
 		stats.Providers.Gemini = &GeminiUsageSummary{

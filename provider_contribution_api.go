@@ -47,8 +47,6 @@ func (h *proxyHandler) providerContributionAPIService() *ProviderContributionAPI
 			"/api/pool/accounts/codex/add":            h.handleCodexAdd,
 			"/api/pool/accounts/codex/exchange":       h.handleCodexExchange,
 			"/api/pool/accounts/codex/status":         h.handleCodexStatus,
-			"/api/pool/accounts/claude/add":           h.handleClaudeAdd,
-			"/api/pool/accounts/claude/exchange":      h.handleClaudeExchange,
 			"/api/pool/accounts/antigravity/add":      h.handleAntigravityAdd,
 			"/api/pool/accounts/antigravity/status":   h.handleAntigravityStatus,
 			"/api/pool/accounts/antigravity/exchange": h.handleAntigravityExchange,

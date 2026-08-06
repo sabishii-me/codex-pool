@@ -95,7 +95,6 @@ func TestModelRouteOverrideXiaomiUsesConfiguredBaseAndCanonicalModel(t *testing.
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewXiaomiProvider(xiaomiBase),
 		),
@@ -170,7 +169,6 @@ func TestProxyRequestStreamsLargeXiaomiBodyAfterModelPeek(t *testing.T) {
 				recent:  newRecentErrors(5),
 				registry: NewProviderRegistry(
 					NewCodexProvider(codexBase, codexBase, nil),
-					NewClaudeProvider(claudeBase),
 					NewGeminiProvider(claudeBase, claudeBase),
 					NewXiaomiProvider(xiaomiBase),
 				),
@@ -253,7 +251,6 @@ func TestProxyRequestRoutesXiaomiModelsToSingaporeLongContext(t *testing.T) {
 				recent:  newRecentErrors(5),
 				registry: NewProviderRegistry(
 					NewCodexProvider(codexBase, codexBase, nil),
-					NewClaudeProvider(claudeBase),
 					NewGeminiProvider(claudeBase, claudeBase),
 					NewXiaomiProvider(xiaomiBase),
 				),
@@ -317,7 +314,7 @@ func TestLoadPoolLoadsXiaomiAccounts(t *testing.T) {
 	}
 
 	xiaomiBase, _ := url.Parse("https://token-plan-sgp.xiaomimimo.com/anthropic")
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase))
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase))
 	accounts, err := loadPool(poolDir, registry)
 	if err != nil {
 		t.Fatalf("loadPool: %v", err)
@@ -395,7 +392,6 @@ func TestXiaomiAdminAddValidatesAndSavesAccount(t *testing.T) {
 		recent:  newRecentErrors(5),
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewXiaomiProvider(xiaomiBase),
 		),
@@ -453,7 +449,7 @@ func TestXiaomiAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, xiaomiBase: xiaomiBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
@@ -484,7 +480,7 @@ func TestXiaomiAdminReportsNonAuthValidationFailureWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, xiaomiBase: xiaomiBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewXiaomiProvider(xiaomiBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusBadRequest,

@@ -11,7 +11,6 @@ var (
 	_ ProviderRouteTarget       = (*CodexProvider)(nil)
 	_ ProviderStreamDetector    = (*CodexProvider)(nil)
 
-	_ Provider = (*ClaudeProvider)(nil)
 	_ Provider = (*GeminiProvider)(nil)
 	_ Provider = (*AntigravityProvider)(nil)
 	_ Provider = (*GrokProvider)(nil)

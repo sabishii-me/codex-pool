@@ -566,32 +566,7 @@ func getPublicURL() string {
 	return ""
 }
 
-// PoolUserClaudeAuth matches the Claude Code credentials format for pool users.
-type PoolUserClaudeAuth struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	IDToken      string `json:"id_token"`
-	Email        string `json:"email"`
-}
 
-// generateClaudeAuth creates the credentials JSON content for a Claude Code pool user.
-// Uses a fake sk-ant-oat01-pool-* format that looks like a real Claude OAuth token
-// (CLAUDE_CODE_OAUTH_TOKEN) but contains an embedded user ID and signature for pool
-// authentication.
-func generateClaudeAuth(secret string, user *GatewayUser) (*PoolUserClaudeAuth, error) {
-	// Generate a fake sk-ant-oat01 token with embedded pool user info.
-	// Format: sk-ant-oat01-pool-<base64url(userID.timestamp.signature)>
-	accessToken := generateClaudePoolToken(secret, user.ID)
-
-	refreshToken := fmt.Sprintf("poolrt_%s_%s", user.ID, randomHex(16))
-
-	return &PoolUserClaudeAuth{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		IDToken:      "", // Claude doesn't use ID token
-		Email:        user.Email,
-	}, nil
-}
 
 // ClaudePoolTokenPrefix is the prefix for pool-generated Claude tokens.
 // These look like real sk-ant-oat01 tokens but have a "pool" marker for detection.

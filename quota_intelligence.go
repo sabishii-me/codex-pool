@@ -188,9 +188,6 @@ func quotaConfidence(intervals int, observedPct float64) string {
 
 func quotaThroughput(row RequestUsage, accountType string) int64 {
 	total := row.InputTokens + row.OutputTokens
-	if accountType == string(AccountTypeClaude) {
-		total += row.CachedInputTokens
-	}
 	if total < 0 {
 		return 0
 	}

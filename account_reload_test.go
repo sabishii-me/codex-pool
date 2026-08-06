@@ -33,7 +33,7 @@ func TestPreserveUsageSnapshotsAcrossAccountReload(t *testing.T) {
 
 func TestPreserveUsageSnapshotsDoesNotCrossAccountTypes(t *testing.T) {
 	current := &Account{Type: AccountTypeCodex, ID: "shared", Usage: UsageSnapshot{SecondaryUsedPercent: 18, secondarySet: true}}
-	loaded := &Account{Type: AccountTypeClaude, ID: "shared"}
+	loaded := &Account{Type: AccountTypeKimi, ID: "shared"}
 
 	preserveUsageSnapshots([]*Account{current}, []*Account{loaded})
 

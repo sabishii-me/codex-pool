@@ -65,7 +65,7 @@ func TestGoogleAIImageGenerationUsesAIStudioKeyAndAccounts(t *testing.T) {
 	}
 	defer analytics.Close()
 	pool := newProviderPool([]*ProviderConnection{connection})
-	h := &proxyHandler{cfg: &config{requestTimeout: 5 * time.Second}, transport: http.DefaultTransport, pool: pool, registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewGoogleAIImageProvider(base)), connections: NewConnectionSelector(pool), analyticsStore: analytics}
+	h := &proxyHandler{cfg: &config{requestTimeout: 5 * time.Second}, transport: http.DefaultTransport, pool: pool, registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewGoogleAIImageProvider(base)), connections: NewConnectionSelector(pool), analyticsStore: analytics}
 	body := []byte(`{"model":"google-ai-image/gemini-2.5-flash-image","prompt":"red point"}`)
 	recorder := httptest.NewRecorder()
 	if !h.handleNativeImageGeneration(recorder, httptest.NewRequest(http.MethodPost, "/v1/images/generations", bytes.NewReader(body)), body, "user", "origin", "request") {
@@ -87,7 +87,7 @@ func TestGoogleAIImageContributionValidatesAndStoresSeparateType(t *testing.T) {
 	base, _ := url.Parse(server.URL)
 	dir := t.TempDir()
 	pool := newProviderPool(nil)
-	h := &proxyHandler{cfg: &config{poolDir: dir, googleAIImageBase: base}, transport: http.DefaultTransport, pool: pool, registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewGoogleAIImageProvider(base))}
+	h := &proxyHandler{cfg: &config{poolDir: dir, googleAIImageBase: base}, transport: http.DefaultTransport, pool: pool, registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewGoogleAIImageProvider(base))}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/api/pool/accounts/google-ai-image/add", strings.NewReader(`{"api_key":"studio-key"}`))
 	request.Header.Set("Content-Type", "application/json")

@@ -37,7 +37,7 @@ func TestNvidiaProxyCanonicalUsageAndLargeBodyIntegrity(t *testing.T) {
 			defer upstream.Close()
 			base, _ := url.Parse(upstream.URL)
 			nvidia := NewNvidiaProvider(base)
-			registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), nvidia)
+			registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), nvidia)
 			account := &Account{Type: AccountTypeNvidia, ID: "nvidia_" + name, AccessToken: "contract-key", PlanType: "nvidia"}
 			analytics, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 			if err != nil {

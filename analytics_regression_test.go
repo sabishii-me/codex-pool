@@ -66,10 +66,9 @@ func TestDeepSeekSSEStreamRecordsExactlyOneRequest(t *testing.T) {
 
 	baseURL, _ := url.Parse(upstream.URL)
 	codex := NewCodexProvider(baseURL, baseURL, baseURL)
-	claude := NewClaudeProvider(baseURL)
 	gemini := NewGeminiProvider(baseURL, baseURL)
 	deepseek := NewDeepSeekProvider(baseURL)
-	registry := NewProviderRegistry(codex, claude, gemini, deepseek)
+	registry := NewProviderRegistry(codex, gemini, deepseek)
 
 	acc := &Account{
 		Type:        AccountTypeDeepSeek,
@@ -194,10 +193,9 @@ func TestZAISSEStreamRecordsExactlyOneRequest(t *testing.T) {
 
 	baseURL, _ := url.Parse(upstream.URL)
 	codex := NewCodexProvider(baseURL, baseURL, baseURL)
-	claude := NewClaudeProvider(baseURL)
 	gemini := NewGeminiProvider(baseURL, baseURL)
 	zai := NewZAIProvider(baseURL)
-	registry := NewProviderRegistry(codex, claude, gemini, zai)
+	registry := NewProviderRegistry(codex, gemini, zai)
 
 	acc := &Account{
 		Type:        AccountTypeZAI,
@@ -287,10 +285,9 @@ func TestDeepSeekNonStreamingRecordsExactlyOneRequest(t *testing.T) {
 
 	baseURL, _ := url.Parse(upstream.URL)
 	codex := NewCodexProvider(baseURL, baseURL, baseURL)
-	claude := NewClaudeProvider(baseURL)
 	gemini := NewGeminiProvider(baseURL, baseURL)
 	deepseek := NewDeepSeekProvider(baseURL)
-	registry := NewProviderRegistry(codex, claude, gemini, deepseek)
+	registry := NewProviderRegistry(codex, gemini, deepseek)
 
 	acc := &Account{
 		Type:        AccountTypeDeepSeek,

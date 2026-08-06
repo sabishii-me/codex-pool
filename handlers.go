@@ -513,93 +513,6 @@ func isUsageRequest(r *http.Request) bool {
 	return path == "/backend-api/wham/usage" || path == "/api/codex/usage"
 }
 
-// isClaudeProfileRequest checks if this is a Claude CLI profile request
-func isClaudeProfileRequest(r *http.Request) bool {
-	if r.Method != http.MethodGet {
-		return false
-	}
-	return r.URL.Path == "/api/claude_cli_profile" ||
-		r.URL.Path == "/api/oauth/profile" ||
-		r.URL.Path == "/api/oauth/claude_cli/client_data"
-}
-
-// isClaudeUsageRequest checks if this is a Claude usage request
-func isClaudeUsageRequest(r *http.Request) bool {
-	if r.Method != http.MethodGet {
-		return false
-	}
-	return r.URL.Path == "/api/oauth/usage"
-}
-
-// handleClaudeProfile returns pool info for Claude CLI profile requests
-func (h *proxyHandler) handleClaudeProfile(w http.ResponseWriter, r *http.Request) {
-	stats := h.pool.getPoolStats()
-
-	// Return a profile that indicates this is a pooled account
-	resp := map[string]any{
-		"email":             "pool@codex-pool.local",
-		"email_verified":    true,
-		"name":              "Codex Pool",
-		"subscription_type": "max",
-		"plan_type":         "max",
-		"is_pooled":         true,
-		"pool_stats": map[string]any{
-			"total_accounts":   stats.TotalCount,
-			"healthy_accounts": stats.HealthyCount,
-			"claude_accounts":  stats.ClaudeCount,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	respondJSON(w, resp)
-}
-
-// handleClaudeUsage returns blended usage from all Claude accounts
-func (h *proxyHandler) handleClaudeUsage(w http.ResponseWriter, r *http.Request) {
-	h.pollUpstreamUsage()
-
-	// Use time-weighted usage for accurate pool utilization
-	snap := h.pool.timeWeightedUsageByType(AccountTypeClaude)
-	stats := h.pool.getPoolStats()
-
-	// Format response like Claude's /api/oauth/usage endpoint
-	now := time.Now()
-	fiveHourReset := now.Add(5 * time.Hour)
-	sevenDayReset := now.Add(7 * 24 * time.Hour)
-
-	// Use earliest reset (soonest capacity refill)
-	if !snap.PrimaryResetAt.IsZero() {
-		fiveHourReset = snap.PrimaryResetAt
-	}
-	if !snap.SecondaryResetAt.IsZero() {
-		sevenDayReset = snap.SecondaryResetAt
-	}
-
-	resp := map[string]any{
-		"five_hour": map[string]any{
-			"utilization": snap.PrimaryUsedPercent * 100,
-			"resets_at":   fiveHourReset.Format(time.RFC3339),
-		},
-		"seven_day": map[string]any{
-			"utilization": snap.SecondaryUsedPercent * 100,
-			"resets_at":   sevenDayReset.Format(time.RFC3339),
-		},
-		"extra_usage": map[string]any{
-			"is_enabled": false,
-		},
-		// Pool-specific info
-		"is_pooled": true,
-		"pool": map[string]any{
-			"total_accounts":   stats.TotalCount,
-			"healthy_accounts": stats.HealthyCount,
-			"claude_accounts":  stats.ClaudeCount,
-		},
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	respondJSON(w, resp)
-}
-
 func codexUsageWindowResponse(window *codexUsageWindow, now time.Time) any {
 	if window == nil {
 		return nil
@@ -651,7 +564,6 @@ func (h *proxyHandler) handleAggregatedUsage(w http.ResponseWriter, reqID string
 			"dead_accounts":     poolStats.DeadCount,
 			"codex_accounts":    poolStats.CodexCount,
 			"gemini_accounts":   poolStats.GeminiCount,
-			"claude_accounts":   poolStats.ClaudeCount,
 			"zai_accounts":      poolStats.ZAICount,
 			"avg_primary_pct":   int(poolStats.AvgPrimaryUsed * 100),
 			"avg_secondary_pct": int(poolStats.AvgSecondaryUsed * 100),

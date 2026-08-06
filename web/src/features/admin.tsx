@@ -44,10 +44,10 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
   </PageFrame>;
 }
 
-type ContributableProvider = "codex" | "claude" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia" | "google-ai-image" | "bfl";
+type ContributableProvider = "codex" | "antigravity" | "kimi" | "kimi-platform" | "minimax" | "zai" | "xiaomi" | "grok" | "deepseek" | "qwen" | "openrouter" | "nvidia" | "google-ai-image" | "bfl";
 type ContributionMode = "oauth" | "key" | "json";
 const CONTRIBUTION_PROVIDERS: Array<{ id: ContributableProvider; label: string; mode: ContributionMode; hint?: string }> = [
-  { id: "codex", label: "Codex", mode: "oauth" }, { id: "claude", label: "Claude", mode: "oauth" }, { id: "antigravity", label: "Google Antigravity", mode: "oauth" },
+  { id: "codex", label: "Codex", mode: "oauth" }, { id: "antigravity", label: "Google Antigravity", mode: "oauth" },
   { id: "kimi", label: "Kimi Coding Plan", mode: "key", hint: "Use a Kimi Code Console coding-plan key." }, { id: "kimi-platform", label: "Kimi Platform", mode: "key" },
   { id: "minimax", label: "MiniMax", mode: "key" }, { id: "zai", label: "Z.ai", mode: "key", hint: "Use a GLM Coding Plan key." }, { id: "xiaomi", label: "Xiaomi", mode: "key", hint: "Use a MiMo Token Plan key." },
   { id: "deepseek", label: "DeepSeek", mode: "key" }, { id: "qwen", label: "Qwen", mode: "key" }, { id: "openrouter", label: "OpenRouter", mode: "key" }, { id: "nvidia", label: "NVIDIA", mode: "key" }, { id: "google-ai-image", label: "Google AI Studio · Image generation", mode: "key", hint: "Use a Google AI Studio API key. This is separate from Gemini LLM and Antigravity OAuth accounts." }, { id: "bfl", label: "Black Forest Labs", mode: "key" },
@@ -111,7 +111,7 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, ini
   const startOAuth = async () => {
     setBusy(true); setError(""); setPhase("preparing");
     try {
-      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex" | "claude", provider === "codex" ? 1455 : undefined);
+      const result = provider === "antigravity" ? await startAntigravityOAuth() : await startAccountOAuth(provider as "codex", 1455);
       if (!result.oauth_url || (provider === "antigravity" ? !result.session_id : !result.verifier)) throw new Error("Provider did not return an authorization session");
       setOAuth({ verifier: result.verifier, sessionID: result.session_id, state: result.state, url: result.oauth_url });
       setPhase("authorizing");
@@ -133,7 +133,7 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, ini
             result = await exchangeAntigravityOAuth(oauth.sessionID, credential, oauth.state || "");
           } else {
             const code = oauthCallbackCode(credential, oauth.state); if (!oauth.verifier) throw new Error("Authorization session expired");
-            result = await exchangeAccountOAuth(provider as "codex" | "claude", code, oauth.verifier);
+            result = await exchangeAccountOAuth("codex", code, oauth.verifier);
           }
           if (reauthorizing) {
             setExchangedAccountID(result.account_id);
@@ -141,7 +141,7 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, ini
           }
         }
       } else if (selected.mode === "json") await contributeGrok(credential);
-      else await contributeAPIKey(provider as Exclude<ContributableProvider, "codex" | "claude" | "antigravity" | "grok">, credential);
+      else await contributeAPIKey(provider as Exclude<ContributableProvider, "codex" | "antigravity" | "grok">, credential);
       await onAdded();
     } catch (failure) {
       if (isAuthorizationError(failure) && onAuthorizationLost) { onAuthorizationLost(); return; }
@@ -191,7 +191,7 @@ function ConnectionDetail({ connection, operation, onClose, onRun, onReauthorize
     </footer>
   </aside>;
 }
-function isOAuthProvider(provider: string): provider is "codex" | "claude" | "antigravity" { return provider === "codex" || provider === "claude" || provider === "antigravity"; }
+function isOAuthProvider(provider: string): provider is "codex" | "antigravity" { return provider === "codex" || provider === "antigravity"; }
 function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirmOpenChange, onRun }: {
   connection: OperatorProviderConnectionV2;
   busy: boolean;

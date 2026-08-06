@@ -47,7 +47,6 @@ func TestModelRouteOverrideOpenRouterModelStripsPrefixAndUsesOpenRouterBase(t *t
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewOpenRouterProvider(openrouterBase),
 		),
@@ -77,7 +76,7 @@ func TestOpenRouterAdminAddValidatesAndSavesAccount(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, openrouterBase: openrouterBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
 			if req.Header.Get("Authorization") != "Bearer sk-or-valid" {
@@ -129,7 +128,7 @@ func TestOpenRouterAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir, openrouterBase: openrouterBase},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewOpenRouterProvider(openrouterBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,

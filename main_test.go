@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -271,7 +270,6 @@ func TestModelRouteOverrideOpenAIModelKeepsBackendAPIBase(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			NewCodexProvider(responsesBase, whamBase, nil),
-			&ClaudeProvider{},
 			&GeminiProvider{},
 		),
 	}
@@ -296,7 +294,6 @@ func TestModelRouteOverrideRoutesGrokCodeModels(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
 			NewGeminiProvider(base, base),
 			NewGrokProvider(base),
 		),
@@ -340,175 +337,6 @@ func TestCodexSSEStillSamplesWhenCyberPolicyMayInspect(t *testing.T) {
 	}
 }
 
-func TestModelRouteOverrideDoesNotRouteCodexClientPathsToClaude(t *testing.T) {
-	base, _ := url.Parse("https://chatgpt.com/backend-api/codex")
-	handler := &proxyHandler{
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-	}
-
-	for _, path := range []string{"/v1/responses", "/responses", "/v1/chat/completions", "/v1/completions"} {
-		for _, model := range []string{"opus", "fable"} {
-			provider, overrideBase, rewritten := handler.modelRouteOverride(path, model, []byte(`{"model":"`+model+`"}`))
-			if provider != nil || overrideBase != nil || rewritten != nil {
-				t.Fatalf("modelRouteOverride(%q, %s) = provider=%v base=%v rewritten=%s, want no Claude override", path, model, provider, overrideBase, rewritten)
-			}
-		}
-	}
-}
-
-func TestModelRouteOverrideRewritesClaudeFableAlias(t *testing.T) {
-	base, _ := url.Parse("https://api.anthropic.com")
-	handler := &proxyHandler{
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-	}
-
-	provider, overrideBase, rewritten := handler.modelRouteOverride("/v1/messages", "fable", []byte(`{"model":"fable"}`))
-	if provider == nil || provider.Type() != AccountTypeClaude || overrideBase == nil {
-		t.Fatalf("modelRouteOverride(/v1/messages, fable) = provider=%v base=%v, want Claude override", provider, overrideBase)
-	}
-	if !bytes.Contains(rewritten, []byte(`"model":"claude-fable-5"`)) {
-		t.Fatalf("rewritten body = %s, want claude-fable-5", rewritten)
-	}
-}
-
-func TestModelRouteOverrideRewritesClaudeSonnetAlias(t *testing.T) {
-	base, _ := url.Parse("https://api.anthropic.com")
-	handler := &proxyHandler{
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-	}
-
-	provider, overrideBase, rewritten := handler.modelRouteOverride("/v1/messages", "sonnet", []byte(`{"model":"sonnet"}`))
-	if provider == nil || provider.Type() != AccountTypeClaude || overrideBase == nil {
-		t.Fatalf("modelRouteOverride(/v1/messages, sonnet) = provider=%v base=%v, want Claude override", provider, overrideBase)
-	}
-	if !bytes.Contains(rewritten, []byte(`"model":"claude-sonnet-5"`)) {
-		t.Fatalf("rewritten body = %s, want claude-sonnet-5", rewritten)
-	}
-}
-
-func TestCodexClientClaudeModelStaysOnCodexAccount(t *testing.T) {
-	t.Setenv("POOL_JWT_SECRET", "test-secret")
-
-	base, _ := url.Parse("https://chatgpt.com/backend-api/codex")
-	codex := &Account{Type: AccountTypeCodex, ID: "codex", AccessToken: "codex-token", AccountID: "acct_codex", PlanType: "pro"}
-	claude := &Account{Type: AccountTypeClaude, ID: "claude", AccessToken: "sk-ant-api-upstream", PlanType: "max"}
-	var upstreamPath string
-	var codexAccountID string
-	var claudeAPIKey string
-
-	h := &proxyHandler{
-		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{codex, claude}),
-		metrics: newMetrics(),
-		recent:  newRecentErrors(5),
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			upstreamPath = req.URL.Path
-			codexAccountID = req.Header.Get("ChatGPT-Account-ID")
-			claudeAPIKey = req.Header.Get("X-Api-Key")
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-				Body:       io.NopCloser(bytes.NewBufferString(`{"ok":true}`)),
-			}, nil
-		}),
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"opus","input":"hello"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("test-secret", "codex-user"))
-	rr := httptest.NewRecorder()
-	h.proxyRequest(rr, req, "req-codex-opus")
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
-	}
-	if upstreamPath != "/backend-api/codex/responses" {
-		t.Fatalf("upstream path = %q, want Codex responses path", upstreamPath)
-	}
-	if codexAccountID != "acct_codex" {
-		t.Fatalf("ChatGPT-Account-ID = %q, want Codex account", codexAccountID)
-	}
-	if claudeAPIKey != "" {
-		t.Fatalf("Claude X-Api-Key should not be set, got %q", claudeAPIKey)
-	}
-}
-
-func TestClaudePoolTranslatesResponsesClientFormat(t *testing.T) {
-	t.Setenv("POOL_JWT_SECRET", "test-secret")
-
-	base, _ := url.Parse("https://api.anthropic.com")
-	claude := &Account{Type: AccountTypeClaude, ID: "claude", AccessToken: "sk-ant-api-upstream", PlanType: "max"}
-	transportCalled := false
-	var upstreamPath string
-	var upstreamModel string
-
-	h := &proxyHandler{
-		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{claude}),
-		metrics: newMetrics(),
-		recent:  newRecentErrors(5),
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			transportCalled = true
-			upstreamPath = req.URL.Path
-			var body map[string]any
-			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
-				t.Fatal(err)
-			}
-			upstreamModel, _ = body["model"].(string)
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-				Body: io.NopCloser(strings.NewReader(
-					`{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-4-8","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`,
-				)),
-			}, nil
-		}),
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewBufferString(`{"model":"opus","input":"hello"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Api-Key", generateClaudePoolToken("test-secret", "claude-user"))
-	rr := httptest.NewRecorder()
-	h.proxyRequest(rr, req, "req-claude-responses")
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
-	}
-	if !transportCalled {
-		t.Fatal("transport was not called")
-	}
-	if upstreamPath != "/v1/messages" {
-		t.Fatalf("upstream path = %q", upstreamPath)
-	}
-	if upstreamModel != "claude-opus-4-8" {
-		t.Fatalf("upstream model = %q", upstreamModel)
-	}
-}
-
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -546,177 +374,6 @@ func TestClaudeToolNameReadCloserRestoresSplitNames(t *testing.T) {
 	}
 }
 
-func TestClaudePoolTokenAcceptedViaXAPIKeyPreservesNativeClaudeRequest(t *testing.T) {
-	t.Setenv("POOL_JWT_SECRET", "test-secret")
-
-	base, _ := url.Parse("https://api.anthropic.com")
-	acc := &Account{Type: AccountTypeClaude, ID: "claude", AccessToken: "sk-ant-oat-upstream", PlanType: "max"}
-	var upstreamBody map[string]any
-	var upstreamAuth string
-	var upstreamAPIKey string
-	var upstreamBeta string
-	var obfuscatedToolName string
-
-	h := &proxyHandler{
-		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{acc}),
-		metrics: newMetrics(),
-		recent:  newRecentErrors(5),
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, base, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			upstreamAuth = req.Header.Get("Authorization")
-			upstreamAPIKey = req.Header.Get("X-Api-Key")
-			upstreamBeta = req.Header.Get("anthropic-beta")
-			body, _ := io.ReadAll(req.Body)
-			if err := json.Unmarshal(body, &upstreamBody); err != nil {
-				t.Fatalf("unmarshal upstream body: %v\n%s", err, body)
-			}
-			tools, _ := upstreamBody["tools"].([]any)
-			tool, _ := tools[0].(map[string]any)
-			obfuscatedToolName, _ = tool["name"].(string)
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Header:     http.Header{"Content-Type": []string{"application/json"}},
-				Body:       io.NopCloser(bytes.NewBufferString(`{"content":[{"type":"tool_use","name":"` + obfuscatedToolName + `"}]}`)),
-			}, nil
-		}),
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{
-		"model":"claude-sonnet-4-6",
-		"max_tokens":128,
-		"system":[{"type":"text","text":"be helpful","cache_control":{"type":"ephemeral","ttl":"5m"}}],
-		"tools":[{"name":"Bash","input_schema":{"type":"object"},"cache_control":{"type":"ephemeral","ttl":"5m"}}],
-		"messages":[{"role":"user","content":[{"type":"text","text":"hello","cache_control":{"type":"ephemeral","ttl":"1h"}}]}]
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Api-Key", generateClaudePoolToken("test-secret", "sdk-user"))
-	rr := httptest.NewRecorder()
-	h.proxyRequest(rr, req, "req-sdk")
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
-	}
-	if upstreamAuth != "Bearer sk-ant-oat-upstream" {
-		t.Fatalf("upstream Authorization = %q", upstreamAuth)
-	}
-	if upstreamAPIKey != "" {
-		t.Fatalf("upstream X-Api-Key leaked pool token: %q", upstreamAPIKey)
-	}
-	for _, beta := range []string{betaClaudeCode, betaOAuth, betaInterleavedThink, betaCacheScope} {
-		if !strings.Contains(upstreamBeta, beta) {
-			t.Fatalf("upstream anthropic-beta = %q, missing %q", upstreamBeta, beta)
-		}
-	}
-	if obfuscatedToolName != "Bash" {
-		t.Fatalf("tool name should be preserved, got %q", obfuscatedToolName)
-	}
-	system, _ := upstreamBody["system"].([]any)
-	systemBlock, _ := system[0].(map[string]any)
-	if text, _ := systemBlock["text"].(string); !strings.Contains(text, "x-anthropic-billing-header") {
-		t.Fatalf("billing system block missing: %#v", systemBlock)
-	}
-	if len(system) != 3 || system[1].(map[string]any)["text"] != ccSystemPrefix {
-		t.Fatalf("Claude Code system shape missing: %#v", system)
-	}
-	tools, _ := upstreamBody["tools"].([]any)
-	tool, _ := tools[0].(map[string]any)
-	toolCache, _ := tool["cache_control"].(map[string]any)
-	if tool["name"] != "Bash" || toolCache["ttl"] != "5m" {
-		t.Fatalf("tool cache block was rewritten: %#v", tool)
-	}
-	messages, _ := upstreamBody["messages"].([]any)
-	if len(messages) != 3 {
-		t.Fatalf("messages = %#v, want instruction pair plus original", messages)
-	}
-	instruction := messages[0].(map[string]any)["content"].([]any)[0].(map[string]any)
-	if instruction["text"] != "[System Instructions]\nbe helpful" {
-		t.Fatalf("system instructions were not preserved: %#v", instruction)
-	}
-	original, _ := messages[2].(map[string]any)
-	content, _ := original["content"].([]any)
-	textBlock, _ := content[0].(map[string]any)
-	messageCache, _ := textBlock["cache_control"].(map[string]any)
-	if textBlock["text"] != "hello" || messageCache["ttl"] != "1h" {
-		t.Fatalf("message cache block was rewritten: %#v", textBlock)
-	}
-	if !strings.Contains(rr.Body.String(), `"name":"Bash"`) {
-		t.Fatalf("response body changed unexpectedly: %s", rr.Body.String())
-	}
-}
-
-func TestClaudeSDKRequestToGPTMapsReasoningEffort(t *testing.T) {
-	t.Setenv("POOL_JWT_SECRET", "test-secret")
-
-	base, _ := url.Parse("https://chatgpt.com/backend-api/codex")
-	wham, _ := url.Parse("https://chatgpt.com/backend-api")
-	acc := &Account{Type: AccountTypeCodex, ID: "codex", AccessToken: "codex-token", AccountID: "acct_codex", PlanType: "pro"}
-	var upstreamPath string
-	var upstreamBody map[string]any
-
-	h := &proxyHandler{
-		cfg:     &config{maxAttempts: 1, maxInMemoryBodyBytes: 4096},
-		pool:    newProviderPool([]*Account{acc}),
-		metrics: newMetrics(),
-		recent:  newRecentErrors(5),
-		registry: NewProviderRegistry(
-			NewCodexProvider(base, wham, nil),
-			NewClaudeProvider(base),
-			NewGeminiProvider(base, base),
-		),
-		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-			upstreamPath = req.URL.Path
-			body, _ := io.ReadAll(req.Body)
-			if err := json.Unmarshal(body, &upstreamBody); err != nil {
-				t.Fatalf("unmarshal upstream body: %v\n%s", err, body)
-			}
-			return &http.Response{
-				StatusCode: http.StatusOK,
-				Status:     "200 OK",
-				Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
-				Body:       io.NopCloser(bytes.NewBufferString("data: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[]}}\n\n")),
-			}, nil
-		}),
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewBufferString(`{
-		"model":"gpt-5.5",
-		"max_tokens":128,
-		"thinking":{"type":"enabled","budget_tokens":8192},
-		"messages":[{"role":"user","content":"hello"}]
-	}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Api-Key", generateClaudePoolToken("test-secret", "sdk-user"))
-	rr := httptest.NewRecorder()
-	h.proxyRequest(rr, req, "req-gpt")
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, body=%s", rr.Code, rr.Body.String())
-	}
-	if strings.Contains(rr.Header().Get("Content-Type"), "text/event-stream") {
-		t.Fatalf("non-streaming Claude client got SSE response: %s", rr.Body.String())
-	}
-	var translated map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &translated); err != nil {
-		t.Fatalf("non-streaming Claude response was not JSON: %v\n%s", err, rr.Body.String())
-	}
-	if translated["type"] != "message" || translated["model"] != "gpt-5.5" {
-		t.Fatalf("unexpected translated Claude response: %#v", translated)
-	}
-	if upstreamPath != "/backend-api/codex/responses" {
-		t.Fatalf("upstream path = %q", upstreamPath)
-	}
-	reasoning, _ := upstreamBody["reasoning"].(map[string]any)
-	if got := reasoning["effort"]; got != "medium" {
-		t.Fatalf("reasoning effort = %#v, body=%#v", got, upstreamBody)
-	}
-}
-
 func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 	t.Setenv("POOL_JWT_SECRET", "test-secret")
 
@@ -750,7 +407,7 @@ func TestCyberPolicyStreamPinsConversationToCyberAccessAccount(t *testing.T) {
 		}),
 		refreshTransport: http.DefaultTransport,
 		pool:             newProviderPool([]*Account{ordinary, cyber}),
-		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
 	}
@@ -805,7 +462,7 @@ func TestCyberPolicyErrorRetriesOnCyberAccessAccount(t *testing.T) {
 		}),
 		refreshTransport: http.DefaultTransport,
 		pool:             newProviderPool([]*Account{ordinary, cyber}),
-		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(),
 		recent:           newRecentErrors(5),
 	}
@@ -866,12 +523,6 @@ func TestInjectClaudeModelsAddsMissingCodexFallbackModels(t *testing.T) {
 		if got := int(found[slug]["context_window"].(float64)); got != 272000 {
 			t.Fatalf("%s context_window = %d, want 272000", slug, got)
 		}
-	}
-	if found["claude-sonnet-5"] == nil {
-		t.Fatalf("missing claude-sonnet-5 in injected catalog: %#v", models)
-	}
-	if got := found["claude-sonnet-5"]["display_name"]; got != "Claude Sonnet 5" {
-		t.Fatalf("claude-sonnet-5 display_name = %#v", got)
 	}
 }
 
@@ -1115,108 +766,6 @@ func TestExtractRequestedModelFromJSON(t *testing.T) {
 	}
 	if !modelRequiresCodexPro(got) {
 		t.Fatalf("expected model to require codex pro")
-	}
-}
-
-func TestPlanMatchesClaudePremium(t *testing.T) {
-	t.Parallel()
-
-	for _, plan := range []string{"max", "max_x5", "max_x20", "team", "team_enterprise", "max_team", " Max "} {
-		if !planMatchesRequired(plan, "claude_premium") {
-			t.Fatalf("expected plan %q to match claude_premium", plan)
-		}
-	}
-	for _, plan := range []string{"", "pro", "free", "enterprise"} {
-		if planMatchesRequired(plan, "claude_premium") {
-			t.Fatalf("did not expect plan %q to match claude_premium", plan)
-		}
-	}
-}
-
-func TestClaudeRequestRequiresPremium(t *testing.T) {
-	t.Parallel()
-
-	if !claudeRequestRequiresPremium(nil, "claude-opus-4-7") {
-		t.Fatal("expected opus model to require a premium Claude account")
-	}
-	if !claudeRequestRequiresPremium(nil, "opus") {
-		t.Fatal("expected opus alias to require a premium Claude account")
-	}
-	if !claudeRequestRequiresPremium(nil, "claude-sonnet-5 [1m]") {
-		t.Fatal("expected [1m] model suffix to require a premium Claude account")
-	}
-	if !claudeRequestRequiresPremium(nil, "claude-sonnet-4-6 [1m]") {
-		t.Fatal("expected [1m] model suffix to require a premium Claude account")
-	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
-	req.Header.Set("anthropic-beta", "context-1m-2025-08-07")
-	if !claudeRequestRequiresPremium(req, "claude-sonnet-4-6") {
-		t.Fatal("expected 1m beta header to require a premium Claude account")
-	}
-	if claudeRequestRequiresPremium(nil, "claude-sonnet-5") {
-		t.Fatal("did not expect regular sonnet model to require a premium Claude account")
-	}
-	if claudeRequestRequiresPremium(nil, "claude-sonnet-4-6") {
-		t.Fatal("did not expect regular sonnet model to require a premium Claude account")
-	}
-}
-
-func TestClaudePremiumRequestSkipsPinnedProAccount(t *testing.T) {
-	t.Parallel()
-
-	pro := &Account{Type: AccountTypeClaude, ID: "pro", PlanType: "pro"}
-	team := &Account{Type: AccountTypeClaude, ID: "team", PlanType: "team"}
-	pool := newProviderPool([]*Account{pro, team})
-	pool.bindAffinity("conv", pro.ID)
-
-	got := pool.candidate("conv", nil, AccountTypeClaude, "claude_premium", "")
-	if got == nil {
-		t.Fatal("expected a premium Claude account")
-	}
-	if got.ID != team.ID {
-		t.Fatalf("candidate = %q, want team account", got.ID)
-	}
-}
-
-func TestClaudeProviderParseUsageHeaders(t *testing.T) {
-	acc := &Account{Type: AccountTypeClaude}
-	provider := &ClaudeProvider{}
-	initialAt := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Second)
-	acc.Usage = UsageSnapshot{
-		PrimaryUsedPercent:   0.25,
-		SecondaryUsedPercent: 0.33,
-		PrimaryUsed:          0.25,
-		SecondaryUsed:        0.33,
-		PrimaryResetAt:       initialAt,
-		SecondaryResetAt:     initialAt,
-		RetrievedAt:          initialAt,
-		Source:               "claude-api",
-	}
-
-	provider.ParseUsageHeaders(acc, mapToHeader(map[string]string{
-		"anthropic-ratelimit-unified-tokens-utilization":   "99.9",
-		"anthropic-ratelimit-unified-requests-utilization": "88.8",
-		"anthropic-ratelimit-unified-tokens-reset":         "9999999999",
-		"anthropic-ratelimit-unified-requests-reset":       "9999999999",
-	}))
-
-	if math.Abs(acc.Usage.PrimaryUsedPercent-0.999) > 1e-9 {
-		t.Fatalf("primary percent = %v", acc.Usage.PrimaryUsedPercent)
-	}
-	if math.Abs(acc.Usage.SecondaryUsedPercent-0.888) > 1e-9 {
-		t.Fatalf("secondary percent = %v", acc.Usage.SecondaryUsedPercent)
-	}
-	if acc.Usage.PrimaryResetAt.UTC().Unix() != 9999999999 {
-		t.Fatalf("primary reset = %v want %v", acc.Usage.PrimaryResetAt.UTC(), time.Unix(9999999999, 0).UTC())
-	}
-	if acc.Usage.SecondaryResetAt.UTC().Unix() != 9999999999 {
-		t.Fatalf("secondary reset = %v want %v", acc.Usage.SecondaryResetAt.UTC(), time.Unix(9999999999, 0).UTC())
-	}
-	if acc.Usage.Source != "headers" {
-		t.Fatalf("source = %q", acc.Usage.Source)
-	}
-	if !acc.Usage.RetrievedAt.After(initialAt) {
-		t.Fatalf("retrieved_at should be updated from headers: %v", acc.Usage.RetrievedAt.UTC())
 	}
 }
 

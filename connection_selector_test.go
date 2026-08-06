@@ -73,14 +73,14 @@ func TestConnectionSelectorDelegatesTypedAffinityAndExactSelection(t *testing.T)
 	if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeCodex, RoutingContext: RequestRoutingContext{Provider: AccountTypeCodex, Protocol: "openai_responses", AffinityKey: "raw-conversation"}, ConversationID: privateKey}); got != first {
 		t.Fatalf("non-HMAC routing context reused a binding: %v", got)
 	}
-	if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeClaude, RoutingContext: RequestRoutingContext{Provider: AccountTypeCodex, Protocol: "openai_responses", CanonicalModel: "test-model", SoftAffinity: ClientAffinitySignal{Kind: AffinityClientSession}, AffinityKey: privateKey}, ConversationID: "conversation"}); got != nil {
+	if got := selector.Select(ConnectionSelection{ProviderID: AccountTypeKimi, RoutingContext: RequestRoutingContext{Provider: AccountTypeCodex, Protocol: "openai_responses", CanonicalModel: "test-model", SoftAffinity: ClientAffinitySignal{Kind: AffinityClientSession}, AffinityKey: privateKey}, ConversationID: "conversation"}); got != nil {
 		t.Fatalf("cross-provider routing context selected a Codex connection: %v", got)
 	}
 	exact := selector.Select(ConnectionSelection{Mode: SelectExactID, ProviderID: AccountTypeCodex, ConnectionID: first.ID})
 	if exact != first {
 		t.Fatalf("exact=%v, want first", exact)
 	}
-	if got := selector.Select(ConnectionSelection{Mode: SelectExactID, ProviderID: AccountTypeClaude, ConnectionID: first.ID}); got != nil {
+	if got := selector.Select(ConnectionSelection{Mode: SelectExactID, ProviderID: AccountTypeKimi, ConnectionID: first.ID}); got != nil {
 		t.Fatalf("cross-provider exact selection=%v", got)
 	}
 }
@@ -88,14 +88,14 @@ func TestConnectionSelectorDelegatesTypedAffinityAndExactSelection(t *testing.T)
 func TestConnectionSelectorDelegatesCyberAndCooldownSelection(t *testing.T) {
 	ordinary := &ProviderConnection{Type: AccountTypeCodex, ID: "ordinary", PlanType: "pro"}
 	cyber := &ProviderConnection{Type: AccountTypeCodex, ID: "cyber", PlanType: "pro", CyberAccess: true}
-	cooling := &ProviderConnection{Type: AccountTypeClaude, ID: "cooling", RateLimitUntil: time.Now().Add(time.Minute)}
+	cooling := &ProviderConnection{Type: AccountTypeKimi, ID: "cooling", RateLimitUntil: time.Now().Add(time.Minute)}
 	selector := NewConnectionSelector(newProviderPool([]*ProviderConnection{ordinary, cyber, cooling}))
 
 	got := selector.Select(ConnectionSelection{Mode: SelectCyberAccess, ProviderID: AccountTypeCodex})
 	if got != cyber {
 		t.Fatalf("cyber=%v, want cyber", got)
 	}
-	wait := selector.NearestCooldown(AccountTypeClaude, nil)
+	wait := selector.NearestCooldown(AccountTypeKimi, nil)
 	if wait <= 0 || wait > time.Minute {
 		t.Fatalf("cooldown=%v", wait)
 	}

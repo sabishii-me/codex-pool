@@ -122,7 +122,6 @@ func TestModelRouteOverrideZAIModelUsesZAIBase(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewZAIProvider(zaiBase),
 		),

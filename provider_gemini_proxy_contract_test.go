@@ -39,7 +39,7 @@ func TestGeminiProxyCanonicalUsageAndLargeBodyIntegrity(t *testing.T) {
 			defer upstream.Close()
 			base, _ := url.Parse(upstream.URL)
 			gemini := NewGeminiProvider(base, base)
-			registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), gemini)
+			registry := NewProviderRegistry(NewCodexProvider(base, base, base), gemini)
 			account := &Account{Type: AccountTypeGemini, ID: "gemini_" + name, AccessToken: "contract-key", PlanType: "gemini"}
 			analytics, err := newAnalyticsStore(filepath.Join(t.TempDir(), "analytics.db"))
 			if err != nil {

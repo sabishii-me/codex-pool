@@ -153,8 +153,8 @@ func (pw *poolWatcher) reloadPool() {
 		counts[a.Type]++
 	}
 	pw.handler.pool.mu.RUnlock()
-	log.Printf("hot-reload complete: codex=%d claude=%d gemini=%d antigravity=%d kimi=%d minimax=%d zai=%d xiaomi=%d grok=%d deepseek=%d qwen=%d openrouter=%d nvidia=%d",
-		counts[AccountTypeCodex], counts[AccountTypeClaude], counts[AccountTypeGemini],
+	log.Printf("hot-reload complete: codex=%d gemini=%d antigravity=%d kimi=%d minimax=%d zai=%d xiaomi=%d grok=%d deepseek=%d qwen=%d openrouter=%d nvidia=%d",
+		counts[AccountTypeCodex], counts[AccountTypeGemini],
 		counts[AccountTypeAntigravity],
 		counts[AccountTypeKimi], counts[AccountTypeMinimax], counts[AccountTypeZAI], counts[AccountTypeXiaomi], counts[AccountTypeGrok],
 		counts[AccountTypeDeepSeek], counts[AccountTypeQwen], counts[AccountTypeOpenRouter], counts[AccountTypeNvidia])

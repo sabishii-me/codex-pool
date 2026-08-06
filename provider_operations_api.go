@@ -11,7 +11,6 @@ import (
 type ProviderOperationsAPI struct {
 	authorizeAdmin func(http.ResponseWriter, *http.Request) bool
 
-	claude              http.HandlerFunc
 	codex               http.HandlerFunc
 	antigravityCallback http.HandlerFunc
 	antigravitySync     http.HandlerFunc
@@ -31,10 +30,6 @@ func (api *ProviderOperationsAPI) TryServe(w http.ResponseWriter, r *http.Reques
 
 	// OAuth callbacks are authenticated by upstream state/PKCE rather than an
 	// operator cookie because browsers reach them through provider redirects.
-	if r.URL.Path == "/admin/claude/callback" {
-		api.claude(w, r)
-		return true
-	}
 	if r.URL.Path == "/admin/antigravity/callback" {
 		if !requireMethod(w, r, http.MethodGet) {
 			return true
@@ -43,9 +38,6 @@ func (api *ProviderOperationsAPI) TryServe(w http.ResponseWriter, r *http.Reques
 		return true
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/admin/claude") {
-		return api.serveAdmin(w, r, api.claude)
-	}
 	if strings.HasPrefix(r.URL.Path, "/admin/codex") {
 		return api.serveAdmin(w, r, api.codex)
 	}
@@ -85,7 +77,6 @@ func (h *proxyHandler) providerOperationsAPIService() *ProviderOperationsAPI {
 	}
 	return &ProviderOperationsAPI{
 		authorizeAdmin:      h.checkAdminAuth,
-		claude:              h.serveClaudeAdmin,
 		codex:               h.serveCodexAdmin,
 		antigravityCallback: h.handleAntigravityCallback,
 		antigravitySync:     h.handleAntigravityModelSync,

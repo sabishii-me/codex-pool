@@ -66,7 +66,7 @@ describe("capacityForecasts", () => {
   });
 
   it("uses a seven-day fallback when a provider omits its weekly window length", () => {
-    const forecast = capacityForecasts([account({ type: "claude", secondary_window_minutes: 0, secondary_reset_minutes: 3960, secondary_window_used_pct: 8 })])[0];
+    const forecast = capacityForecasts([account({ type: "kimi", secondary_window_minutes: 0, secondary_reset_minutes: 3960, secondary_window_used_pct: 8 })])[0];
     expect(forecast.loadEquivalents).toBeCloseTo(0.13, 1);
     expect(forecast.minimumToAdd).toBe(0);
     expect(forecast.earliestFullMinutes).toBeNull();

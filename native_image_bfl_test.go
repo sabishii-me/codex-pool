@@ -65,7 +65,7 @@ func TestBFLNativeImageGenerationPoolsAndAccountsExactlyOnce(t *testing.T) {
 	}
 	defer analytics.Close()
 	connection := &ProviderConnection{Type: AccountTypeBFL, ID: "bfl-one", AccessToken: "bfl-secret", PlanType: "credits"}
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), NewBFLProvider(base))
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), NewBFLProvider(base))
 	h := &proxyHandler{cfg: &config{requestTimeout: 5 * time.Second}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: registry, connections: NewConnectionSelector(newProviderPool(nil)), analyticsStore: analytics, metrics: newMetrics()}
 	h.connections = NewConnectionSelector(h.pool)
 	recorder := httptest.NewRecorder()
@@ -106,7 +106,7 @@ func TestBFLRequestValidationDoesNotCallUpstream(t *testing.T) {
 	calls := 0
 	base, _ := url.Parse("https://api.bfl.ai")
 	connection := &ProviderConnection{Type: AccountTypeBFL, ID: "bfl", AccessToken: "secret"}
-	h := &proxyHandler{cfg: &config{}, transport: roundTripFunc(func(*http.Request) (*http.Response, error) { calls++; return nil, errors.New("unexpected") }), pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
+	h := &proxyHandler{cfg: &config{}, transport: roundTripFunc(func(*http.Request) (*http.Response, error) { calls++; return nil, errors.New("unexpected") }), pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
 	h.connections = NewConnectionSelector(h.pool)
 	for _, test := range []struct{ method, body string }{
 		{http.MethodGet, `{"model":"bfl/flux-2-pro","prompt":"x"}`},
@@ -181,7 +181,7 @@ func TestBFLFailureIsAccountedExactlyOnce(t *testing.T) {
 	}
 	defer analytics.Close()
 	connection := &ProviderConnection{Type: AccountTypeBFL, ID: "failed", AccessToken: "key"}
-	h := &proxyHandler{cfg: &config{}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base)), analyticsStore: analytics}
+	h := &proxyHandler{cfg: &config{}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base)), analyticsStore: analytics}
 	h.connections = NewConnectionSelector(h.pool)
 	body := []byte(`{"model":"bfl/flux-2-pro","prompt":"failure"}`)
 	recorder := httptest.NewRecorder()
@@ -232,7 +232,7 @@ func TestBFLRateLimitCoolsConnectionWithoutRetry(t *testing.T) {
 	defer server.Close()
 	base, _ := url.Parse(server.URL)
 	connection := &ProviderConnection{Type: AccountTypeBFL, ID: "limited", AccessToken: "secret"}
-	h := &proxyHandler{cfg: &config{}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
+	h := &proxyHandler{cfg: &config{}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
 	h.connections = NewConnectionSelector(h.pool)
 	recorder := httptest.NewRecorder()
 	body := []byte(`{"model":"bfl/flux-2-pro","prompt":"one request"}`)
@@ -289,7 +289,7 @@ func TestBFLAdminValidatesAndStoresKeySeparately(t *testing.T) {
 	defer server.Close()
 	base, _ := url.Parse(server.URL)
 	dir := t.TempDir()
-	h := &proxyHandler{cfg: &config{poolDir: dir, bflBase: base}, transport: http.DefaultTransport, pool: newProviderPool(nil), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
+	h := &proxyHandler{cfg: &config{poolDir: dir, bflBase: base}, transport: http.DefaultTransport, pool: newProviderPool(nil), registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/admin/bfl/add", strings.NewReader(`{"api_key":"bfl-key"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -342,7 +342,7 @@ func TestBFLContributionReusesExistingConnectionForSameKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	connection := &ProviderConnection{Type: AccountTypeBFL, ID: "stable", File: path, AccessToken: "bfl-key", Dead: true}
-	h := &proxyHandler{cfg: &config{poolDir: dir, bflBase: base}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
+	h := &proxyHandler{cfg: &config{poolDir: dir, bflBase: base}, transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}), registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base))}
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/admin/bfl/add", strings.NewReader(`{"api_key":"bfl-key"}`))
 	request.Header.Set("Content-Type", "application/json")
@@ -362,7 +362,7 @@ func TestBFLModelRoutingProjectionUsesNativeWorkloadRoute(t *testing.T) {
 	base, _ := url.Parse("https://api.bfl.ai")
 	ready := &ProviderConnection{Type: AccountTypeBFL, ID: "ready", Identity: ConnectionIdentity{DisplayName: "Ready"}}
 	cooling := &ProviderConnection{Type: AccountTypeBFL, ID: "cooling", Identity: ConnectionIdentity{DisplayName: "Cooling"}, RateLimitUntil: time.Now().Add(time.Hour)}
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(base))
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(base))
 	h := &proxyHandler{pool: newProviderPool([]*ProviderConnection{ready, cooling}), registry: registry, modelRoutes: NewModelRouteRegistry(registry)}
 	recorder := httptest.NewRecorder()
 	h.serveModelRouting(recorder, httptest.NewRequest(http.MethodGet, "/api/v2/models/bfl%2Fflux-2-pro/routing", nil))
@@ -388,7 +388,7 @@ func TestBFLAccountReloadPreservesStableIdentityAndLifecycle(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"type":"bfl","api_key":"secret","disabled":true,"plan_type":"credits","identity":{"display_name":"BFL account"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewBFLProvider(nil))
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewBFLProvider(nil))
 	accounts, err := loadPool(dir, registry)
 	if err != nil {
 		t.Fatal(err)

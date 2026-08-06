@@ -1,12 +1,10 @@
 package main
 
 import (
-	"log"
 	"time"
 )
 
 const (
-	claudePrimaryCooldownThreshold = 1.0
 	primaryHardExcludeThreshold    = 0.95
 	secondaryHardExcludeThreshold  = 0.99
 )
@@ -62,38 +60,4 @@ func accountAvailableForRoutingLocked(a *ProviderConnection, now time.Time) bool
 		return false
 	}
 	return !accountUsageExhaustedLocked(a)
-}
-
-func syncUsageCooldown(a *ProviderConnection) {
-	if a == nil {
-		return
-	}
-
-	now := time.Now()
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if a.Type != AccountTypeClaude {
-		return
-	}
-
-	primaryUsed := accountPrimaryUsageLocked(a)
-	resetAt := a.Usage.PrimaryResetAt
-	if primaryUsed < claudePrimaryCooldownThreshold || resetAt.IsZero() || !resetAt.After(now) {
-		return
-	}
-
-	if !a.RateLimitUntil.Before(resetAt) {
-		return
-	}
-
-	a.RateLimitUntil = resetAt
-	if a.ID != "" {
-		log.Printf("cooling down claude account %s until %s (5hr usage %.1f%%)",
-			a.ID,
-			resetAt.Format(time.RFC3339),
-			primaryUsed*100,
-		)
-	}
 }

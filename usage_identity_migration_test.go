@@ -8,8 +8,8 @@ import (
 )
 
 func TestRequestUsageCanonicalIdentityNormalizesBothDirections(t *testing.T) {
-	legacy := RequestUsage{AccountID: "connection", AccountType: AccountTypeClaude}.canonicalIdentity()
-	if legacy.ConnectionID != "connection" || legacy.ProviderID != AccountTypeClaude {
+	legacy := RequestUsage{AccountID: "connection", AccountType: AccountTypeKimi}.canonicalIdentity()
+	if legacy.ConnectionID != "connection" || legacy.ProviderID != AccountTypeKimi {
 		t.Fatalf("legacy normalization = %#v", legacy)
 	}
 	canonical := RequestUsage{ConnectionID: "connection", ProviderID: AccountTypeGemini}.canonicalIdentity()

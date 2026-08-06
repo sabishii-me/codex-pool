@@ -2,31 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 	"time"
 )
-
-func TestClaudeCanonicalModelHandlesShortOneMillionAliases(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]string{
-		"sonnet":      "claude-sonnet-5",
-		"sonnet[1m]":  "claude-sonnet-5 [1m]",
-		"sonnet [1m]": "claude-sonnet-5 [1m]",
-		"opus":        "claude-opus-4-8",
-		"opus[1m]":    "claude-opus-4-8 [1m]",
-		"opus [1m]":   "claude-opus-4-8 [1m]",
-		"fable":       "claude-fable-5",
-		"haiku":       "claude-haiku-4-5-20251001",
-	}
-
-	for input, want := range tests {
-		if got := claudeCanonicalModel(input); got != want {
-			t.Fatalf("claudeCanonicalModel(%q) = %q, want %q", input, got, want)
-		}
-	}
-}
 
 func TestGeneratePiModelsJSON(t *testing.T) {
 	t.Parallel()
@@ -91,51 +69,6 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 			}
 		} else if len(model.ThinkingLevelMap) != 0 {
 			t.Fatalf("codex model %q unexpectedly advertises extended thinking levels: %#v", model.ID, model.ThinkingLevelMap)
-		}
-	}
-
-	claude := cfg.Providers["claude"]
-	if claude.API != "anthropic-messages" {
-		t.Fatalf("claude api = %q", claude.API)
-	}
-	if claude.BaseURL != "https://pool.example.com" {
-		t.Fatalf("claude baseUrl = %q", claude.BaseURL)
-	}
-	if claude.APIKey != "sk-ant-oat01-pool-test" {
-		t.Fatalf("claude apiKey = %q", claude.APIKey)
-	}
-
-	needClaudeIDs := map[string]bool{
-		"claude-haiku-4-5-20251001": false,
-		"claude-sonnet-5":           false,
-		"claude-sonnet-4-6":         false,
-		"claude-fable-5":            false,
-		"claude-opus-4-8":           false,
-		"claude-opus-4-7":           false,
-		"claude-opus-4-6":           false,
-	}
-	for _, model := range claude.Models {
-		if _, ok := needClaudeIDs[model.ID]; ok {
-			needClaudeIDs[model.ID] = true
-		}
-		if !ccModelSupportsEffort(model.ID) {
-			if model.Compat != nil || len(model.ThinkingLevelMap) != 0 {
-				t.Fatalf("claude model %q unexpectedly advertises adaptive thinking: %#v %#v", model.ID, model.Compat, model.ThinkingLevelMap)
-			}
-			continue
-		}
-		if model.Compat == nil || !model.Compat.ForceAdaptiveThinking || model.ThinkingLevelMap["max"] != "max" {
-			t.Fatalf("claude model %q missing adaptive max metadata: %#v %#v", model.ID, model.Compat, model.ThinkingLevelMap)
-		}
-		canonical := ccCanonicalClaudeModel(model.ID)
-		wantXHigh := strings.Contains(canonical, "sonnet-5") || strings.Contains(canonical, "opus-4-7") || strings.Contains(canonical, "fable-5")
-		if gotXHigh := model.ThinkingLevelMap["xhigh"] == "xhigh"; gotXHigh != wantXHigh {
-			t.Fatalf("claude model %q xhigh support = %v, want %v", model.ID, gotXHigh, wantXHigh)
-		}
-	}
-	for id, found := range needClaudeIDs {
-		if !found {
-			t.Fatalf("missing claude model %q", id)
 		}
 	}
 

@@ -284,7 +284,7 @@ export async function cancelCodexOAuthBrokerLease(): Promise<void> {
   await fetch("http://127.0.0.1:1460/v1/leases", { method: "DELETE" }).catch(() => undefined);
 }
 
-export async function startAccountOAuth(provider: "codex" | "claude", redirectPort?: number) {
+export async function startAccountOAuth(provider: "codex", redirectPort?: number) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/add`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -300,7 +300,7 @@ export async function codexOAuthStatus(sessionID: string) {
   }));
 }
 
-export async function exchangeAccountOAuth(provider: "codex" | "claude", code: string, verifier: string) {
+export async function exchangeAccountOAuth(provider: "codex", code: string, verifier: string) {
   return decode<AccountContributionResult>(await fetch(`/api/pool/accounts/${provider}/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

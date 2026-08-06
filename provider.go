@@ -82,8 +82,8 @@ type ProviderRegistry struct {
 	snapshot atomic.Pointer[providerRegistrySnapshot]
 }
 
-func NewProviderRegistry(codex *CodexProvider, claude *ClaudeProvider, gemini *GeminiProvider, extra ...Provider) *ProviderRegistry {
-	core := []Provider{gemini, claude, codex}
+func NewProviderRegistry(codex *CodexProvider, gemini *GeminiProvider, extra ...Provider) *ProviderRegistry {
+	core := []Provider{gemini, codex}
 	providers := append(core, extra...)
 	registry := &ProviderRegistry{core: append([]Provider(nil), core...), baseline: append([]Provider(nil), providers...)}
 	registry.publish(providers)

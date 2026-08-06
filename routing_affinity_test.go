@@ -47,7 +47,7 @@ func TestAffinityKindProtocolProviderMatrix(t *testing.T) {
 		{protocol: "anthropic_messages", provider: AccountTypeCodex, kind: AffinityClientSession, want: true},
 		{protocol: "openai_chat", provider: AccountTypeCodex, kind: AffinityPromptCacheKey, want: false},
 		{protocol: "anthropic_messages", provider: AccountTypeCodex, kind: AffinityPromptCacheKey, want: false},
-		{protocol: "openai_responses", provider: AccountTypeClaude, kind: AffinityPromptCacheKey, want: false},
+		{protocol: "openai_responses", provider: AccountTypeKimi, kind: AffinityPromptCacheKey, want: false},
 	}
 	for _, test := range tests {
 		if got := affinityKindAllowedForProtocolProvider(test.protocol, test.provider, test.kind); got != test.want {
@@ -117,7 +117,6 @@ func TestExtractClientAffinitySignalUsesDeclaredProtocolFields(t *testing.T) {
 		{name: "chat codex conversation extension", path: "/v1/chat/completions", body: `{}`, header: http.Header{"X-Codex-Conversation-Id": []string{"codex-chat-conversation"}}, kind: AffinityClientConversation, source: "client.codex.x-codex-conversation-id", value: "codex-chat-conversation"},
 		{name: "chat codex session extension", path: "/v1/chat/completions", body: `{}`, header: http.Header{"Session_id": []string{"codex-chat-session"}}, kind: AffinityClientSession, source: "client.codex.session_id", value: "codex-chat-session"},
 		{name: "messages codex session extension", path: "/v1/messages", body: `{}`, header: http.Header{"Session_id": []string{"codex-messages-session"}}, kind: AffinityClientSession, source: "client.codex.session_id", value: "codex-messages-session"},
-		{name: "claude code profile", path: "/v1/messages", body: `{"metadata":{"user_id":"not-affinity"}}`, header: http.Header{"X-Claude-Code-Session-Id": []string{"claude-session"}}, kind: AffinityClientSession, source: "client.claude-code.x-claude-code-session-id", value: "claude-session"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -174,9 +173,9 @@ func TestExtractClientAffinitySignalDoesNotGuess(t *testing.T) {
 		{name: "claude cache markers have no unique key", path: "/v1/messages", body: `{"system":[{"type":"text","text":"x","cache_control":{"type":"ephemeral"}}]}`},
 		{name: "response state is not soft affinity", path: "/v1/responses", body: `{"previous_response_id":"resp-owned"}`},
 		{name: "provider SSE fields are not request affinity", path: "/v1/responses", body: `{"type":"response.completed","response":{"id":"resp-sse-owned","conversation_id":"provider-conversation"}}`},
-		{name: "responses cache declaration ignored for unrelated provider", path: "/v1/responses", body: `{"prompt_cache_key":"codex-profile-only"}`, provider: AccountTypeClaude},
-		{name: "claude code header ignored for unrelated provider", path: "/v1/messages", header: http.Header{"X-Claude-Code-Session-Id": []string{"codex-transport-only"}}, provider: AccountTypeClaude},
-		{name: "codex conversation ignored for other provider", path: "/v1/responses", body: `{"conversation_id":"codex-only"}`, provider: AccountTypeClaude},
+		{name: "responses cache declaration ignored for unrelated provider", path: "/v1/responses", body: `{"prompt_cache_key":"codex-profile-only"}`, provider: AccountTypeKimi},
+		{name: "claude code header ignored for unrelated provider", path: "/v1/messages", header: http.Header{"X-Claude-Code-Session-Id": []string{"codex-transport-only"}}, provider: AccountTypeKimi},
+		{name: "codex conversation ignored for other provider", path: "/v1/responses", body: `{"conversation_id":"codex-only"}`, provider: AccountTypeKimi},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -225,7 +224,7 @@ func TestRequestRoutingContextDoesNotRetainRawValueInPool(t *testing.T) {
 func TestAffinityRoutingKeyRejectsUnregisteredProviderProfile(t *testing.T) {
 	signal := ClientAffinitySignal{Kind: AffinityClientSession, Value: "same-session"}
 	codex := affinityRoutingKey("secret", "user", AccountTypeCodex, "model", "anthropic_messages", signal)
-	claude := affinityRoutingKey("secret", "user", AccountTypeClaude, "model", "anthropic_messages", signal)
+	claude := affinityRoutingKey("secret", "user", AccountTypeKimi, "model", "anthropic_messages", signal)
 	if codex == "" || claude != "" {
 		t.Fatalf("provider profile admission failed: codex=%q claude=%q", codex, claude)
 	}
@@ -274,7 +273,7 @@ func TestAffinityRoutingKeyIsPrivateAndNamespaced(t *testing.T) {
 	if got := affinityRoutingKey("secret", "user-a", AccountTypeCodex, "gpt-5.6-sol", "openai_chat", signal); got != "" {
 		t.Fatalf("Chat prompt cache key has no registered contract, got %q", got)
 	}
-	if got := affinityRoutingKey("secret", "user-a", AccountTypeClaude, "gpt-5.6-sol", "openai_responses", signal); got != "" {
+	if got := affinityRoutingKey("secret", "user-a", AccountTypeKimi, "gpt-5.6-sol", "openai_responses", signal); got != "" {
 		t.Fatalf("Responses cache key should require the registered Codex profile, got %q", got)
 	}
 	if got := affinityRoutingKey("secret", "user-a", AccountTypeCodex, "gpt-5.6-sol", "openai_responses", ClientAffinitySignal{Kind: "unknown", Value: "x"}); got != "" {

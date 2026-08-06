@@ -161,7 +161,7 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 	now := time.Now().UTC()
 	for _, request := range []RequestUsage{
 		{Timestamp: now, AccountID: "codex", AccountType: AccountTypeCodex, UserID: "friend", InputTokens: 3000000, CachedInputTokens: 1000000, OutputTokens: 250000, BillableTokens: 2250000},
-		{Timestamp: now, AccountID: "claude", AccountType: AccountTypeClaude, UserID: "friend", InputTokens: 100, CachedInputTokens: 500, OutputTokens: 10, BillableTokens: 110},
+		{Timestamp: now, AccountID: "kimi", AccountType: AccountTypeKimi, UserID: "friend", InputTokens: 100, CachedInputTokens: 500, OutputTokens: 10, BillableTokens: 110},
 	} {
 		if err := usage.record(request); err != nil {
 			t.Fatal(err)
@@ -170,7 +170,7 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 
 	h := &proxyHandler{
 		cfg:   &config{},
-		pool:  newProviderPool([]*Account{{ID: "codex", Type: AccountTypeCodex}, {ID: "claude", Type: AccountTypeClaude}}),
+		pool:  newProviderPool([]*Account{{ID: "codex", Type: AccountTypeCodex}, {ID: "claude", Type: AccountTypeKimi}}),
 		store: usage,
 	}
 	recorder := httptest.NewRecorder()
@@ -180,7 +180,7 @@ func TestPoolStatsLast24hUsesProcessedThroughput(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &stats); err != nil {
 		t.Fatal(err)
 	}
-	const want = int64(3250610)
+	const want = int64(3250110)
 	if stats.Last24hTokens != want {
 		t.Fatalf("last 24h throughput = %d, want %d", stats.Last24hTokens, want)
 	}

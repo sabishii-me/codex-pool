@@ -12,7 +12,7 @@ func anthropicCompatibleProvidersForTest(t *testing.T) []Provider {
 		t.Fatal(err)
 	}
 	return []Provider{
-		NewClaudeProvider(base), NewKimiProvider(base), NewKimiPlatformProvider(base),
+		NewKimiProvider(base), NewKimiPlatformProvider(base),
 		NewMinimaxProvider(base), NewZAIProvider(base), NewXiaomiProvider(base),
 		NewDeepSeekProvider(base), NewQwenProvider(base), NewOpenRouterProvider(base),
 	}

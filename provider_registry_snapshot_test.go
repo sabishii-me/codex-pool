@@ -7,7 +7,7 @@ import (
 )
 
 func TestProviderRegistryReturnsDefensiveSnapshot(t *testing.T) {
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	providers := registry.All()
 	providers[0] = nil
 	if registry.ForType(AccountTypeGemini) == nil {
@@ -16,18 +16,18 @@ func TestProviderRegistryReturnsDefensiveSnapshot(t *testing.T) {
 }
 
 func TestProviderRegistryRejectsDuplicateWithoutPublishing(t *testing.T) {
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	before := registry.ForType(AccountTypeCodex)
 	if err := registry.ReplaceExtras(&CodexProvider{}); err == nil {
 		t.Fatal("duplicate provider accepted")
 	}
-	if registry.ForType(AccountTypeCodex) != before || len(registry.All()) != 3 {
+	if registry.ForType(AccountTypeCodex) != before || len(registry.All()) != 2 {
 		t.Fatal("failed replacement changed active snapshot")
 	}
 }
 
 func TestProviderRegistryDeclarativeReplacementIsAtomic(t *testing.T) {
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	first := validProviderSpec()
 	if err := registry.ReplaceDeclarative([]ProviderSpec{first}); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestProviderRegistryDeclarativeReplacementIsAtomic(t *testing.T) {
 }
 
 func TestProviderRegistryConcurrentReadersSeeCompleteSnapshots(t *testing.T) {
-	registry := NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{})
+	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{})
 	first := validProviderSpec()
 	second := validProviderSpec()
 	second.ID = "example-two"
@@ -70,7 +70,7 @@ func TestProviderRegistryConcurrentReadersSeeCompleteSnapshots(t *testing.T) {
 			defer wait.Done()
 			for range 100 {
 				providers := registry.All()
-				if len(providers) < 3 || registry.ForType(AccountTypeCodex) == nil {
+				if len(providers) < 2 || registry.ForType(AccountTypeCodex) == nil {
 					t.Errorf("reader observed incomplete snapshot")
 					return
 				}

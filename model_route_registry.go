@@ -78,10 +78,5 @@ func (registry *ModelRouteRegistry) Resolve(path, model string) (ResolvedModelRo
 			return ResolvedModelRoute{Provider: provider, RequestedModel: model, CanonicalModel: model, BodyPolicy: ModelBodyRewriteNative}, true
 		}
 	}
-	if isClaudeModel(model) && !isCodexToClaudeModelOverridePath(path) {
-		if provider := registry.providers.ForType(AccountTypeClaude); provider != nil {
-			return ResolvedModelRoute{Provider: provider, RequestedModel: model, CanonicalModel: claudeCanonicalModel(model), BodyPolicy: ModelBodyRewriteNative, RewriteModel: true}, true
-		}
-	}
 	return ResolvedModelRoute{}, false
 }

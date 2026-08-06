@@ -75,8 +75,6 @@ func targetFormatForProvider(provider ProviderIdentity) RequestFormat {
 // providers that have not declared a target-format capability.
 func providerTargetFormat(accountType AccountType) RequestFormat {
 	switch accountType {
-	case AccountTypeClaude:
-		return FormatClaude
 	case AccountTypeZAI:
 		return FormatClaude
 	case AccountTypeKimiPlatform:
@@ -1447,11 +1445,6 @@ func injectClaudeModels(body []byte) []byte {
 			if slug, _ := model["slug"].(string); slug != "" {
 				existing[slug] = true
 			}
-		}
-	}
-	for _, model := range modelsForProvider(AccountTypeClaude) {
-		if !existing[model.ID] {
-			models = append(models, claudeModelEntry(model.ID, model.DisplayName, model.ContextWindow))
 		}
 	}
 	for _, model := range antigravityModels.Models(nil) {

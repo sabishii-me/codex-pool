@@ -9,7 +9,7 @@ import (
 
 func modelRouteTestRegistry(base *url.URL) *ProviderRegistry {
 	return NewProviderRegistry(
-		NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base),
+		NewCodexProvider(base, base, base), NewGeminiProvider(base, base),
 		NewAntigravityProvider(base, base), NewKimiProvider(base), NewGrokProvider(base),
 		NewDeepSeekProvider(base), NewNvidiaProvider(base),
 	)
@@ -30,7 +30,6 @@ func TestModelRouteRegistryCentralizesProviderPrecedenceAndPolicies(t *testing.T
 		{name: "kimi coding", path: "/v1/messages", model: "kimi-for-coding", provider: AccountTypeKimi, canonical: "kimi-for-coding", policy: ModelBodyRewriteNative},
 		{name: "grok", path: "/v1/responses", model: "grok-composer", provider: AccountTypeGrok, canonical: "grok-composer-2.5-fast", policy: ModelBodySanitizeGrok},
 		{name: "codex", path: "/v1/messages", model: "gpt-5.5", provider: AccountTypeCodex, canonical: "gpt-5.5", policy: ModelBodyRewriteNative},
-		{name: "claude", path: "/v1/messages", model: "sonnet", provider: AccountTypeClaude, canonical: "claude-sonnet-5", policy: ModelBodyRewriteNative},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -39,9 +38,6 @@ func TestModelRouteRegistryCentralizesProviderPrecedenceAndPolicies(t *testing.T
 				t.Fatalf("route=%#v ok=%v", route, ok)
 			}
 		})
-	}
-	if _, ok := routes.Resolve("/v1/responses", "sonnet"); ok {
-		t.Fatal("Claude model must not override Codex-compatible path")
 	}
 }
 
@@ -66,7 +62,7 @@ func TestResolvedModelRouteAppliesOneBodyPolicy(t *testing.T) {
 
 func TestModelRouteRegistryObservesAtomicProviderReload(t *testing.T) {
 	base, _ := url.Parse("https://routes.example.test")
-	providers := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base))
+	providers := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base))
 	routes := NewModelRouteRegistry(providers)
 	if _, ok := routes.Resolve("/v1/messages", "runtime"); ok {
 		t.Fatal("runtime route existed before reload")

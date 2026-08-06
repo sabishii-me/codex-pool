@@ -8,23 +8,17 @@ import (
 
 func TestProviderOperationsAPIPublicCallbacksBypassAdminOnly(t *testing.T) {
 	adminCalls := 0
-	claudeCalls := 0
 	antigravityCalls := 0
 	api := &ProviderOperationsAPI{
 		authorizeAdmin:      func(http.ResponseWriter, *http.Request) bool { adminCalls++; return false },
-		claude:              func(w http.ResponseWriter, _ *http.Request) { claudeCalls++; w.WriteHeader(http.StatusNoContent) },
 		antigravityCallback: func(w http.ResponseWriter, _ *http.Request) { antigravityCalls++; w.WriteHeader(http.StatusNoContent) },
 	}
 	response := httptest.NewRecorder()
-	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/claude/callback", nil)) || response.Code != http.StatusNoContent {
-		t.Fatalf("Claude callback status=%d", response.Code)
-	}
-	response = httptest.NewRecorder()
 	if !api.TryServe(response, httptest.NewRequest(http.MethodGet, "/admin/antigravity/callback", nil)) || response.Code != http.StatusNoContent {
 		t.Fatalf("Antigravity callback status=%d", response.Code)
 	}
-	if adminCalls != 0 || claudeCalls != 1 || antigravityCalls != 1 {
-		t.Fatalf("admin=%d claude=%d antigravity=%d", adminCalls, claudeCalls, antigravityCalls)
+	if adminCalls != 0 || antigravityCalls != 1 {
+		t.Fatalf("admin=%d antigravity=%d", adminCalls, antigravityCalls)
 	}
 }
 

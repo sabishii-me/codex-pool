@@ -59,7 +59,7 @@ func TestIsKimiPlatformModelMatchesBarePlatformModels(t *testing.T) {
 func TestIsKimiPlatformModelRejectsUnrelatedModels(t *testing.T) {
 	t.Parallel()
 
-	for _, model := range []string{"gpt-5.6", "deepseek-v4-pro", "claude-sonnet-5"} {
+	for _, model := range []string{"gpt-5.6", "deepseek-v4-pro"} {
 		if isKimiPlatformModel(model) {
 			t.Fatalf("did not expect %q to route to kimi-platform", model)
 		}
@@ -100,7 +100,6 @@ func TestModelRouteOverrideKimiPlatformPrefixedModel(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewKimiPlatformProvider(kimiPlatformBase),
 		),
@@ -131,7 +130,6 @@ func TestModelRouteOverrideKimiPlatformBareModel(t *testing.T) {
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewKimiPlatformProvider(kimiPlatformBase),
 		),
@@ -164,7 +162,6 @@ func TestModelRouteOverrideKimiCodingPlanModelDoesNotRouteToPlatform(t *testing.
 	handler := &proxyHandler{
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewKimiProvider(kimiBase),
 			NewKimiPlatformProvider(kimiPlatformBase),
@@ -280,7 +277,7 @@ func TestKimiPlatformAdminAddValidatesAndSavesAccount(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			validationCalled = true
 			// Validate via GET /v1/models on the OpenAI-compatible endpoint
@@ -341,7 +338,7 @@ func TestKimiPlatformAdminRejectsUnauthorizedKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
@@ -375,7 +372,7 @@ func TestKimiPlatformAdminPreservesUpstreamDiagnostics(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			// Simulate a 404 from a wrong-endpoint scenario - the response
 			// body should be propagated to the caller for debugging.
@@ -414,7 +411,7 @@ func TestKimiPlatformAdminNetworkFailureDoesNotSave(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return nil, &url.Error{Op: "Get", URL: req.URL.String(), Err: os.ErrDeadlineExceeded}
 		}),
@@ -443,7 +440,7 @@ func TestKimiPlatformAdminRejectsForbiddenKeyWithoutSaving(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusForbidden,
@@ -477,7 +474,7 @@ func TestKimiPlatformAdminNon401ErrorDoesNotClaimInvalidKey(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusTooManyRequests,
@@ -536,7 +533,7 @@ func TestKimiPlatformAdminValidatesUsingGETV1Models(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			gotReq = req
 			return &http.Response{
@@ -583,7 +580,7 @@ func TestKimiPlatformAdminAuthErrorIncludesUpstreamBody(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusUnauthorized,
@@ -623,7 +620,7 @@ func TestKimiPlatformAdminWrongEndpoint403PreservesBody(t *testing.T) {
 	h := &proxyHandler{
 		cfg:      &config{poolDir: poolDir},
 		pool:     newProviderPool(nil),
-		registry: NewProviderRegistry(&CodexProvider{}, &ClaudeProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
+		registry: NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewKimiPlatformProvider(kimiPlatformBase)),
 		transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusForbidden,
@@ -687,7 +684,6 @@ func TestKimiPlatformProductModelConflationEndToEnd(t *testing.T) {
 		pool: pool,
 		registry: NewProviderRegistry(
 			&CodexProvider{},
-			&ClaudeProvider{},
 			&GeminiProvider{},
 			NewKimiProvider(kimiBase),
 			NewKimiPlatformProvider(kimiPlatformBase),

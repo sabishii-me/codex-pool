@@ -30,7 +30,7 @@ func TestAntigravityProxyNonStreamingResponsesCanonicalUsage(t *testing.T) {
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
 	antigravity := NewAntigravityProvider(base, base)
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), antigravity)
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), antigravity)
 	account := &Account{Type: AccountTypeAntigravity, ID: "antigravity_contract", AccessToken: "contract-key", ProjectID: "project-contract", PlanType: "antigravity", ModelRateLimits: make(map[string]time.Time)}
 	antigravityModels.ReplaceAccount(account.ID, AntigravityAccountSnapshot{FetchedAt: time.Now(), Models: map[string]AntigravityModelInfo{model: {ID: model}}})
 	defer antigravityModels.ReplaceAccount(account.ID, AntigravityAccountSnapshot{})
@@ -77,7 +77,7 @@ func TestAntigravityLargeBodyIsRejectedBeforeUpstream(t *testing.T) {
 	defer upstream.Close()
 	base, _ := url.Parse(upstream.URL)
 	antigravity := NewAntigravityProvider(base, base)
-	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base), antigravity)
+	registry := NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base), antigravity)
 	account := &Account{Type: AccountTypeAntigravity, ID: "antigravity_large", AccessToken: "contract", ProjectID: "project", ModelRateLimits: make(map[string]time.Time)}
 	handler := &proxyHandler{cfg: &config{maxInMemoryBodyBytes: 1024, maxAttempts: 1}, transport: http.DefaultTransport, pool: newProviderPool([]*Account{account}), registry: registry, metrics: newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil)}
 	body := []byte(`{"model":"antigravity/gemini-3-flash","input":` + mustJSONContractString(t, strings.Repeat("x", streamedModelRoutePeekBytes+1024)) + `,"stream":false}`)

@@ -251,7 +251,6 @@ func main() {
 
 	// Create provider registry
 	codexProvider := NewCodexProvider(cfg.responsesBase, cfg.whamBase, cfg.refreshBase)
-	claudeProvider := NewClaudeProvider(cfg.claudeBase)
 	geminiProvider := NewGeminiProvider(cfg.geminiBase, cfg.geminiAPIBase)
 	antigravityProvider := NewAntigravityProvider(cfg.antigravityDailyBase, cfg.antigravityProdBase)
 	kimiProvider := NewKimiProvider(cfg.kimiBase)
@@ -266,7 +265,7 @@ func main() {
 	nvidiaProvider := NewNvidiaProvider(cfg.nvidiaBase)
 	googleAIImageProvider := NewGoogleAIImageProvider(cfg.googleAIImageBase)
 	bflProvider := NewBFLProvider(cfg.bflBase)
-	registry := NewProviderRegistry(codexProvider, claudeProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider, googleAIImageProvider, bflProvider)
+	registry := NewProviderRegistry(codexProvider, geminiProvider, antigravityProvider, kimiProvider, kimiPlatformProvider, minimaxProvider, zaiProvider, xiaomiProvider, grokProvider, deepseekProvider, qwenProvider, openrouterProvider, nvidiaProvider, googleAIImageProvider, bflProvider)
 	if cfg.providerSpecsDir != "" {
 		if err := ReloadProviderSpecs(registry, cfg.providerSpecsDir); err != nil {
 			log.Fatalf("load provider specs: %v", err)
@@ -282,7 +281,6 @@ func main() {
 	pool := newProviderPool(accounts)
 	pool.tierThreshold = cfg.tierThreshold
 	codexCount := pool.countByType(AccountTypeCodex)
-	claudeCount := pool.countByType(AccountTypeClaude)
 	geminiCount := pool.countByType(AccountTypeGemini)
 	antigravityCount := pool.countByType(AccountTypeAntigravity)
 	kimiCount := pool.countByType(AccountTypeKimi)
@@ -489,9 +487,6 @@ func main() {
 	startAntigravityVersionUpdater(processCtx, jobs)
 	h.startAntigravityModelPoller(processCtx, jobs)
 
-	// Probe account UUIDs for Claude OAuth accounts that don't have one yet.
-	jobs.Go(processCtx, func(ctx context.Context) { h.probeClaudeAccountUUIDs(ctx) })
-
 	// Background cleanup for request pacer (every 5 minutes)
 	if pacer != nil {
 		jobs.Go(processCtx, func(ctx context.Context) {
@@ -543,8 +538,8 @@ func main() {
 	} else {
 		log.Printf("WARNING: no admin emails configured, operator controls are unreachable")
 	}
-	log.Printf("codex-pool proxy listening on %s (codex=%d, claude=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, google_ai_image=%d, bfl=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
-		cfg.listenAddr, codexCount, claudeCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, googleAIImageCount, bflCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
+	log.Printf("codex-pool proxy listening on %s (codex=%d, gemini=%d, antigravity=%d, kimi=%d, kimi_platform=%d, minimax=%d, zai=%d, xiaomi=%d, grok=%d, deepseek=%d, qwen=%d, openrouter=%d, nvidia=%d, google_ai_image=%d, bfl=%d, request_timeout=%v, stream_timeout=%v, stream_idle_timeout=%v, websocket_idle_timeout=%v, websocket_heartbeat_interval=%v, websocket_read_limit=%d)",
+		cfg.listenAddr, codexCount, geminiCount, antigravityCount, kimiCount, kimiPlatformCount, minimaxCount, zaiCount, xiaomiCount, grokCount, deepseekCount, qwenCount, openrouterCount, nvidiaCount, googleAIImageCount, bflCount, cfg.requestTimeout, cfg.streamTimeout, cfg.streamIdleTimeout, cfg.websocketIdleTimeout, cfg.websocketHeartbeatInterval, cfg.websocketReadLimit)
 	serveErr := serveUntilShutdown(srv, h, processCtx.Done(), cfg.shutdownGrace)
 	stopProcess()
 	jobs.Wait()
@@ -671,19 +666,6 @@ func (h *proxyHandler) routeRegistry() *ModelRouteRegistry {
 
 func (h *proxyHandler) pickUpstream(path string, headers http.Header) (Provider, *url.URL) {
 	// Check headers first - Anthropic requests have X-Api-Key or anthropic-* headers
-	if headers.Get("X-Api-Key") != "" {
-		// X-Api-Key is used by Anthropic Claude API
-		provider := h.registry.ForType(AccountTypeClaude)
-		return provider, provider.UpstreamURL(path)
-	}
-	// Check for any anthropic-* headers (version, beta, etc.)
-	for key := range headers {
-		if strings.HasPrefix(strings.ToLower(key), "anthropic-") {
-			provider := h.registry.ForType(AccountTypeClaude)
-			return provider, provider.UpstreamURL(path)
-		}
-	}
-
 	// Fall back to path-based routing
 	provider := h.registry.ForPath(path)
 	if provider == nil {
@@ -1241,9 +1223,6 @@ func claudeRequestRequiresPremium(r *http.Request, model string) bool {
 func requiredPlanForRequest(accountType AccountType, r *http.Request, requestedModel string) string {
 	if accountType == AccountTypeCodex && modelRequiresCodexPro(requestedModel) {
 		return "pro"
-	}
-	if accountType == AccountTypeClaude && claudeRequestRequiresPremium(r, requestedModel) {
-		return requiredPlanClaudePremium
 	}
 	return ""
 }
@@ -1860,13 +1839,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			translateDir = TranslateChatToResponses
 		}
 	}
-	// Special case: Responses API -> Claude Messages API
-	// When client sends /responses (e.g. Codex CLI with -m opus) and provider is Claude.
-	if translateDir == TranslateNone && accountType == AccountTypeClaude {
-		if strings.HasPrefix(r.URL.Path, "/v1/responses") || strings.HasPrefix(r.URL.Path, "/responses") {
-			translateDir = TranslateResponsesToClaude
-		}
-	}
 
 	if translateDir == TranslateNone && accountType == AccountTypeCodex && (strings.HasPrefix(r.URL.Path, "/v1/responses") || strings.HasPrefix(r.URL.Path, "/responses")) {
 		if strings.HasPrefix(r.URL.Path, "/v1/responses/compact") || strings.HasPrefix(r.URL.Path, "/responses/compact") {
@@ -2077,12 +2049,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			// Refine classification with body content.
 			if acc.Type == AccountTypeCodex && errClass == ErrorClassInvalid && isCodexModelUnavailableError(errBody) {
 				errClass = ErrorClassNotFound
-			}
-			if acc.Type == AccountTypeClaude && isClaudeOrganizationDisabled(errBody) {
-				h.disableAccountPermanently(acc, reqID, safeText(errBody))
-				lastErr = fmt.Errorf("claude organization disabled for account %s", acc.ID)
-				h.recent.add(lastErr.Error())
-				continue
 			}
 
 			// Cloudflare bot challenges return 403 with HTML — not an auth failure.
@@ -2747,12 +2713,6 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	outURL.Host = targetBase.Host
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(r.URL.Path))
 
-	// For Claude OAuth tokens, add beta=true query param (required for OAuth to work)
-	if provider.Type() == AccountTypeClaude && strings.HasPrefix(access, "sk-ant-oat") {
-		q := outURL.Query()
-		q.Set("beta", "true")
-		outURL.RawQuery = q.Encode()
-	}
 
 	// Build upstream headers: clone client headers, replace auth.
 	upstreamHeaders := cloneHeader(r.Header)
@@ -2897,24 +2857,8 @@ func (h *proxyHandler) proxyPassthroughWebSocket(
 	outURL.Host = targetBase.Host
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(r.URL.Path))
 
-	// For Claude OAuth passthrough tokens, add beta=true query param.
-	if providerType == AccountTypeClaude {
-		if auth := r.Header.Get("Authorization"); strings.HasPrefix(auth, "Bearer ") {
-			token := strings.TrimPrefix(auth, "Bearer ")
-			if strings.HasPrefix(token, "sk-ant-oat") {
-				q := outURL.Query()
-				q.Set("beta", "true")
-				outURL.RawQuery = q.Encode()
-			}
-		}
-	}
-
 	upstreamHeaders := cloneHeader(r.Header)
 	removeConflictingProxyHeaders(upstreamHeaders)
-	if providerType == AccountTypeClaude && upstreamHeaders.Get("anthropic-version") == "" {
-		upstreamHeaders.Set("anthropic-version", ccAnthropicVersion)
-	}
-
 	readLimit := effectiveWebSocketReadLimit(providerType, h.cfg.websocketReadLimit)
 	downstreamHeartbeatInterval := time.Duration(0)
 	var transformUpstream, transformClient func([]byte) ([]byte, error)
@@ -3263,12 +3207,6 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// For Claude OAuth tokens, add beta=true query param (required for OAuth to work)
-	if provider.Type() == AccountTypeClaude && strings.HasPrefix(access, "sk-ant-oat") {
-		q := outURL.Query()
-		q.Set("beta", "true")
-		outURL.RawQuery = q.Encode()
-	}
 
 	var body io.Reader = r.Body
 
@@ -3743,11 +3681,6 @@ func looksLikeProviderCredential(authHeader string) (bool, AccountType) {
 		return false, ""
 	}
 
-	// Claude/Anthropic API keys: sk-ant-api* or sk-ant-oat* (OAuth tokens)
-	if strings.HasPrefix(token, "sk-ant-") {
-		return true, AccountTypeClaude
-	}
-
 	// OpenAI-style API keys: sk-proj-*, sk-* (but not sk-ant-)
 	if strings.HasPrefix(token, "sk-proj-") || (strings.HasPrefix(token, "sk-") && !strings.HasPrefix(token, "sk-ant-")) {
 		return true, AccountTypeCodex
@@ -3883,12 +3816,6 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	// Force uncompressed responses — SSE streams break with on-the-fly decompression.
 	outReq.Header.Set("Accept-Encoding", "identity")
 
-	// For Claude, ensure required headers are set
-	if providerType == AccountTypeClaude {
-		if outReq.Header.Get("anthropic-version") == "" {
-			outReq.Header.Set("anthropic-version", ccAnthropicVersion)
-		}
-	}
 
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
@@ -4076,12 +4003,6 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 	// Force uncompressed responses — SSE streams break with on-the-fly decompression.
 	outReq.Header.Set("Accept-Encoding", "identity")
 
-	// For Claude, ensure required headers are set
-	if providerType == AccountTypeClaude {
-		if outReq.Header.Get("anthropic-version") == "" {
-			outReq.Header.Set("anthropic-version", ccAnthropicVersion)
-		}
-	}
 
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
@@ -4170,12 +4091,6 @@ func (h *proxyHandler) tryOnce(
 	// Use provider's NormalizePath method for path handling
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(in.URL.Path))
 
-	// For Claude OAuth tokens, add beta=true query param (required for OAuth to work)
-	if provider.Type() == AccountTypeClaude && strings.HasPrefix(acc.AccessToken, "sk-ant-oat") {
-		q := outURL.Query()
-		q.Set("beta", "true")
-		outURL.RawQuery = q.Encode()
-	}
 
 	var claudeToolNameMapper map[string]string
 
@@ -4218,10 +4133,6 @@ func (h *proxyHandler) tryOnce(
 			if conversationID != "" {
 				outReq.Header.Set("x-grok-conv-id", conversationID)
 			}
-		}
-
-		if provider.Type() == AccountTypeClaude && translateDir == TranslateNone && strings.HasPrefix(access, "sk-ant-oat") {
-			outReq.Header.Set("anthropic-beta", appendAnthropicBeta(outReq.Header.Get("anthropic-beta"), betaOAuth))
 		}
 
 		// When translating, body size changes — remove the client's Content-Length
@@ -4327,50 +4238,6 @@ func (h *proxyHandler) tryOnce(
 			// Remove any OpenAI-specific headers that might leak
 			outReq.Header.Del("openai-beta")
 			outReq.Header.Del("openai-organization")
-		}
-
-		if provider.Type() == AccountTypeClaude &&
-			translateDir == TranslateNone &&
-			strings.HasPrefix(access, "sk-ant-oat") {
-			var bodyObj map[string]any
-			if json.Unmarshal(bodyBytes, &bodyObj) == nil && !ccIsGenuineClaudeCodeRequest(in, bodyObj) {
-				sessionID := ccSessionHeader(in, userID)
-				acc.mu.Lock()
-				accUUID := acc.AccountUUID
-				acc.mu.Unlock()
-				ccInjectMetadata(bodyObj, accUUID, userID, sessionID)
-				if _, ok := bodyObj["tools"]; !ok {
-					bodyObj["tools"] = []any{}
-				}
-				if _, ok := bodyObj["temperature"]; !ok {
-					bodyObj["temperature"] = 1
-				}
-				if !bodyHasClaudeSystemBlocks(bodyObj) {
-					bodyBytes = ccInjectSystemBlocks(bodyObj, bodyBytes)
-					_ = json.Unmarshal(bodyBytes, &bodyObj)
-				}
-				if reordered, err := orderedMarshal(bodyObj, claudeBodyKeyOrder); err == nil {
-					bodyBytes = reordered
-				}
-
-				model, _ := bodyObj["model"].(string)
-				outReq.Header.Set("anthropic-version", ccAnthropicVersion)
-				outReq.Header.Set("anthropic-beta", ccBetaHeader(model, true, false, false, ccRequestHasStructuredOutputs(bodyObj), ccRequestHasTaskBudget(bodyObj)))
-				outReq.Header.Set("anthropic-dangerous-direct-browser-access", "true")
-				outReq.Header.Set("User-Agent", ccUserAgent())
-				outReq.Header.Set("X-Claude-Code-Session-Id", sessionID)
-				outReq.Header.Set("X-App", "cli")
-				outReq.Header.Set("x-client-request-id", uuid.NewString())
-				outReq.Header.Set("Accept-Language", "*")
-				outReq.Header.Set("Sec-Fetch-Mode", "cors")
-				ccStainlessHeaders(outReq.Header.Set)
-			}
-		}
-
-		if provider.Type() == AccountTypeClaude && strings.HasPrefix(access, "sk-ant-oat") {
-			if normalized, _, changed := normalizeAnthropicDateline(bodyBytes); changed {
-				bodyBytes = normalized
-			}
 		}
 
 		// Body fingerprinting and dateline normalization happen after the request

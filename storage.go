@@ -91,7 +91,6 @@ type UserDailyUsage struct {
 	ReasoningTokens int64  `json:"reasoning_tokens"`
 	RequestCount    int64  `json:"request_count"`
 	// Per-provider breakdown
-	ClaudeTokens  int64 `json:"claude_tokens,omitempty"`
 	CodexTokens   int64 `json:"codex_tokens,omitempty"`
 	GeminiTokens  int64 `json:"gemini_tokens,omitempty"`
 	KimiTokens    int64 `json:"kimi_tokens,omitempty"`
@@ -322,8 +321,6 @@ func (s *usageStore) recordIfNew(u RequestUsage) (bool, error) {
 			daily.RequestCount++
 			// Per-provider breakdown
 			switch u.AccountType {
-			case AccountTypeClaude:
-				daily.ClaudeTokens += u.BillableTokens
 			case AccountTypeCodex:
 				daily.CodexTokens += u.BillableTokens
 			case AccountTypeGemini, AccountTypeAntigravity:

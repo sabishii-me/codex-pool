@@ -6,7 +6,6 @@ import (
 
 func TestAnthropicMessagesEngineNormalizesCompatibleProviders(t *testing.T) {
 	providers := map[string]Provider{
-		"claude":        &ClaudeProvider{},
 		"deepseek":      &DeepSeekProvider{},
 		"zai":           &ZAIProvider{},
 		"minimax":       NewMinimaxProvider(nil),

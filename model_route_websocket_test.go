@@ -10,7 +10,7 @@ import (
 func TestWebSocketFrameUsesCentralModelRoute(t *testing.T) {
 	base, _ := url.Parse("https://ws-routes.example.test")
 	codex := NewCodexProvider(base, base, base)
-	handler := &proxyHandler{registry: NewProviderRegistry(codex, NewClaudeProvider(base), NewGeminiProvider(base, base), NewDeepSeekProvider(base)), aliases: newModelAliases(nil)}
+	handler := &proxyHandler{registry: NewProviderRegistry(codex, NewGeminiProvider(base, base), NewDeepSeekProvider(base)), aliases: newModelAliases(nil)}
 
 	frame := applyModelAliasToJSONFrame(handler, "test", []byte(`{"type":"response.create","model":"gpt-5.6"}`))
 	routed, err := applyModelRouteToWebSocketFrame(handler, codex, frame)
@@ -25,7 +25,7 @@ func TestWebSocketFrameUsesCentralModelRoute(t *testing.T) {
 func TestWebSocketFrameRejectsProviderSwitchAfterUpgrade(t *testing.T) {
 	base, _ := url.Parse("https://ws-routes.example.test")
 	codex := NewCodexProvider(base, base, base)
-	handler := &proxyHandler{registry: NewProviderRegistry(codex, NewClaudeProvider(base), NewGeminiProvider(base, base), NewDeepSeekProvider(base))}
+	handler := &proxyHandler{registry: NewProviderRegistry(codex, NewGeminiProvider(base, base), NewDeepSeekProvider(base))}
 
 	frame := []byte(`{"type":"response.create","model":"deepseek"}`)
 	_, err := applyModelRouteToWebSocketFrame(handler, codex, frame)

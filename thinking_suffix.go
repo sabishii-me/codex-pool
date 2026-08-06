@@ -54,7 +54,6 @@ func injectThinkingBudget(body []byte, accountType AccountType, budget int) []by
 	}
 
 	switch accountType {
-	case AccountTypeClaude:
 	case AccountTypeZAI:
 		// Claude: { "thinking": { "type": "enabled", "budget_tokens": N } }
 		thinking := map[string]any{

@@ -53,12 +53,6 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pricin
 				API:     "openai-codex-responses",
 				Models:  piModelsForProvider(AccountTypeCodex, pricing),
 			},
-			"claude": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeClaude, pricing),
-			},
 			"antigravity": {
 				BaseURL: baseURL,
 				APIKey:  codexAPIKey,
@@ -171,31 +165,6 @@ func piCodexModel(id, name string, contextWindow, maxTokens int) piModelConfig {
 	return model
 }
 
-func piClaudeAlias(id, name string, contextWindow, maxTokens int, inputCost, outputCost, cacheReadCost, cacheWriteCost float64) piModelConfig {
-	model := piModelConfig{
-		ID:            id,
-		Name:          name,
-		Reasoning:     boolPtr(true),
-		Input:         []string{"text", "image"},
-		ContextWindow: contextWindow,
-		MaxTokens:     maxTokens,
-		Cost: &piModelCost{
-			Input:      inputCost,
-			Output:     outputCost,
-			CacheRead:  cacheReadCost,
-			CacheWrite: cacheWriteCost,
-		},
-	}
-	if ccModelSupportsEffort(id) {
-		model.ThinkingLevelMap = map[string]string{"max": "max"}
-		model.Compat = &piModelCompat{ForceAdaptiveThinking: true}
-		canonical := ccCanonicalClaudeModel(id)
-		if strings.Contains(canonical, "opus-4-7") || strings.Contains(canonical, "fable-5") || strings.Contains(canonical, "sonnet-5") {
-			model.ThinkingLevelMap["xhigh"] = "xhigh"
-		}
-	}
-	return model
-}
 
 func boolPtr(v bool) *bool {
 	return &v
@@ -220,14 +189,6 @@ func piModelsForProvider(accountType AccountType, pricings ...*PricingData) []pi
 		}
 		if accountType == AccountTypeCodex && strings.HasPrefix(model.ID, "gpt-5.6-") {
 			config.ThinkingLevelMap = map[string]string{"xhigh": "xhigh", "max": "max"}
-		}
-		if accountType == AccountTypeClaude && ccModelSupportsEffort(model.ID) {
-			config.ThinkingLevelMap = map[string]string{"max": "max"}
-			config.Compat = &piModelCompat{ForceAdaptiveThinking: true}
-			canonical := ccCanonicalClaudeModel(model.ID)
-			if strings.Contains(canonical, "opus-4-7") || strings.Contains(canonical, "fable-5") || strings.Contains(canonical, "sonnet-5") {
-				config.ThinkingLevelMap["xhigh"] = "xhigh"
-			}
 		}
 		result = append(result, config)
 	}

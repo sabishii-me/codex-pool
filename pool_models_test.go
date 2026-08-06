@@ -28,7 +28,6 @@ func TestPoolModelDescriptorsCoverEveryProvider(t *testing.T) {
 
 	tests := map[string]string{
 		"gpt-5.6-sol":     "openai",
-		"claude-sonnet-5": "anthropic",
 		"kimi-for-coding": "anthropic",
 		"MiniMax-M3":      "anthropic",
 		"glm-5.2":         "anthropic",
@@ -88,16 +87,8 @@ func TestPoolModelsEndpointRequiresPoolToken(t *testing.T) {
 		t.Fatalf("unauthenticated status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 
-	auth, err := generateClaudeAuth("test-secret", &GatewayUser{
-		ID:        "model-user",
-		Token:     "download-token",
-		CreatedAt: time.Now(),
-	})
-	if err != nil {
-		t.Fatalf("generate pool auth: %v", err)
-	}
 	request = httptest.NewRequest(http.MethodGet, "http://pool.example/api/pool/models", nil)
-	request.Header.Set("Authorization", "Bearer "+auth.AccessToken)
+	request.Header.Set("Authorization", "Bearer "+generateClaudePoolToken("test-secret", "model-user"))
 	recorder = httptest.NewRecorder()
 	handler.proxyRequest(recorder, request, "request-id")
 	if recorder.Code != http.StatusOK {

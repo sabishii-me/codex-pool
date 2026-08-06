@@ -48,7 +48,7 @@ func TestApplyProxyAuthFailure(t *testing.T) {
 	})
 
 	t.Run("non-codex proxy auth failure stays severe before refresh failure", func(t *testing.T) {
-		acc := &Account{Type: AccountTypeClaude}
+		acc := &Account{Type: AccountTypeGemini}
 
 		markedDead, penaltyNow := applyProxyAuthFailure(acc, false)
 
@@ -64,7 +64,7 @@ func TestApplyProxyAuthFailure(t *testing.T) {
 	})
 
 	t.Run("non-codex refresh failure marks account dead", func(t *testing.T) {
-		acc := &Account{Type: AccountTypeClaude}
+		acc := &Account{Type: AccountTypeGemini}
 
 		markedDead, penaltyNow := applyProxyAuthFailure(acc, true)
 

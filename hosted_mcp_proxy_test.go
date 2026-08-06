@@ -36,7 +36,7 @@ func TestCodexProxyFiltersHostedMCPRequestAndJSONResponse(t *testing.T) {
 		}),
 		refreshTransport: http.DefaultTransport,
 		pool:             newProviderPool([]*ProviderConnection{connection}),
-		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry:         NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:          newMetrics(), recent: newRecentErrors(5),
 	}
 	body := `{"model":"gpt-5.5","stream":false,"input":[{"type":"message"},{"type":"mcp_approval_response","approval_request_id":"approval-secret"}],"tools":[{"type":"mcp","server_url":"https://private.example/mcp"},{"type":"web_search"},{"type":"function","name":"local_mcp_tool"}]}`
@@ -66,7 +66,7 @@ func TestCodexProxyRejectsOversizedResponsesRequestBeforeTransport(t *testing.T)
 		cfg:       &config{maxAttempts: 1, maxInMemoryBodyBytes: 32},
 		transport: roundTripFunc(func(*http.Request) (*http.Response, error) { called = true; return nil, nil }),
 		pool:      newProviderPool([]*ProviderConnection{{Type: AccountTypeCodex, ID: "codex", AccessToken: "token", PlanType: "pro"}}),
-		registry:  NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)), metrics: newMetrics(), recent: newRecentErrors(5),
+		registry:  NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)), metrics: newMetrics(), recent: newRecentErrors(5),
 	}
 	body := []byte(`{"model":"gpt-5.5","input":"` + strings.Repeat("x", 80) + `"}`)
 	request := httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(body))

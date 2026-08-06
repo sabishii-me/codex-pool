@@ -269,10 +269,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.serveGeminiSetupScript(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/setup/claude/") {
-		h.serveClaudeSetupScript(w, r)
-		return
-	}
 	if strings.HasPrefix(r.URL.Path, "/setup/grok/") {
 		h.serveGrokSetupScript(w, r)
 		return
@@ -306,16 +302,6 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// unauthenticated usage endpoint cannot trigger upstream traffic.
 	if isUsageRequest(r) {
 		h.handleAggregatedUsage(w, reqID)
-		return
-	}
-
-	// Claude-specific endpoints - return pool info instead of individual account info
-	if isClaudeProfileRequest(r) {
-		h.handleClaudeProfile(w, r)
-		return
-	}
-	if isClaudeUsageRequest(r) {
-		h.handleClaudeUsage(w, r)
 		return
 	}
 

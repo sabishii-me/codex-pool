@@ -28,7 +28,7 @@ func TestCodexAnthropicReadToolImageReachesUpstreamUnmodified(t *testing.T) {
 	handler := &proxyHandler{
 		cfg:       &config{requestTimeout: 10 * time.Second, streamTimeout: 10 * time.Second, maxInMemoryBodyBytes: 1024 * 1024},
 		transport: http.DefaultTransport, pool: newProviderPool([]*ProviderConnection{connection}),
-		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewClaudeProvider(base), NewGeminiProvider(base, base)),
+		registry: NewProviderRegistry(NewCodexProvider(base, base, base), NewGeminiProvider(base, base)),
 		metrics:  newMetrics(), recent: newRecentErrors(5), aliases: newModelAliases(nil),
 	}
 	body := `{"model":"gpt-5.6-sol","max_tokens":64,"stream":false,"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"read_1","name":"Read","input":{"path":"screen.png"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"read_1","content":[{"type":"text","text":"Image dimensions: 2x2"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"aW1hZ2U="}}]}]}]}`

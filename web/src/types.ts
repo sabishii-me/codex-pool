@@ -10,7 +10,6 @@ export interface GatewaySession {
   auth_json: string;
   gemini_auth_json: string;
   gemini_api_key: string;
-  claude_api_key: string;
   pi_models_json: string;
 }
 

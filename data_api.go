@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"strings"
+	"time"
 )
 
 // DataAPI owns routing for read-only gateway data endpoints. Authentication is
@@ -13,14 +14,8 @@ type DataAPI struct {
 	authorizeAdmin   func(http.ResponseWriter, *http.Request) bool
 
 	poolStats           http.HandlerFunc
-	whoami              http.HandlerFunc
 	poolUsers           http.HandlerFunc
-	poolOrigins         http.HandlerFunc
-	dailyBreakdown      http.HandlerFunc
-	globalHourly        http.HandlerFunc
 	signalAnalytics     http.HandlerFunc
-	userDaily           http.HandlerFunc
-	userHourly          http.HandlerFunc
 	modelCatalog        http.HandlerFunc
 	usageV2             http.HandlerFunc
 	usageEconomicsV2    http.HandlerFunc
@@ -28,6 +23,10 @@ type DataAPI struct {
 	modelRouting        http.HandlerFunc
 	providerConnections func(http.ResponseWriter)
 	legacyConnections   func(http.ResponseWriter)
+
+	// readCache deduplicates expensive read-only analytics endpoints so many
+	// concurrent clients never issue identical heavy queries.
+	readCache *ttlSingleFlight
 }
 
 // TryServe handles a request when its path belongs to the read-only data API.
@@ -56,17 +55,8 @@ func (api *DataAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 	switch r.URL.Path {
 	case "/api/pool/stats":
 		return api.serveSession(w, r, api.poolStats)
-	case "/api/pool/whoami":
-		api.whoami(w, r)
-		return true
 	case "/api/pool/users":
 		return api.serveSession(w, r, api.poolUsers)
-	case "/api/pool/origins":
-		return api.serveSession(w, r, api.poolOrigins)
-	case "/api/pool/daily-breakdown":
-		return api.serveSession(w, r, api.dailyBreakdown)
-	case "/api/pool/hourly":
-		return api.serveSession(w, r, api.globalHourly)
 	case "/api/pool/signal":
 		return api.serveSession(w, r, api.signalAnalytics)
 	case "/api/pool/catalog":
@@ -106,14 +96,6 @@ func (api *DataAPI) TryServe(w http.ResponseWriter, r *http.Request) bool {
 
 	// Preserve compatibility behavior: these handlers historically owned
 	// method validation (if any), so this routing extraction does not add one.
-	if strings.HasPrefix(r.URL.Path, "/api/pool/users/") {
-		switch {
-		case strings.HasSuffix(r.URL.Path, "/daily"):
-			return api.serveSession(w, r, api.userDaily)
-		case strings.HasSuffix(r.URL.Path, "/hourly"):
-			return api.serveSession(w, r, api.userHourly)
-		}
-	}
 	return false
 }
 
@@ -137,26 +119,26 @@ func (h *proxyHandler) dataAPIService() *DataAPI {
 	if h.dataAPI != nil {
 		return h.dataAPI
 	}
-	return &DataAPI{
+	api := &DataAPI{
 		authorizeSession: h.checkAdminOrSessionAuth,
 		authorizeAdmin:   h.checkAdminAuth,
-		poolStats:        h.handlePoolStats,
-		whoami:           h.handleWhoami,
 		poolUsers:        h.handlePoolUsers,
-		poolOrigins:      h.handlePoolOrigins,
-		dailyBreakdown:   h.handleDailyBreakdown,
-		globalHourly:     h.handleGlobalHourly,
-		signalAnalytics:  h.handleSignalAnalytics,
-		userDaily:        h.handleUserDaily,
-		userHourly:       h.handleUserHourly,
 		modelCatalog: func(w http.ResponseWriter, _ *http.Request) {
 			servePoolModelsWithRegistry(w, h.pool, h.registry)
 		},
-		usageV2:             h.handleUsageV2,
-		usageEconomicsV2:    h.handleUsageEconomicsV2,
 		pricingModels:       h.handleModelPricingV2,
 		modelRouting:        h.serveModelRouting,
 		providerConnections: h.serveProviderConnectionsV2,
 		legacyConnections:   h.serveAccounts,
+		readCache:           newTTLSingleFlight(),
 	}
+	// Expensive read-only endpoints are single-flighted and short-TTL cached so
+	// many concurrent clients share one backend computation instead of issuing
+	// identical heavy queries. Caching runs after authorization.
+	api.poolStats = api.cachedHandler(5*time.Second, cacheAllGET, h.handlePoolStats)
+	api.signalAnalytics = api.cachedHandler(5*time.Second, cacheAllGET, h.handleSignalAnalytics)
+	api.usageEconomicsV2 = api.cachedHandler(10*time.Second, cacheAllGET, h.handleUsageEconomicsV2)
+	api.usageV2 = api.cachedHandler(5*time.Second, cachePoolUsageOnly, h.handleUsageV2)
+	h.dataAPI = api
+	return api
 }

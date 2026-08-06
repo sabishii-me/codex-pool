@@ -300,9 +300,11 @@ func (h *proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Special case: aggregate usage for client; do not hit upstream.
+	// Special case: aggregate usage for client; do not hit upstream. Usage
+	// polling is owned by the background poller (startUsagePoller) so a client
+	// request is never blocked on a staggered upstream poll, and the
+	// unauthenticated usage endpoint cannot trigger upstream traffic.
 	if isUsageRequest(r) {
-		h.pollUpstreamUsage()
 		h.handleAggregatedUsage(w, reqID)
 		return
 	}

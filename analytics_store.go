@@ -124,13 +124,15 @@ func newAnalyticsStore(dbPath string) (*AnalyticsStore, error) {
 		return nil, fmt.Errorf("create analytics dir: %w", err)
 	}
 
+	// A single SQLite handle with WAL keeps model-response accounting and heavy
+	// usage reads independent at the connection-pool level. The pool is sized so
+	// a burst of dashboard reads cannot starve the accounting write.
 	db, err := sql.Open("sqlite", dbPath+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, fmt.Errorf("open analytics db: %w", err)
 	}
-
-	// Set connection pool to 1 for writes (SQLite limitation)
-	db.SetMaxOpenConns(4)
+	db.SetMaxOpenConns(16)
+	db.SetMaxIdleConns(4)
 
 	if err := createAnalyticsTables(db); err != nil {
 		db.Close()
@@ -174,6 +176,7 @@ func createAnalyticsTables(db *sql.DB) error {
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_events_request ON usage_events(connection_id, request_id) WHERE request_id != '';
 	CREATE INDEX IF NOT EXISTS idx_usage_events_completed ON usage_events(completed_at);
 	CREATE INDEX IF NOT EXISTS idx_usage_events_provider_completed ON usage_events(provider_id, completed_at);
+	CREATE INDEX IF NOT EXISTS idx_usage_events_user_completed ON usage_events(user_id, completed_at);
 
 	CREATE TABLE IF NOT EXISTS request_costs (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

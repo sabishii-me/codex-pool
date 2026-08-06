@@ -866,65 +866,6 @@ func inferClaudeWindowReset(now, prev time.Time, window time.Duration) time.Time
 	return prev.Add(time.Duration(cycles+1) * window)
 }
 
-// DailyBreakdownDay represents one day of usage data.
-type DailyBreakdownDay struct {
-	Date     string
-	Surfaces map[string]float64
-}
-
-// fetchDailyBreakdownData fetches the daily token usage breakdown and returns structured data.
-func (h *proxyHandler) fetchDailyBreakdownData(a *ProviderConnection) ([]DailyBreakdownDay, error) {
-	base := h.cfg.whamBase
-	joined := singleJoin(base.Path, "/wham/usage/daily-token-usage-breakdown")
-	u := *base
-	u.Path = joined
-	u.RawQuery = ""
-
-	req, _ := http.NewRequest(http.MethodGet, u.String(), nil)
-	a.mu.Lock()
-	access := a.AccessToken
-	accountID := a.AccountID
-	idTokID := a.IDTokenChatGPTAccountID
-	a.mu.Unlock()
-	req.Header.Set("Authorization", "Bearer "+access)
-	chatgptHeaderID := accountID
-	if chatgptHeaderID == "" {
-		chatgptHeaderID = idTokID
-	}
-	if chatgptHeaderID != "" {
-		req.Header.Set("ChatGPT-Account-ID", chatgptHeaderID)
-	}
-
-	resp, err := h.transport.RoundTrip(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	var payload struct {
-		Data []struct {
-			Date                      string             `json:"date"`
-			ProductSurfaceUsageValues map[string]float64 `json:"product_surface_usage_values"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, err
-	}
-
-	var result []DailyBreakdownDay
-	for _, d := range payload.Data {
-		result = append(result, DailyBreakdownDay{
-			Date:     d.Date,
-			Surfaces: d.ProductSurfaceUsageValues,
-		})
-	}
-	return result, nil
-}
-
 func hasCodexUsageHeaders(hdr http.Header) bool {
 	for _, key := range []string{
 		"X-Codex-Primary-Used-Percent",

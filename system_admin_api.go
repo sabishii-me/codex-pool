@@ -137,7 +137,6 @@ func (h *proxyHandler) systemAdminAPIService() *SystemAdminAPI {
 				w.WriteHeader(http.StatusOK)
 				_, _ = w.Write([]byte("ok"))
 			}},
-			"/admin/origins":           {method: http.MethodGet, handler: h.handleAdminOrigins},
 			"/admin/tokens":            {method: http.MethodGet, handler: func(w http.ResponseWriter, _ *http.Request) { h.serveTokenCapacity(w) }},
 			"/admin/clear-rate-limits": {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) { h.clearAllRateLimits(w) }},
 			"/admin/purge-anonymous":   {method: http.MethodPost, handler: func(w http.ResponseWriter, _ *http.Request) { h.purgeAnonymousUsers(w) }},

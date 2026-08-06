@@ -71,22 +71,6 @@ func TestDataAPIPreservesExplicitCollectionMethods(t *testing.T) {
 	}
 }
 
-func TestDataAPIRoutesDynamicUserUsageReads(t *testing.T) {
-	called := ""
-	api := &DataAPI{
-		authorizeSession: func(http.ResponseWriter, *http.Request) bool { return true },
-		userDaily:        func(http.ResponseWriter, *http.Request) { called = "daily" },
-		userHourly:       func(http.ResponseWriter, *http.Request) { called = "hourly" },
-	}
-	if !api.TryServe(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/pool/users/member-1/daily", nil)) || called != "daily" {
-		t.Fatalf("daily route called=%q", called)
-	}
-	called = ""
-	if !api.TryServe(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/pool/users/member-1/hourly", nil)) || called != "hourly" {
-		t.Fatalf("hourly route called=%q", called)
-	}
-}
-
 func TestProxyHandlerDelegatesProviderConnectionReadToDataAPI(t *testing.T) {
 	called := false
 	handler := &proxyHandler{

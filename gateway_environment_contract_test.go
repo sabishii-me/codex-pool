@@ -45,7 +45,9 @@ func TestStagingAndDevelopmentComposeStayIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, directory := range []string{"dev", "staging"} {
-		if !strings.Contains("\n"+string(dockerIgnore)+"\n", "\n"+directory+"\n") {
+		// Normalize CRLF so the contract holds on Windows checkouts too.
+		normalized := "\n" + strings.ReplaceAll(string(dockerIgnore), "\r\n", "\n") + "\n"
+		if !strings.Contains(normalized, "\n"+directory+"\n") {
 			t.Errorf(".dockerignore does not exclude secret state directory %q", directory)
 		}
 	}

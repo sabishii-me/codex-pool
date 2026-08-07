@@ -4298,7 +4298,22 @@ func (h *proxyHandler) tryOnce(
 					return nil, nil, false, err
 				}
 				// Refresh succeeded - if we still get 401/403 after refresh,
-				// the account is truly dead (fresh token still rejected)
+				// the account is truly dead (fresh token still rejected).
+				// A working refresh token plus a rejected fresh token is strong
+				// evidence the account was deactivated/suspended upstream, so it
+				// must be marked dead rather than accumulating a small penalty
+				// and silently dropping out of the routing window forever.
+				if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
+					acc.mu.Lock()
+					acc.Dead = true
+					acc.Penalty += 100.0
+					acc.mu.Unlock()
+					log.Printf("[%s] marking account %s as DEAD: fresh token still rejected after refresh", reqID, acc.ID)
+					if err := saveAccount(acc); err != nil {
+						log.Printf("[%s] warning: failed to save dead account %s: %v", reqID, acc.ID, err)
+					}
+					refreshFailed = true
+				}
 			} else {
 				errStr := err.Error()
 				if isRateLimitError(err) {

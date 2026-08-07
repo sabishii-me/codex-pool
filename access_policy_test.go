@@ -77,13 +77,19 @@ func TestAccessPolicyAdminRequiresAllowlistAndElevation(t *testing.T) {
 	}
 
 	user.Email = "admin@example.com"
+	// Reads (GET) require admin sign-in only — no MFA elevation.
 	response = httptest.NewRecorder()
-	if policy.RequireAdmin(response, httptest.NewRequest(http.MethodGet, "/", nil)) || response.Code != http.StatusUnauthorized {
-		t.Fatalf("non-elevated status=%d", response.Code)
+	if !policy.RequireAdmin(response, httptest.NewRequest(http.MethodGet, "/", nil)) {
+		t.Fatalf("admin GET rejected without elevation, status=%d", response.Code)
+	}
+	// Writes still require MFA elevation.
+	response = httptest.NewRecorder()
+	if policy.RequireAdmin(response, httptest.NewRequest(http.MethodPost, "/", nil)) || response.Code != http.StatusUnauthorized {
+		t.Fatalf("non-elevated POST status=%d", response.Code)
 	}
 
 	elevated = true
-	if !policy.RequireAdmin(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil)) || attempts.success != 1 {
+	if !policy.RequireAdmin(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/", nil)) || attempts.success != 2 {
 		t.Fatalf("elevated admin rejected, successes=%d", attempts.success)
 	}
 }

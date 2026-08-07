@@ -36,12 +36,22 @@ func TestProviderAdminRoutesRequireElevatedAdminSession(t *testing.T) {
 		t.Fatalf("failed to save admin TOTP entry: %v", err)
 	}
 
+	// Reads (GET) are MFA-free for admin-listed sessions.
 	unelevatedRequest := httptest.NewRequest(http.MethodGet, "/admin/kimi", nil)
 	unelevatedRequest.AddCookie(newTestSessionCookie(t, secret, user))
 	unelevatedResponse := httptest.NewRecorder()
 	h.ServeHTTP(unelevatedResponse, unelevatedRequest)
-	if unelevatedResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("admin-listed but unelevated status = %d, want 401", unelevatedResponse.Code)
+	if unelevatedResponse.Code != http.StatusOK {
+		t.Fatalf("admin-listed GET without elevation status = %d, want 200", unelevatedResponse.Code)
+	}
+
+	// Writes (POST) still require MFA elevation.
+	writeRequest := httptest.NewRequest(http.MethodPost, "/admin/kimi", strings.NewReader(`{}`))
+	writeRequest.AddCookie(newTestSessionCookie(t, secret, user))
+	writeResponse := httptest.NewRecorder()
+	h.ServeHTTP(writeResponse, writeRequest)
+	if writeResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("admin-listed unelevated write status = %d, want 401", writeResponse.Code)
 	}
 
 	// Elevate via a real TOTP verify call, then the same route should succeed.

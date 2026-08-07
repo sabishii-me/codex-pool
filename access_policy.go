@@ -20,6 +20,13 @@ type AccessPolicy struct {
 }
 
 func (policy *AccessPolicy) RequireAdmin(w http.ResponseWriter, r *http.Request) bool {
+	// Reads (GET) require admin sign-in only; state-changing operations
+	// additionally require MFA elevation so browsing never forces a second
+	// verification while every write stays gated behind two-factor auth.
+	return policy.requireAdmin(w, r, r.Method != http.MethodGet)
+}
+
+func (policy *AccessPolicy) requireAdmin(w http.ResponseWriter, r *http.Request, requireElevation bool) bool {
 	ip := policy.requestIP(r)
 	if policy.attempts != nil && policy.attempts.isBanned(ip) {
 		http.Error(w, "too many failed attempts, try again later", http.StatusTooManyRequests)
@@ -38,7 +45,7 @@ func (policy *AccessPolicy) RequireAdmin(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "not an admin", http.StatusForbidden)
 		return false
 	}
-	if policy.isElevated == nil || !policy.isElevated(r, user.ID) {
+	if requireElevation && (policy.isElevated == nil || !policy.isElevated(r, user.ID)) {
 		http.Error(w, "two-factor verification required", http.StatusUnauthorized)
 		return false
 	}

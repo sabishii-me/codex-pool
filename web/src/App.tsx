@@ -41,7 +41,6 @@ export function App() {
       const status = await checkMFAStatus();
       if (generation !== capabilityGeneration.current) return false;
       setCapability({ status: "resolved", enrolled: status.enrolled, elevated: status.elevated, recoveryCodesRemaining: status.recovery_codes_remaining });
-      if (!status.elevated) clearProtected();
       return status.elevated;
     } catch (error) {
       if (generation !== capabilityGeneration.current) return false;
@@ -83,12 +82,13 @@ export function App() {
     setLoading(false);
   }, []);
 
-  // Hydrate admin resources as soon as the session is elevated, and re-hydrate
-  // whenever elevation changes. Dashboard refreshes never clear this state.
+  // Hydrate admin resources as soon as the admin session loads (reads are
+  // MFA-free). Re-hydrate when the session changes. Dashboard refreshes never
+  // clear this state; writes that fail with 401 will trigger MFA elevation.
   useEffect(() => {
-    if (!session || !elevated) return;
+    if (!session || !session.is_admin) return;
     void hydrateProtected();
-  }, [session, elevated, hydrateProtected]);
+  }, [session, hydrateProtected]);
 
   const refreshConnections = useCallback(async () => {
     setConnections({ status: "loading" });
@@ -126,20 +126,11 @@ export function App() {
     if (!session || capabilityPending(capability)) return;
     const incoming = currentRoute();
     if (incoming.adminOnly && !session.is_admin) { const home = routeForPath("/"); navigateTo(home, true); setRoute(home); return; }
-    if (incoming.adminOnly && session.is_admin && !elevated) {
-      setPendingAdminRoute(incoming.path);
-      setMFAChallengeOpen(true);
-    }
   }, [session, capability, elevated]);
 
   const go = (path: AppRoute) => {
     const target = routeForPath(path);
     if (target.adminOnly && !session?.is_admin) return;
-    if (target.adminOnly && !elevated) {
-      setPendingAdminRoute(path);
-      setMFAChallengeOpen(true);
-      return;
-    }
     navigateTo(target); setRoute(target);
   };
   const closeMFAChallenge = () => {
@@ -159,7 +150,7 @@ export function App() {
   if (booting) return <div className="new-boot"><span>AI POOL</span><small>Loading workspace</small></div>;
   if (!session) return <AccessGate />;
 
-  const renderedRoute = route.adminOnly && !elevated ? "/" : route.path;
+  const renderedRoute = route.adminOnly && !session.is_admin ? "/" : route.path;
   return <div className="new-app" data-admin={session.is_admin ? "true" : "false"} data-elevated={elevated ? "true" : "false"} data-route={route.path}>
     <Topbar session={session} isAdmin={session.is_admin} elevated={elevated} loading={loading} onRefresh={refresh} />
     <div className="new-layout"><Sidebar route={renderedRoute} isAdmin={session.is_admin} onNavigate={go} onSignOut={signOut} email={session.email} />

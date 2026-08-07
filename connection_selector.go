@@ -11,7 +11,7 @@ import (
 const (
 	ordinaryRoutingWeight         = 1
 	cyberAccessRoutingWeight      = 2
-	competitiveRoutingScoreWindow = 0.15
+	competitiveRoutingScoreWindow = 0.30
 )
 
 type weightedConnectionCandidate struct {
@@ -69,23 +69,37 @@ func selectQuotaCompetitiveConnection(candidates []weightedConnectionCandidate, 
 	sort.Slice(competitive, func(i, j int) bool { return competitive[i].connection.ID < competitive[j].connection.ID })
 	totalWeight := 0
 	for _, candidate := range competitive {
-		totalWeight += ordinaryRoutingWeight
-		if candidate.cyberAccess {
-			totalWeight += cyberAccessRoutingWeight - ordinaryRoutingWeight
-		}
+		totalWeight += routingWeightFor(candidate)
 	}
 	slot := int(sequence % uint64(totalWeight))
 	for _, candidate := range competitive {
-		weight := ordinaryRoutingWeight
-		if candidate.cyberAccess {
-			weight = cyberAccessRoutingWeight
-		}
+		weight := routingWeightFor(candidate)
 		if slot < weight {
 			return candidate.connection
 		}
 		slot -= weight
 	}
 	return competitive[len(competitive)-1].connection
+}
+
+// routingWeightFor returns the weighted routing share for a candidate. Cyber
+// access carries more weight; ordinary Codex capacity is unweighted so every
+// account is consumed evenly (smaller-capacity plans naturally hit their
+// limit first, then the larger capacity is burned).
+func routingWeightFor(candidate weightedConnectionCandidate) int {
+	return routingWeightForConnection(candidate.connection)
+}
+
+// routingWeightForConnection returns the routing weight for a connection,
+// independent of candidate selection.
+func routingWeightForConnection(a *ProviderConnection) int {
+	if a == nil {
+		return ordinaryRoutingWeight
+	}
+	if a.CyberAccess {
+		return cyberAccessRoutingWeight
+	}
+	return ordinaryRoutingWeight
 }
 
 // ConnectionSelectionMode declares exceptional capacity constraints without

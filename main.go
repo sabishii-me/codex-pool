@@ -1549,6 +1549,15 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	start := time.Now()
 	authHeader := r.Header.Get("Authorization")
 
+	// Model API must not be reachable from the public internet. Only trusted
+	// networks (loopback, private LAN, CGNAT/Tailscale, link-local) may touch
+	// the model gateway; a public source is rejected before any token parsing
+	// or upstream work, even if it carries a valid pool token.
+	if !isTrustedClientIP(getClientIP(r)) {
+		http.Error(w, "model API is restricted to trusted networks", http.StatusForbidden)
+		return
+	}
+
 	// codex_apps MCP and other noop paths must never require a pool token.
 	// ServeHTTP already routes these, but keep a guard here in case a future
 	// caller reaches proxyRequest with a rewritten / stripped path.

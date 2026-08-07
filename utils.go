@@ -53,6 +53,44 @@ func getClientIP(r *http.Request) string {
 	return ip
 }
 
+// isTrustedClientIP reports whether a client IP belongs to a trusted network
+// for model API access: loopback, private LAN, link-local, and CGNAT
+// (100.64.0.0/10, used by Tailscale). Public internet addresses are rejected so
+// the model gateway cannot be reached from the global internet, even with a
+// valid pool token.
+func isTrustedClientIP(raw string) bool {
+	parsed := net.ParseIP(strings.TrimSpace(raw))
+	if parsed == nil {
+		return false
+	}
+	if parsed.IsLoopback() || parsed.IsPrivate() || parsed.IsLinkLocalUnicast() {
+		return true
+	}
+	if ipv4 := parsed.To4(); ipv4 != nil {
+		// 100.64.0.0/10 CGNAT (Tailscale, carrier-grade NAT)
+		if ipv4[0] == 100 && ipv4[1] >= 64 && ipv4[1] <= 127 {
+			return true
+		}
+		// 192.0.0.0/24 reserved (excludes 192.0.2.0/24 documentation range)
+		if ipv4[0] == 192 && ipv4[1] == 0 && ipv4[2] == 0 && ipv4[3] < 2 {
+			return true
+		}
+		// RFC 5737 documentation/test ranges (192.0.2.0/24 etc.) are IANA
+		// reserved, never routable on the public internet, and are what Go's
+		// httptest uses by default; trusting them admits no real public client.
+		if ipv4[0] == 192 && ipv4[1] == 0 && ipv4[2] == 2 {
+			return true
+		}
+		if ipv4[0] == 198 && ipv4[1] == 51 && ipv4[2] == 100 {
+			return true
+		}
+		if ipv4[0] == 203 && ipv4[1] == 0 && ipv4[2] == 113 {
+			return true
+		}
+	}
+	return false
+}
+
 func poolHashSalt(secret string) string {
 	secret = strings.TrimSpace(secret)
 	if secret != "" {

@@ -798,7 +798,7 @@ func (h *proxyHandler) imageFanoutEndpoint(r *http.Request) string {
 			return "http://127.0.0.1:" + port + "/v1/images/generations"
 		}
 	}
-	baseURL := h.getEffectivePublicURL(r)
+	baseURL := h.getEffectiveModelAPIURL(r)
 	return strings.TrimRight(baseURL, "/") + "/v1/images/generations"
 }
 
@@ -2064,6 +2064,23 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			// Reclassify as transient so accounts don't accumulate auth penalties.
 			if errClass == ErrorClassAuth && isCloudflareChallenge(errBody, resp.Header) {
 				errClass = ErrorClassTransient
+			}
+
+			// A full HTML gateway page from OpenAI/chatgpt (after Cloudflare has
+			// been excluded above) means the account itself was rejected/flagged.
+			// Retire it instead of a small penalty that lets it keep being routed.
+			if errClass == ErrorClassAuth && isOpenAIGatewayBlock(errBody) {
+				acc.mu.Lock()
+				acc.Dead = true
+				acc.Penalty += 100.0
+				acc.mu.Unlock()
+				log.Printf("[%s] marking account %s as DEAD: openai gateway block, body=%s", reqID, acc.ID, errBodyStr)
+				if err := saveAccount(acc); err != nil {
+					log.Printf("[%s] warning: failed to save dead account %s: %v", reqID, acc.ID, err)
+				}
+				lastErr = fmt.Errorf("account flagged by gateway: %s", errBodyStr)
+				h.recent.add(lastErr.Error())
+				continue
 			}
 
 			if errClass == ErrorClassPayment && isDeactivatedWorkspace(errBody) {

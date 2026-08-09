@@ -117,6 +117,21 @@ func isCloudflareChallenge(body []byte, headers http.Header) bool {
 	return false
 }
 
+// isOpenAIGatewayBlock detects a full HTML account-gate page served in place
+// of an API error envelope (e.g. chatgpt.com serving a flagged-session or
+// verification page). Unlike Cloudflare bot challenges (handled separately as
+// transient), an upstream HTML page on an authenticated API call means the
+// account itself was rejected, so the connection should be retired rather than
+// handed a small penalty and retried forever.
+func isOpenAIGatewayBlock(body []byte) bool {
+	if !bytes.Contains(body, []byte("<html")) && !bytes.Contains(body, []byte("<!DOCTYPE html")) {
+		return false
+	}
+	// Cloudflare challenges are classified transient by the caller before this
+	// helper runs; do not treat them as account death here.
+	return true
+}
+
 func isCyberPolicyError(body []byte) bool {
 	// Only match the upstream's actual error envelope. Naive substring
 	// matching trips on any assistant output that happens to contain the

@@ -10,6 +10,39 @@ func TestClassifyAnthropicOverloadedAsTransient(t *testing.T) {
 	}
 }
 
+func TestIsOpenAIGatewayBlock(t *testing.T) {
+	t.Parallel()
+
+	// Real body shape observed from chatgpt.com flagged-session 403: full HTML
+	// page with the OpenAI logo and a refresh meta tag.
+	openaiHTML := `<html>
+  <head><meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style global>body{font-family:Arial}.logo{color:#8e8ea0}</style>
+  <meta http-equiv="refresh" content="360">
+  </head><body><div class="logo"><svg width="41" height="41" viewBox="0 0 41 41"></svg></div></body></html>`
+
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{name: "openai html page", body: openaiHTML, want: true},
+		{name: "doctype html", body: "<!DOCTYPE html><html><body>verify</body></html>", want: true},
+		{name: "json api error", body: `{"error":{"message":"insufficient_quota"}}`, want: false},
+		{name: "empty", body: ``, want: false},
+		{name: "plain text", body: "Forbidden", want: false},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isOpenAIGatewayBlock([]byte(tc.body)); got != tc.want {
+				t.Fatalf("isOpenAIGatewayBlock(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestIsClaudeOrganizationDisabled(t *testing.T) {
 	t.Parallel()
 

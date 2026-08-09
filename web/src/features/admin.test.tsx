@@ -5,7 +5,7 @@ import { AccountContribution, ConnectionsPage, OAuthSessionDetails } from "./adm
 
 describe("provider account contribution UX", () => {
   it("exposes Add account even when no provider connections exist", () => {
-    const html = renderToStaticMarkup(<ConnectionsPage state={{ status: "empty" }} onRefresh={async () => {}} onAuthorizationLost={() => {}} />);
+    const html = renderToStaticMarkup(<ConnectionsPage state={{ status: "empty" }} onRefresh={async () => {}} isElevated={true} onAuthorizationLost={() => {}} onRequireElevation={() => {}} />);
     expect(html).toContain("Add account");
     expect(html).toContain("No provider connections are configured");
   });

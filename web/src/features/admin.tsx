@@ -17,7 +17,7 @@ export function AdminLockedPage({ resource, onUnlock }: { resource: "Connections
   </PageFrame>;
 }
 
-export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { state: ResourceState<OperatorProviderConnectionV2[]>; onRefresh: () => Promise<void>; onAuthorizationLost: () => void }) {
+export function ConnectionsPage({ state, onRefresh, isElevated, onAuthorizationLost, onRequireElevation }: { state: ResourceState<OperatorProviderConnectionV2[]>; onRefresh: () => Promise<void>; isElevated: boolean; onAuthorizationLost: () => void; onRequireElevation: () => void }) {
   const [selectedID, setSelectedID] = useState<string | null>(null);
   const [contributionTarget, setContributionTarget] = useState<OperatorProviderConnectionV2 | null | undefined>(undefined);
   const [operation, setOperation] = useState<string | null>(null);
@@ -26,6 +26,7 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
   useEffect(() => { if (state.status === "ready" && selectedID && !state.data.some(connection => connection.id === selectedID)) setSelectedID(null); }, [state, selectedID]);
   const run = async (label: string, task: () => Promise<unknown>) => {
     if (operation) return;
+    if (!isElevated) { onRequireElevation(); return; }
     setOperation(label); setFeedback(null);
     try { await task(); await onRefresh(); setFeedback({ tone: "success", text: `${label} completed.` }); }
     catch (error) {
@@ -40,7 +41,7 @@ export function ConnectionsPage({ state, onRefresh, onAuthorizationLost }: { sta
       <div className="admin-table connection-list" aria-label="Provider connections">{state.data.map(connection => { const runtime = connectionRuntimePresentation(connection); return <button className={`admin-row connection-row ${selectedID === connection.id ? "selected" : ""}`} key={connection.id} onClick={() => setSelectedID(connection.id)} aria-pressed={selectedID === connection.id}><div><b>{connection.identity.display_name || connection.provider_id}</b><small>{connection.provider_id} · {connection.plan_type || "plan unavailable"}{connection.is_primary ? " · Primary" : ""}</small></div><StatusBadge tone={runtime.tone}>{runtime.label}</StatusBadge><span>{runtime.summary || `${connection.inflight} in flight`}</span></button>; })}</div>
       {selected ? <ConnectionDetail connection={selected} operation={operation} onClose={() => setSelectedID(null)} onRun={run} onReauthorize={() => setContributionTarget(selected)} /> : <div className="connection-detail-empty"><span>Connection detail</span><b>Select a connection</b></div>}
     </section> : null}
-    {contributionTarget !== undefined ? <AccountContribution initialProvider={contributionTarget?.provider_id as ContributableProvider | undefined} reauthorizing={contributionTarget ?? undefined} onClose={() => setContributionTarget(undefined)} onAdded={async () => { await onRefresh(); setContributionTarget(undefined); setFeedback({ tone: "success", text: contributionTarget ? "Account reauthorized." : "Account added." }); }} onAuthorizationLost={onAuthorizationLost} /> : null}
+    {contributionTarget !== undefined ? <AccountContribution initialProvider={contributionTarget?.provider_id as ContributableProvider | undefined} reauthorizing={contributionTarget ?? undefined} isElevated={isElevated} onRequireElevation={onRequireElevation} onClose={() => setContributionTarget(undefined)} onAdded={async () => { await onRefresh(); setContributionTarget(undefined); setFeedback({ tone: "success", text: contributionTarget ? "Account reauthorized." : "Account added." }); }} onAuthorizationLost={onAuthorizationLost} /> : null}
   </PageFrame>;
 }
 
@@ -84,7 +85,7 @@ export async function activateReauthorizedConnection(connection: OperatorProvide
   return restored;
 }
 
-export function AccountContribution({ onClose, onAdded, onAuthorizationLost, initialProvider = "codex", reauthorizing }: { onClose: () => void; onAdded: () => Promise<void>; onAuthorizationLost?: () => void; initialProvider?: ContributableProvider; reauthorizing?: OperatorProviderConnectionV2 }) {
+export function AccountContribution({ onClose, onAdded, onAuthorizationLost, isElevated, onRequireElevation, initialProvider = "codex", reauthorizing }: { onClose: () => void; onAdded: () => Promise<void>; onAuthorizationLost?: () => void; isElevated?: boolean; onRequireElevation?: () => void; initialProvider?: ContributableProvider; reauthorizing?: OperatorProviderConnectionV2 }) {
   const [provider, setProvider] = useState<ContributableProvider>(initialProvider);
   const [credential, setCredential] = useState("");
   const [oauth, setOAuth] = useState<{ verifier?: string; sessionID?: string; state?: string; url: string; relayRequired?: boolean } | null>(null);
@@ -120,7 +121,9 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, ini
     } finally { setBusy(false); }
   };
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (busy) return; setBusy(true); setError("");
+    event.preventDefault(); if (busy) return;
+    if (isElevated === false) { onRequireElevation?.(); return; }
+    setBusy(true); setError("");
     try {
       if (selected.mode === "oauth") {
         if (reauthorizing && exchangedAccountID) {
@@ -296,7 +299,7 @@ export function formatRelativeTimestamp(value: string) {
 function Fact({ label, value }: { label: string; value: string }) { return <div className="connection-fact"><span>{label}</span><b>{value}</b></div>; }
 function formatTimestamp(value: string) { const date = new Date(value); return date.toLocaleString(); }
 
-export function MembersPage({ state, onRefresh }: { state: ResourceState<GatewayMember[]>; onRefresh: () => Promise<void> }) {
+export function MembersPage({ state, onRefresh, isElevated, onRequireElevation }: { state: ResourceState<GatewayMember[]>; onRefresh: () => Promise<void>; isElevated: boolean; onRequireElevation: () => void }) {
   const [creating, setCreating] = useState(false);
   const [email, setEmail] = useState("");
   const [plan, setPlan] = useState("pro");
@@ -306,6 +309,7 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
   const [confirmMember, setConfirmMember] = useState<GatewayMember | null>(null);
   const create = async () => {
     if (!email.trim() || busy) return;
+    if (!isElevated) { onRequireElevation(); return; }
     setBusy("create"); setError(""); setIssuedToken("");
     try { const result = await createGatewayMember(email.trim(), plan); setIssuedToken(result.token); setEmail(""); setCreating(false); await onRefresh(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Member creation failed"); }
@@ -313,6 +317,7 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
   };
   const toggle = async (member: GatewayMember): Promise<boolean> => {
     if (busy) return false;
+    if (!isElevated) { onRequireElevation(); return false; }
     setBusy(member.id); setError("");
     try { await setGatewayMemberEnabled(member.id, member.disabled); await onRefresh(); return true; }
     catch (failure) { setError(failure instanceof Error ? failure.message : "Member update failed"); return false; }
@@ -328,12 +333,13 @@ export function MembersPage({ state, onRefresh }: { state: ResourceState<Gateway
   </PageFrame>;
 }
 
-export function SystemPage({ state }: { state: ResourceState<SystemProjection> }) {
+export function SystemPage({ state, isElevated, onRequireElevation }: { state: ResourceState<SystemProjection>; isElevated: boolean; onRequireElevation: () => void }) {
   const [operation, setOperation] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const run = async (label: string, action: "reload-connections" | "clear-rate-limits"): Promise<boolean> => {
     if (operation) return false;
+    if (!isElevated) { onRequireElevation(); return false; }
     setOperation(label); setMessage("");
     try { const result = await runSystemOperation(action); setMessage(action === "clear-rate-limits" ? `${Number(result.cleared ?? 0)} active rate limits cleared.` : "Provider connections reloaded."); return true; }
     catch (error) { setMessage(error instanceof Error ? error.message : `${label} failed`); return false; }

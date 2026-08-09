@@ -107,6 +107,15 @@ export function App() {
     void refreshCapability(true);
   }, [clearProtected, refreshCapability, route.path]);
 
+  // Proactive MFA gate used by write actions: it pops the challenge without
+  // clearing admin state or redirecting, so nothing the admin already selected
+  // or typed is lost. After verifying they simply retry the action.
+  const requireElevation = useCallback(() => {
+    setPendingAdminRoute(null);
+    setMFAChallengeOpen(true);
+    void refreshCapability(true);
+  }, [refreshCapability]);
+
   const refreshMembers = useCallback(async () => {
     setMembers({ status: "loading" });
     try { const data = await loadGatewayMembers(); setMembers(data.users.length ? { status: "ready", data: data.users } : { status: "empty" }); }
@@ -141,8 +150,15 @@ export function App() {
   const completeMFAChallenge = async () => {
     const nowElevated = await refreshCapability();
     if (!nowElevated) return false;
-    const target = routeForPath(pendingAdminRoute ?? "/admin/connections");
-    setMFAChallengeOpen(false); setPendingAdminRoute(null); navigateTo(target, route.adminOnly); setRoute(target);
+    const adminRoute = pendingAdminRoute;
+    setMFAChallengeOpen(false); setPendingAdminRoute(null);
+    // A proactive challenge (pendingAdminRoute == null) leaves the admin on
+    // their current page with all selected/typed state intact; only a write
+    // that actually returned 401 gets redirected back to the admin route.
+    if (adminRoute) {
+      const target = routeForPath(adminRoute);
+      navigateTo(target, route.adminOnly); setRoute(target);
+    }
     return true;
   };
   const signOut = async () => { await logout(); setSession(null); const home = routeForPath("/"); navigateTo(home, true); setRoute(home); };
@@ -156,7 +172,7 @@ export function App() {
     <div className="new-layout"><Sidebar route={renderedRoute} isAdmin={session.is_admin} onNavigate={go} onSignOut={signOut} email={session.email} />
       <main className="new-main" id="main-content" tabIndex={-1}>
         {errors.length ? <div className="new-alert" role="alert"><b>Some data could not be loaded</b><span>{errors.join(" · ")}</span></div> : null}
-        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} members={members} health={health} session={session} capability={capability} isElevated={elevated} onConnectionsRefresh={refreshConnections} onMembersRefresh={refreshMembers} onCapabilityRefresh={async () => { await refreshCapability(); }} onAuthorizationLost={authorizationLost} onNavigate={go} />
+        <Page route={renderedRoute} stats={stats} signal={signal} models={models} connections={connections} users={users} members={members} health={health} session={session} capability={capability} isElevated={elevated} onConnectionsRefresh={refreshConnections} onMembersRefresh={refreshMembers} onCapabilityRefresh={async () => { await refreshCapability(); }} onAuthorizationLost={authorizationLost} onRequireElevation={requireElevation} onNavigate={go} />
       </main>
     </div>
     {mfaChallengeOpen ? <MFAChallenge capability={capability} destination={pendingAdminRoute} onCancel={closeMFAChallenge} onVerified={completeMFAChallenge} /> : null}

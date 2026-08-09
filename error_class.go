@@ -106,15 +106,12 @@ func isClaudeOrganizationDisabled(body []byte) bool {
 
 // isCloudflareChallenge detects Cloudflare bot-mitigation responses that return
 // 403 with an HTML challenge page. These are transient (not auth failures) and
-// should not penalize accounts.
+// should not penalize accounts. Only the explicit Cf-Mitigated marker counts:
+// chatgpt.com also serves its flagged-session 403 pages through Cloudflare, and
+// those "Server: cloudflare + <html" responses are account-level rejections that
+// must retire the connection, not be treated as transient challenges.
 func isCloudflareChallenge(body []byte, headers http.Header) bool {
-	if headers.Get("Cf-Mitigated") == "challenge" {
-		return true
-	}
-	if headers.Get("Server") == "cloudflare" && strings.Contains(string(body), "<html") {
-		return true
-	}
-	return false
+	return headers.Get("Cf-Mitigated") == "challenge"
 }
 
 // isOpenAIGatewayBlock detects a full HTML account-gate page served in place

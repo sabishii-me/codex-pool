@@ -1,6 +1,35 @@
 package main
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
+
+func TestIsCloudflareChallengeStrict(t *testing.T) {
+	t.Parallel()
+
+	// Real Cloudflare bot challenge is explicitly marked and stays transient.
+	cfHeaders := http.Header{}
+	cfHeaders.Set("Server", "cloudflare")
+	cfHeaders.Set("Cf-Mitigated", "challenge")
+	cfBody := []byte("<html>Just a moment...</html>")
+	if !isCloudflareChallenge(cfBody, cfHeaders) {
+		t.Fatalf("Cf-Mitigated: challenge must remain a transient cloudflare challenge")
+	}
+
+	// chatgpt.com flagged-session 403 is served through Cloudflare too, but
+	// without the Cf-Mitigated marker. It is an account-level rejection and
+	// must retire the account, never be treated as a transient challenge.
+	openAIHeaders := http.Header{}
+	openAIHeaders.Set("Server", "cloudflare")
+	openAIHTML := []byte("<html><head><meta http-equiv=\"refresh\" content=\"360\"></head><body><div class=\"logo\"><svg width=\"41\" height=\"41\" viewBox=\"0 0 41 41\"></svg></div></body></html>")
+	if isCloudflareChallenge(openAIHTML, openAIHeaders) {
+		t.Fatalf("OpenAI gateway block must not be classified as a cloudflare challenge")
+	}
+	if !isOpenAIGatewayBlock(openAIHTML) {
+		t.Fatalf("OpenAI gateway block should be detected as an account-level block")
+	}
+}
 
 func TestClassifyAnthropicOverloadedAsTransient(t *testing.T) {
 	t.Parallel()

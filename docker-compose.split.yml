@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile.api
     image: ${PRODUCTION_API_IMAGE:-codex-pool-api:latest}
+    ports:
+      - "0.0.0.0:8990:8989"
     volumes:
       - ./pool:/app/pool
       - ./data:/app/data
@@ -23,6 +25,7 @@ services:
       ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8989}
+      MODEL_API_BASE_URL: ${MODEL_API_BASE_URL:-}
       OAUTH_GOOGLE_REDIRECT_URI: ${OAUTH_GOOGLE_REDIRECT_URI:-}
       POOL_JWT_SECRET: ${POOL_JWT_SECRET:-}
     healthcheck:

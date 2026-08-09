@@ -58,7 +58,7 @@ func (h *proxyHandler) writeGatewaySessionJSON(w http.ResponseWriter, r *http.Re
 	// Anthropic-compatible providers (Kimi, MiniMax, Z.ai, etc.) share a pool
 	// credential format with the removed Claude account integration.
 	anthropicPoolKey := generateClaudePoolToken(secret, user.ID)
-	piModelsJSON, err := generatePiModelsJSON(h.getEffectivePublicURL(r), codexAccessToken, anthropicPoolKey, h.pricing)
+	piModelsJSON, err := generatePiModelsJSON(h.getEffectiveModelAPIURL(r), codexAccessToken, anthropicPoolKey, h.pricing)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate pi models config.")
 		return
@@ -108,6 +108,17 @@ func (h *proxyHandler) getEffectivePublicURL(r *http.Request) string {
 	return fmt.Sprintf("%s://%s", scheme, host)
 }
 
+// getEffectiveModelAPIURL returns the base URL that generated client
+// configurations should use for model traffic. When MODEL_API_BASE_URL is
+// configured (frontend/backend split), it points at the private model port;
+// otherwise it falls back to the public URL for single-endpoint deployments.
+func (h *proxyHandler) getEffectiveModelAPIURL(r *http.Request) string {
+	if u := getModelAPIBaseURL(); u != "" {
+		return strings.TrimRight(u, "/")
+	}
+	return h.getEffectivePublicURL(r)
+}
+
 func wantsPowerShell(r *http.Request) bool {
 	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("shell"))) {
 	case "powershell", "pwsh", "ps", "ps1":
@@ -124,6 +135,7 @@ func (h *proxyHandler) serveCodexSetupScript(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	publicURL := h.getEffectivePublicURL(r)
+	modelBase := h.getEffectiveModelAPIURL(r)
 
 	if wantsPowerShell(r) {
 		script := fmt.Sprintf(`#requires -Version 5.1
@@ -132,6 +144,7 @@ $ErrorActionPreference = 'Stop'
 
 $Token = '%s'
 $BaseUrl = '%s'
+$ModelBase = '%s'
 
 $authDir = Join-Path $HOME '.codex'
 $configFile = Join-Path $authDir 'config.toml'
@@ -190,7 +203,7 @@ try {
     $accessToken = [string]$auth.access_token
   }
   if (-not [string]::IsNullOrWhiteSpace($accessToken)) {
-    $modelsUrl = $BaseUrl.TrimEnd('/') + '/backend-api/codex/models?client_version=0.125.0'
+    $modelsUrl = $ModelBase.TrimEnd('/') + '/backend-api/codex/models?client_version=0.125.0'
     $headers = @{ Authorization = "Bearer $accessToken" }
     $tmp = [System.IO.Path]::GetTempFileName()
     try {
@@ -415,7 +428,7 @@ if ($existing -notmatch 'codex-pool') {
   $new = @"
 # Codex Pool Proxy Config
 model_provider = "codex-pool"
-chatgpt_base_url = "$BaseUrl/backend-api"
+chatgpt_base_url = "$ModelBase/backend-api"
 model_catalog_json = "$modelCatalogToml"
 
 $existing
@@ -432,7 +445,7 @@ responses_websockets_v2 = true
 
 [mcp_servers.model_sync]
 command = "$mcpCommandToml"
-args = ["-NoLogo", "-NoProfile", "-File", "$mcpScriptToml", "$BaseUrl"]
+args = ["-NoLogo", "-NoProfile", "-File", "$mcpScriptToml", "$ModelBase"]
 "@
 
   Set-Utf8NoBom -Path $configFile -Value $new
@@ -455,7 +468,7 @@ args = ["-NoLogo", "-NoProfile", "-File", "$mcpScriptToml", "$BaseUrl"]
       $nl + $nl +
       '[mcp_servers.model_sync]' + $nl +
       'command = "' + $mcpCommandToml + '"' + $nl +
-      'args = ["-NoLogo", "-NoProfile", "-File", "' + $mcpScriptToml + '", "' + $BaseUrl + '"]' + $nl
+      'args = ["-NoLogo", "-NoProfile", "-File", "' + $mcpScriptToml + '", "' + $ModelBase + '"]' + $nl
     $updated = $true
   }
 
@@ -468,7 +481,7 @@ args = ["-NoLogo", "-NoProfile", "-File", "$mcpScriptToml", "$BaseUrl"]
 }
 
 Write-Host 'Setup complete! You are ready to use the pool.'
-`, token, publicURL)
+`, token, publicURL, modelBase)
 
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte(script))
@@ -479,6 +492,7 @@ Write-Host 'Setup complete! You are ready to use the pool.'
 set -euo pipefail
 TOKEN="%s"
 BASE_URL="%s"
+MODEL_BASE="%s"
 AUTH_DIR="$HOME/.codex"
 CONFIG_FILE="$AUTH_DIR/config.toml"
 AUTH_FILE="$AUTH_DIR/auth.json"
@@ -497,7 +511,7 @@ ACCESS_TOKEN=$(sed -n 's/.*"access_token"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/
 if [ -n "${ACCESS_TOKEN:-}" ]; then
     curl --connect-timeout 5 --max-time 10 -fsSL \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
-        "$BASE_URL/backend-api/codex/models?client_version=0.125.0" \
+        "$MODEL_BASE/backend-api/codex/models?client_version=0.125.0" \
         -o "$MODEL_CATALOG" 2>/dev/null && chmod 600 "$MODEL_CATALOG" 2>/dev/null || true
 fi
 
@@ -526,7 +540,7 @@ refresh_model_catalog() {
     local tmp_file
     tmp_file=$(mktemp "${MODEL_CATALOG}.tmp.XXXXXX")
     if curl --connect-timeout 2 --max-time 5 -fsSL -H "Authorization: Bearer $token" \
-        "${BASE_URL%%/}/backend-api/codex/models?client_version=${CLIENT_VERSION}" \
+        "${MODEL_BASE%%/}/backend-api/codex/models?client_version=${CLIENT_VERSION}" \
         -o "$tmp_file"; then
         mv "$tmp_file" "$MODEL_CATALOG"
         chmod 600 "$MODEL_CATALOG" 2>/dev/null || true
@@ -644,7 +658,7 @@ if ! grep -q "codex-pool" "$CONFIG_FILE"; then
     cat <<EOF > "$TEMP_FILE"
 # Codex Pool Proxy Config
 model_provider = "codex-pool"
-chatgpt_base_url = "$BASE_URL/backend-api"
+chatgpt_base_url = "$MODEL_BASE/backend-api"
 model_catalog_json = "$MODEL_CATALOG"
 
 EOF
@@ -666,7 +680,7 @@ responses_websockets_v2 = true
 
 [mcp_servers.model_sync]
 command = "bash"
-args = ["$MCP_SCRIPT", "$BASE_URL"]
+args = ["$MCP_SCRIPT", "$MODEL_BASE"]
 EOF
 
     mv "$TEMP_FILE" "$CONFIG_FILE"
@@ -697,7 +711,7 @@ EOF
 
 [mcp_servers.model_sync]
 command = "bash"
-args = ["$MCP_SCRIPT", "$BASE_URL"]
+args = ["$MCP_SCRIPT", "$MODEL_BASE"]
 EOF
         UPDATED=1
     fi
@@ -711,7 +725,7 @@ EOF
 fi
 
 echo "Setup complete! You are ready to use the pool."
-`, token, publicURL)
+`, token, publicURL, modelBase)
 
 	w.Header().Set("Content-Type", "text/x-shellscript")
 	w.Write([]byte(script))
@@ -751,7 +765,9 @@ func (h *proxyHandler) serveGeminiSetupScript(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	publicURL := h.getEffectivePublicURL(r)
+	// Gemini CLI config points entirely at the model API, which is internal in
+	// the split deployment, so use the model base URL rather than the public one.
+	publicURL := h.getEffectiveModelAPIURL(r)
 
 	// Script sets env vars to bypass Google OAuth validation and route through proxy
 	// Uses GOOGLE_GENAI_USE_GCA + GOOGLE_CLOUD_ACCESS_TOKEN to skip getTokenInfo() check

@@ -15,6 +15,7 @@ type ConfigFile struct {
 	MaxAttempts     int    `toml:"max_attempts"`
 	RefreshProxyURL string `toml:"refresh_proxy_url"` // HTTP proxy for refresh operations
 	PublicURL       string `toml:"public_url"`
+	ModelAPIBaseURL string `toml:"model_api_base_url"`
 	GrokBase        string `toml:"grok_base"`
 	FriendName      string `toml:"friend_name"`
 	FriendTagline   string `toml:"friend_tagline"`

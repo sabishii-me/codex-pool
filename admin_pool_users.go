@@ -230,7 +230,7 @@ func (h *proxyHandler) serveConfigDownload(w http.ResponseWriter, r *http.Reques
 			respondJSONError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		publicURL := h.getEffectivePublicURL(r)
+		publicURL := h.getEffectiveModelAPIURL(r)
 		codexAccessToken := ""
 		if codexAuth.Tokens != nil {
 			codexAccessToken = codexAuth.Tokens.AccessToken
@@ -244,7 +244,7 @@ func (h *proxyHandler) serveConfigDownload(w http.ResponseWriter, r *http.Reques
 	case "grok":
 		respondJSON(w, map[string]any{
 			"api_key":        generateClaudePoolToken(secret, user.ID),
-			"base_url":       strings.TrimRight(h.getEffectivePublicURL(r), "/") + "/v1",
+			"base_url":       strings.TrimRight(h.getEffectiveModelAPIURL(r), "/") + "/v1",
 			"model":          "grok-build",
 			"api_backend":    "responses",
 			"context_window": 512000,

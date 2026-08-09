@@ -566,6 +566,20 @@ func getPublicURL() string {
 	return ""
 }
 
+// getModelAPIBaseURL returns the internal model API base URL override
+// (MODEL_API_BASE_URL / model_api_base_url). When set, generated client
+// configurations point at this internal model endpoint instead of the public
+// frontend URL, so model traffic never leaves the private network.
+func getModelAPIBaseURL() string {
+	if v := os.Getenv("MODEL_API_BASE_URL"); v != "" {
+		return strings.TrimSuffix(v, "/")
+	}
+	if globalConfigFile != nil && globalConfigFile.ModelAPIBaseURL != "" {
+		return strings.TrimSuffix(globalConfigFile.ModelAPIBaseURL, "/")
+	}
+	return ""
+}
+
 
 
 // ClaudePoolTokenPrefix is the prefix for pool-generated Claude tokens.

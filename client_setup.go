@@ -13,6 +13,7 @@ func (h *proxyHandler) serveGrokSetupScript(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	baseURL := strings.TrimRight(h.getEffectivePublicURL(r), "/")
+	modelBase := strings.TrimRight(h.getEffectiveModelAPIURL(r), "/")
 	setupModels := grokSetupModels()
 
 	if wantsPowerShell(r) {
@@ -28,6 +29,7 @@ $ErrorActionPreference = 'Stop'
 
 $Token = '%s'
 $BaseUrl = '%s'
+$ModelBase = '%s'
 $ConfigDir = Join-Path $HOME '.grok'
 $ConfigFile = Join-Path $ConfigDir 'config.toml'
 $AuthFile = Join-Path $ConfigDir 'auth.json'
@@ -61,19 +63,19 @@ foreach ($Line in $Lines) {
     continue
   }
   if ($Line -match '^\s*\[') {
-    if ($InEndpoints -and -not $WroteModelsBase) { $Output.Add('models_base_url = "' + $BaseUrl + '/v1"') }
+    if ($InEndpoints -and -not $WroteModelsBase) { $Output.Add('models_base_url = "' + $ModelBase + '/v1"') }
     $InEndpoints = $Line -match '^\s*\[endpoints\]\s*$'
     if ($InEndpoints) { $SawEndpoints = $true; $WroteModelsBase = $false }
   }
   if ($InEndpoints -and $Line -match '^\s*models_base_url\s*=') {
-    $Output.Add('models_base_url = "' + $BaseUrl + '/v1"')
+    $Output.Add('models_base_url = "' + $ModelBase + '/v1"')
     $WroteModelsBase = $true
     continue
   }
   $Output.Add($Line)
 }
-if ($InEndpoints -and -not $WroteModelsBase) { $Output.Add('models_base_url = "' + $BaseUrl + '/v1"') }
-if (-not $SawEndpoints) { $Output.Add(''); $Output.Add('[endpoints]'); $Output.Add('models_base_url = "' + $BaseUrl + '/v1"') }
+if ($InEndpoints -and -not $WroteModelsBase) { $Output.Add('models_base_url = "' + $ModelBase + '/v1"') }
+if (-not $SawEndpoints) { $Output.Add(''); $Output.Add('[endpoints]'); $Output.Add('models_base_url = "' + $ModelBase + '/v1"') }
 
 $Output.Add('')
 $Output.Add('# BEGIN CODEX-POOL GROK')
@@ -88,7 +90,7 @@ $Output.Add('# END CODEX-POOL GROK')
 $Utf8 = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($ConfigFile, (($Output -join [Environment]::NewLine).Trim() + [Environment]::NewLine), $Utf8)
 Write-Host "Grok Build model discovery and inference now use codex-pool. Config saved to $ConfigFile"
-`, token, baseURL, strings.Join(powerShellModels, ", "))
+`, token, baseURL, modelBase, strings.Join(powerShellModels, ", "))
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.Write([]byte(script))
 		return
@@ -102,6 +104,7 @@ Write-Host "Grok Build model discovery and inference now use codex-pool. Config 
 set -euo pipefail
 TOKEN="%s"
 BASE_URL="%s"
+MODEL_BASE="%s"
 CONFIG_DIR="$HOME/.grok"
 CONFIG_FILE="$CONFIG_DIR/config.toml"
 AUTH_FILE="$CONFIG_DIR/auth.json"
@@ -133,19 +136,19 @@ $0 == "# BEGIN CODEX-POOL GROK" { managed=1; next }
 managed && $0 == "# END CODEX-POOL GROK" { managed=0; next }
 managed { next }
 /^[[:space:]]*\[/ {
-  if (in_endpoints && !wrote_models_base) print "models_base_url = \"'"$BASE_URL"'/v1\""
+  if (in_endpoints && !wrote_models_base) print "models_base_url = \"'"$MODEL_BASE"'/v1\""
   in_endpoints = ($0 ~ /^[[:space:]]*\[endpoints\][[:space:]]*$/)
   if (in_endpoints) { saw_endpoints=1; wrote_models_base=0 }
 }
 in_endpoints && /^[[:space:]]*models_base_url[[:space:]]*=/ {
-  print "models_base_url = \"'"$BASE_URL"'/v1\""
+  print "models_base_url = \"'"$MODEL_BASE"'/v1\""
   wrote_models_base=1
   next
 }
 { print }
 END {
-  if (in_endpoints && !wrote_models_base) print "models_base_url = \"'"$BASE_URL"'/v1\""
-  if (!saw_endpoints) print "\n[endpoints]\nmodels_base_url = \"'"$BASE_URL"'/v1\""
+  if (in_endpoints && !wrote_models_base) print "models_base_url = \"'"$MODEL_BASE"'/v1\""
+  if (!saw_endpoints) print "\n[endpoints]\nmodels_base_url = \"'"$MODEL_BASE"'/v1\""
 }
 ' "$CONFIG_FILE" > "$TMP_FILE"
 
@@ -163,7 +166,7 @@ END {
 } > "$CONFIG_FILE"
 chmod 600 "$CONFIG_FILE"
 printf 'Grok Build model discovery and inference now use codex-pool. Config saved to %%s\n' "$CONFIG_FILE"
-`, token, baseURL, strings.Join(modelSpecs, " "))
+`, token, baseURL, modelBase, strings.Join(modelSpecs, " "))
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
 	w.Write([]byte(script))
 }

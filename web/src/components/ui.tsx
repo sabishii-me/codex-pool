@@ -101,3 +101,40 @@ export function SplineChart({ values }: { values: number[] }) {
   const path = coordinates.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
   return <div className="spline-chart" role="img" aria-label={`Request activity trend, ${points.length} measured ${points.length === 1 ? "point" : "points"}`}><svg viewBox="0 0 100 100" preserveAspectRatio="none"><defs><linearGradient id="red-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--color-accent-primary)" stopOpacity=".28" /><stop offset="1" stopColor="var(--color-accent-primary)" stopOpacity="0" /></linearGradient></defs>{points.length > 1 ? <><path className="chart-area" d={`${path} L100,100 L0,100 Z`} /><path className="chart-line" d={path} /></> : <circle className="chart-point" cx="50" cy={coordinate(points[0])} r="2.5" />}</svg></div>;
 }
+
+const pieColors = ["#60a5fa", "#4ade80", "#facc15", "#f87171", "#c084fc", "#2dd4bf", "#fb923c", "#f472b6", "#a3e635", "#818cf8", "#34d399", "#fbbf24", "#22d3ee", "#a78bfa", "#f97316"];
+
+export interface PieSlice { label: string; value: number; color?: string }
+
+export function PieChart({ slices, size = 320, selectedLabel, onSelect }: { slices: PieSlice[]; size?: number; selectedLabel?: string; onSelect?: (label: string) => void }) {
+  const total = slices.reduce((sum, slice) => sum + Math.max(0, slice.value), 0);
+  if (total <= 0) return <div className="pie-empty">No usage in this range</div>;
+  const cx = size / 2, cy = size / 2, r = size / 2 - 2;
+  let angle = -Math.PI / 2;
+  const paths: ReactNode[] = [];
+  const legend: ReactNode[] = [];
+  slices.forEach((slice, index) => {
+    const value = Math.max(0, slice.value);
+    if (value <= 0) return;
+    const fraction = value / total;
+    const startAngle = angle;
+    const endAngle = angle + fraction * 2 * Math.PI;
+    angle = endAngle;
+    const largeArc = fraction > 0.5 ? 1 : 0;
+    const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+    const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+    const color = slice.color ?? pieColors[index % pieColors.length];
+    const selected = selectedLabel === slice.label;
+    if (fraction >= 0.9999) {
+      // A single full circle cannot be drawn as an SVG arc from a point back to
+      // itself; render it as a plain circle instead.
+      paths.push(<circle key={slice.label} cx={cx} cy={cy} r={r} fill={color} fillOpacity={selected ? 1 : 0.78} stroke="var(--color-surface)" strokeWidth={1.5} style={{ cursor: onSelect ? "pointer" : "default", transition: "fill-opacity .15s" }} onClick={onSelect ? () => onSelect(slice.label) : undefined} role={onSelect ? "button" : undefined} aria-label={slice.label} />);
+    } else {
+      const x1 = cx + r * Math.cos(startAngle), y1 = cy + r * Math.sin(startAngle);
+      const x2 = cx + r * Math.cos(endAngle), y2 = cy + r * Math.sin(endAngle);
+      paths.push(<path key={slice.label} d={`M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2} Z`} fill={color} fillOpacity={selected ? 1 : 0.78} stroke="var(--color-surface)" strokeWidth={1.5} style={{ cursor: onSelect ? "pointer" : "default", transition: "fill-opacity .15s" }} onClick={onSelect ? () => onSelect(slice.label) : undefined} role={onSelect ? "button" : undefined} aria-label={slice.label} />);
+    }
+    legend.push(<button key={slice.label} type="button" className={`pie-legend-item${selected ? " active" : ""}`} onClick={onSelect ? () => onSelect(slice.label) : undefined}><span className="pie-legend-dot" style={{ background: color }} /><span className="pie-legend-label">{slice.label}</span><small>{Math.round(fraction * 100)}%</small></button>);
+  });
+  return <div className="pie-wrap"><svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Usage distribution">{paths}</svg><div className="pie-legend">{legend}</div></div>;
+}

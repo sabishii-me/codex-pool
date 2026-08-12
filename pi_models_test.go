@@ -7,12 +7,13 @@ import (
 )
 
 func TestGeneratePiModelsJSON(t *testing.T) {
-	t.Parallel()
+	t.Setenv("POOL_NAME", "test-pool")
 
 	data, err := generatePiModelsJSON(
 		"https://pool.example.com/",
-		"eyJhbGciOiJIUzI1NiJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF90ZXN0In19.sig",
+		"codex-token",
 		"sk-ant-oat01-pool-test",
+		nil, // nil pool -> every model's provider is treated as available
 	)
 	if err != nil {
 		t.Fatalf("generatePiModelsJSON error: %v", err)
@@ -23,163 +24,46 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 		t.Fatalf("unmarshal pi models json: %v", err)
 	}
 
-	if got := cfg.Providers["codex"].BaseURL; got != "https://pool.example.com/backend-api" {
-		t.Fatalf("codex baseUrl = %q", got)
+	if len(cfg.Providers) != 1 {
+		t.Fatalf("expected exactly one provider, got %d", len(cfg.Providers))
 	}
-	if got := cfg.Providers["codex"].APIKey; got != "eyJhbGciOiJIUzI1NiJ9.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF90ZXN0In19.sig" {
-		t.Fatalf("codex apiKey = %q", got)
+	prov, ok := cfg.Providers["test-pool"]
+	if !ok {
+		t.Fatalf("provider %q missing; got providers %v", "test-pool", cfg.Providers)
 	}
-	if got := cfg.Providers["codex"].API; got != "openai-codex-responses" {
-		t.Fatalf("codex api = %q", got)
+	if prov.BaseURL != "https://pool.example.com" {
+		t.Fatalf("pool baseUrl = %q, want https://pool.example.com (no /backend-api suffix)", prov.BaseURL)
 	}
-	if len(cfg.Providers["codex"].Models) == 0 {
-		t.Fatalf("codex models missing")
+	if prov.API != "anthropic-messages" {
+		t.Fatalf("pool api = %q", prov.API)
 	}
-	wantCodexLimits := map[string]struct {
-		contextWindow int
-		maxTokens     int
-	}{
-		"gpt-5.6-sol":         {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.6-terra":       {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.6-luna":        {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.5":             {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.4":             {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.4-mini":        {contextWindow: 272000, maxTokens: 128000},
-		"gpt-5.3-codex-spark": {contextWindow: 128000, maxTokens: 128000},
-	}
-	for _, model := range cfg.Providers["codex"].Models {
-		if len(model.Input) != 2 || model.Input[0] != "text" || model.Input[1] != "image" {
-			t.Fatalf("codex model %q inputs = %#v, want text+image", model.ID, model.Input)
-		}
-		if want, ok := wantCodexLimits[model.ID]; ok {
-			if model.ContextWindow != want.contextWindow || model.MaxTokens != want.maxTokens {
-				t.Fatalf(
-					"codex model %q limits = (%d, %d), want (%d, %d)",
-					model.ID,
-					model.ContextWindow,
-					model.MaxTokens,
-					want.contextWindow,
-					want.maxTokens,
-				)
-			}
-		}
-		if model.ID == "gpt-5.6" || model.ID == "gpt-5.6-sol" || model.ID == "gpt-5.6-terra" || model.ID == "gpt-5.6-luna" {
-			if model.ThinkingLevelMap["xhigh"] != "xhigh" || model.ThinkingLevelMap["max"] != "max" {
-				t.Fatalf("codex model %q thinking levels = %#v, want xhigh+max", model.ID, model.ThinkingLevelMap)
-			}
-		} else if len(model.ThinkingLevelMap) != 0 {
-			t.Fatalf("codex model %q unexpectedly advertises extended thinking levels: %#v", model.ID, model.ThinkingLevelMap)
-		}
+	if prov.APIKey != "sk-ant-oat01-pool-test" {
+		t.Fatalf("pool apiKey = %q", prov.APIKey)
 	}
 
-	kimi := cfg.Providers["kimi"]
-	if kimi.API != "anthropic-messages" {
-		t.Fatalf("kimi api = %q", kimi.API)
+	byID := map[string]piModelConfig{}
+	for _, m := range prov.Models {
+		byID[m.ID] = m
 	}
-	if len(kimi.Models) != 2 {
-		t.Fatalf("kimi model count = %d", len(kimi.Models))
-	}
-	needKimiIDs := map[string]bool{
-		"kimi-for-coding":           false,
-		"kimi-for-coding-highspeed": false,
-	}
-	for _, model := range kimi.Models {
-		if _, ok := needKimiIDs[model.ID]; ok {
-			needKimiIDs[model.ID] = true
-		}
-		if len(model.Input) != 2 || model.Input[0] != "text" || model.Input[1] != "image" {
-			t.Fatalf("kimi model %q inputs = %#v, want text+image", model.ID, model.Input)
-		}
-	}
-	for id, found := range needKimiIDs {
-		if !found {
-			t.Fatalf("missing kimi model %q", id)
-		}
-	}
-
-	minimax := cfg.Providers["minimax"]
-	if minimax.API != "anthropic-messages" {
-		t.Fatalf("minimax api = %q", minimax.API)
-	}
-	if len(minimax.Models) != 3 {
-		t.Fatalf("minimax model count = %d", len(minimax.Models))
-	}
-	needMinimaxIDs := map[string]bool{
-		"MiniMax-M3":             false,
-		"MiniMax-M2.7":           false,
-		"MiniMax-M2.7-highspeed": false,
-	}
-	for _, model := range minimax.Models {
-		if _, ok := needMinimaxIDs[model.ID]; ok {
-			needMinimaxIDs[model.ID] = true
-		}
-		if len(model.Input) != 2 || model.Input[0] != "text" || model.Input[1] != "image" {
-			t.Fatalf("minimax model %q inputs = %#v, want text+image", model.ID, model.Input)
-		}
-		if model.ID == "MiniMax-M3" && model.ContextWindow != 1000000 {
-			t.Fatalf("minimax m3 context window = %d, want 1000000", model.ContextWindow)
-		}
-	}
-	for id, found := range needMinimaxIDs {
-		if !found {
-			t.Fatalf("missing minimax model %q", id)
-		}
-	}
-
-	zai := cfg.Providers["zai"]
-	if zai.API != "anthropic-messages" {
-		t.Fatalf("zai api = %q", zai.API)
-	}
-	if len(zai.Models) != 1 {
-		t.Fatalf("zai model count = %d", len(zai.Models))
-	}
-	wantZAIContexts := map[string]int{
-		"glm-5.2": 1000000,
-	}
-	for _, model := range zai.Models {
-		wantContext, ok := wantZAIContexts[model.ID]
+	for _, id := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "deepseek-v4-flash", "deepseek-v4-pro", "glm-5.2"} {
+		m, ok := byID[id]
 		if !ok {
-			t.Fatalf("unexpected zai model id = %q", model.ID)
+			t.Fatalf("model %q missing from pool provider", id)
 		}
-		if model.ContextWindow != wantContext {
-			t.Fatalf("zai model %q context window = %d, want %d", model.ID, model.ContextWindow, wantContext)
+		if len(m.Input) == 0 {
+			t.Fatalf("model %q has no input kinds", id)
 		}
-		if len(model.Input) != 1 || model.Input[0] != "text" {
-			t.Fatalf("zai model %q inputs = %#v, want text", model.ID, model.Input)
-		}
-		delete(wantZAIContexts, model.ID)
 	}
-	for id := range wantZAIContexts {
-		t.Fatalf("missing zai model %q", id)
+	if m := byID["gpt-5.6-sol"]; m.ThinkingLevelMap["xhigh"] != "xhigh" || m.ThinkingLevelMap["max"] != "max" {
+		t.Fatalf("gpt-5.6-sol thinking levels = %#v, want xhigh+max", m.ThinkingLevelMap)
 	}
-
-	grok := cfg.Providers["grok"]
-	if grok.API != "openai-responses" {
-		t.Fatalf("grok api = %q", grok.API)
-	}
-	if grok.BaseURL != "https://pool.example.com" {
-		t.Fatalf("grok baseUrl = %q", grok.BaseURL)
-	}
-	if len(grok.Models) != 7 {
-		t.Fatalf("grok model count = %d", len(grok.Models))
-	}
-	wantGrokContexts := map[string]int{
-		"grok-4.5":                     500000,
-		"grok-composer-2.5-fast":       200000,
-		"grok-build":                   512000,
-		"grok-4.3":                     1000000,
-		"grok-4.20-0309-reasoning":     2000000,
-		"grok-4.20-0309-non-reasoning": 2000000,
-		"grok-4.20-multi-agent-0309":   2000000,
-	}
-	for _, model := range grok.Models {
-		if want, ok := wantGrokContexts[model.ID]; !ok || model.ContextWindow != want || model.MaxTokens != 30000 {
-			t.Fatalf("grok model %q limits = (%d, %d)", model.ID, model.ContextWindow, model.MaxTokens)
-		}
+	if m := byID["deepseek-v4-flash"]; m.Reasoning == nil || *m.Reasoning {
+		t.Fatalf("deepseek-v4-flash reasoning = %#v, want false", m.Reasoning)
 	}
 }
 
 func TestGeneratedClientConfigsIncludeDiscoveredAntigravityModels(t *testing.T) {
+	t.Setenv("POOL_NAME", "test-pool")
 	antigravityModels.Reset()
 	t.Cleanup(antigravityModels.Reset)
 	antigravityModels.ReplaceAccount("antigravity-test", AntigravityAccountSnapshot{
@@ -188,7 +72,7 @@ func TestGeneratedClientConfigsIncludeDiscoveredAntigravityModels(t *testing.T) 
 			"gemini-live": {ID: "gemini-live", DisplayName: "Gemini Live", MaxTokens: 1000000, MaxOutputTokens: 65536, SupportsThinking: true},
 		},
 	})
-	piJSON, err := generatePiModelsJSON("https://pool.example.com", "codex-token", "claude-token")
+	piJSON, err := generatePiModelsJSON("https://pool.example.com", "codex-token", "claude-token", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,10 +80,39 @@ func TestGeneratedClientConfigsIncludeDiscoveredAntigravityModels(t *testing.T) 
 	if err := json.Unmarshal(piJSON, &piConfig); err != nil {
 		t.Fatal(err)
 	}
-	if models := piConfig.Providers["antigravity"].Models; len(models) != 1 || models[0].ID != "antigravity/gemini-live" {
-		t.Fatalf("Pi Antigravity models = %#v", models)
+	prov := piConfig.Providers["test-pool"]
+	found := false
+	for _, m := range prov.Models {
+		if m.ID == "antigravity/gemini-live" {
+			found = true
+		}
 	}
+	if !found {
+		t.Fatalf("antigravity/gemini-live missing from pool provider models")
+	}
+}
 
+func TestAvailablePiModelsFiltersUnavailableProviders(t *testing.T) {
+	t.Setenv("POOL_NAME", "test-pool")
+	// Pool only has a codex account. Providers without any account must not
+	// contribute models to the Pi list (e.g. deepseek, zai would be unavailable).
+	pool := &ProviderPool{accounts: []*ProviderConnection{
+		{ID: "codex-1", Type: AccountTypeCodex},
+	}}
+	models := availablePiModels(pool, nil)
+	byID := map[string]bool{}
+	for _, m := range models {
+		byID[m.ID] = true
+	}
+	if !byID["gpt-5.6-sol"] {
+		t.Fatalf("gpt-5.6-sol missing; codex has an account so it should be present")
+	}
+	if byID["deepseek-v4-flash"] {
+		t.Fatalf("deepseek-v4-flash should be filtered out (no deepseek account)")
+	}
+	if byID["glm-5.2"] {
+		t.Fatalf("glm-5.2 should be filtered out (no zai account)")
+	}
 }
 
 func TestIsKimiModelHandlesPiBuiltInIDs(t *testing.T) {

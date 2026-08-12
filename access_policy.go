@@ -20,10 +20,11 @@ type AccessPolicy struct {
 }
 
 func (policy *AccessPolicy) RequireAdmin(w http.ResponseWriter, r *http.Request) bool {
-	// Reads (GET) require admin sign-in only; state-changing operations
-	// additionally require MFA elevation so browsing never forces a second
-	// verification while every write stays gated behind two-factor auth.
-	return policy.requireAdmin(w, r, r.Method != http.MethodGet)
+	// Reads (GET) and account additions (POST) require admin sign-in only;
+	// destructive DELETE operations additionally require MFA elevation so
+	// browsing and adding accounts never force a second verification while
+	// removals stay gated behind two-factor auth.
+	return policy.requireAdmin(w, r, r.Method == http.MethodDelete)
 }
 
 func (policy *AccessPolicy) requireAdmin(w http.ResponseWriter, r *http.Request, requireElevation bool) bool {

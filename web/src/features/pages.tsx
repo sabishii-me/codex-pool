@@ -29,7 +29,7 @@ export function Page({ route, stats, signal, models, connections, users, members
 }) {
   if (route === "/") return <DashboardPage stats={stats} models={models} connections={connections} isElevated={isElevated} onNavigate={onNavigate} />;
   if (route === "/models") return <ModelsPage models={models} isElevated={isElevated} />;
-  if (route === "/usage") return <UsagePage isElevated={isElevated} members={users} identities={members} />;
+  if (route === "/usage") return <UsagePage isElevated={isElevated} isAdmin={session.is_admin} members={users} identities={members} />;
   if (route === "/setup") return <SetupPage session={session} />;
   if (route === "/profile") return <ProfilePage session={session} capability={capability} onCapabilityRefresh={onCapabilityRefresh} />;
   if (route === "/admin/connections") return <ConnectionsPage state={connections} onRefresh={onConnectionsRefresh} isElevated={isElevated} onAuthorizationLost={onAuthorizationLost} onRequireElevation={onRequireElevation} />;

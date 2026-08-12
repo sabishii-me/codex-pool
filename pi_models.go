@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 )
 
@@ -39,90 +40,64 @@ type piModelCost struct {
 	CacheWrite float64 `json:"cacheWrite"`
 }
 
-func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pricings ...*PricingData) ([]byte, error) {
+func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pool *ProviderPool, pricings ...*PricingData) ([]byte, error) {
 	var pricing *PricingData
 	if len(pricings) > 0 {
 		pricing = pricings[0]
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(publicURL), "/")
+	// The provider name is the pool's own identity (POOL_NAME). It must never
+	// collide with a built-in Pi/OpenAI provider name (codex, antigravity, ...)
+	// or the generated config would silently overwrite the official provider.
+	providerName := strings.TrimSpace(os.Getenv("POOL_NAME"))
+	if providerName == "" {
+		providerName = "codex-pool"
+	}
 	cfg := piModelsConfig{
 		Providers: map[string]piProviderConfig{
-			"codex": {
-				BaseURL: baseURL + "/backend-api",
-				APIKey:  codexAPIKey,
-				API:     "openai-codex-responses",
-				Models:  piModelsForProvider(AccountTypeCodex, pricing),
-			},
-			"antigravity": {
-				BaseURL: baseURL,
-				APIKey:  codexAPIKey,
-				API:     "openai-completions",
-				Models:  antigravityPiModels(),
-			},
-			"kimi": {
+			providerName: {
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeKimi, pricing),
-			},
-			"kimi-platform": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeKimiPlatform, pricing),
-			},
-			"minimax": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeMinimax, pricing),
-			},
-			"zai": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeZAI, pricing),
-			},
-			"xiaomi": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeXiaomi, pricing),
-			},
-			"grok": {
-				BaseURL: baseURL,
-				APIKey:  codexAPIKey,
-				API:     "openai-responses",
-				Models:  grokPiModels(),
-			},
-			"deepseek": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeDeepSeek, pricing),
-			},
-			"qwen": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeQwen, pricing),
-			},
-			"openrouter": {
-				BaseURL: baseURL,
-				APIKey:  anthropicAPIKey,
-				API:     "anthropic-messages",
-				Models:  piModelsForProvider(AccountTypeOpenRouter, pricing),
-			},
-			"nvidia": {
-				BaseURL: baseURL,
-				APIKey:  codexAPIKey,
-				API:     "openai-completions",
-				Models:  piModelsForProvider(AccountTypeNvidia, pricing),
+				Models:  availablePiModels(pool, pricing),
 			},
 		},
 	}
 
 	return json.MarshalIndent(cfg, "", "  ")
+}
+
+// availablePiModels returns only the pool models whose provider currently has
+// at least one healthy, routable account. Providers without any available
+// account are omitted so Pi never receives a model list with entries it cannot
+// actually use (e.g. "displayed unavailable" models).
+func availablePiModels(pool *ProviderPool, pricing *PricingData) []piModelConfig {
+	var result []piModelConfig
+	for _, model := range poolModels {
+		_, _, available := poolModelAvailability(pool, model.ProviderID)
+		if !available {
+			continue
+		}
+		config := piModelConfig{
+			ID:            model.ID,
+			Name:          model.DisplayName,
+			Reasoning:     boolPtr(model.Reasoning),
+			Input:         append([]string(nil), model.Input...),
+			ContextWindow: model.ContextWindow,
+			MaxTokens:     model.MaxTokens,
+			Cost:          piCostForModel(pricing, model),
+		}
+		if model.ProviderID == AccountTypeCodex && strings.HasPrefix(model.ID, "gpt-5.6-") {
+			config.ThinkingLevelMap = map[string]string{"xhigh": "xhigh", "max": "max"}
+		}
+		result = append(result, config)
+	}
+	// Antigravity keeps its own model catalog with provider-prefixed IDs.
+	_, _, available := poolModelAvailability(pool, AccountTypeAntigravity)
+	if available {
+		result = append(result, antigravityPiModels()...)
+	}
+	return result
 }
 
 func antigravityPiModels() []piModelConfig {

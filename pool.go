@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -68,6 +69,7 @@ type ProviderConnection struct {
 	Penalty                 float64
 	LastPenalty             time.Time
 	Dead                    bool
+	GatewayBlockStreak      int32 // consecutive OpenAI gateway 403 blocks before retiring
 	LastUsed                time.Time
 	RateLimitUntil          time.Time
 	BackoffLevel            int // exponent: cooldown = min(1s * 2^level, 30m)
@@ -686,6 +688,7 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 				if ok {
 					binding.TouchedAt = now
 					p.convPin[affinityKey] = binding
+					log.Printf("[route] AFFINITY-HIT session=%q account=%s", affinityKey, id)
 					return a
 				}
 				delete(p.convPin, affinityKey)
@@ -838,7 +841,16 @@ func (p *ProviderPool) candidate(affinityKey string, exclude map[string]bool, ac
 		return choose(all)
 	}
 	if len(eligible) == 0 {
+		log.Printf("[route] NO-CANDIDATES session=%q type=%s (affinity=%q)", affinityKey, accountType, affinityKey)
 		return nil
+	}
+
+	if len(eligible) > 0 {
+		names := make([]string, 0, len(eligible))
+		for i := range eligible {
+			names = append(names, eligible[i].acc.ID)
+		}
+		log.Printf("[route] CANDIDATES session=%q type=%s n=%d [%s]", affinityKey, accountType, len(eligible), strings.Join(names, ","))
 	}
 
 	return selectCandidate(eligible)

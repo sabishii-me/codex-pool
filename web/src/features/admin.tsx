@@ -24,9 +24,11 @@ export function ConnectionsPage({ state, onRefresh, isElevated, onAuthorizationL
   const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const selected = state.status === "ready" ? state.data.find(connection => connection.id === selectedID) ?? null : null;
   useEffect(() => { if (state.status === "ready" && selectedID && !state.data.some(connection => connection.id === selectedID)) setSelectedID(null); }, [state, selectedID]);
-  const run = async (label: string, task: () => Promise<unknown>) => {
+  const run = async (label: string, task: () => Promise<unknown>, requireElevation = false) => {
     if (operation) return;
-    if (!isElevated) { onRequireElevation(); return; }
+    // Only destructive removal requires MFA elevation; reads and additions
+    // (POST) are admin-signin only.
+    if (requireElevation && !isElevated) { onRequireElevation(); return; }
     setOperation(label); setFeedback(null);
     try { await task(); await onRefresh(); setFeedback({ tone: "success", text: `${label} completed.` }); }
     catch (error) {
@@ -122,7 +124,7 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, isE
   };
   const submit = async (event: FormEvent) => {
     event.preventDefault(); if (busy) return;
-    if (isElevated === false) { onRequireElevation?.(); return; }
+    // Adding/reauthorizing an account is a POST and does not require MFA elevation.
     setBusy(true); setError("");
     try {
       if (selected.mode === "oauth") {
@@ -168,7 +170,7 @@ export function AccountContribution({ onClose, onAdded, onAuthorizationLost, isE
   </div>;
 }
 
-function ConnectionDetail({ connection, operation, onClose, onRun, onReauthorize }: { connection: OperatorProviderConnectionV2; operation: string | null; onClose: () => void; onRun: (label: string, task: () => Promise<unknown>) => Promise<void>; onReauthorize: () => void }) {
+function ConnectionDetail({ connection, operation, onClose, onRun, onReauthorize }: { connection: OperatorProviderConnectionV2; operation: string | null; onClose: () => void; onRun: (label: string, task: () => Promise<unknown>, requireElevation?: boolean) => Promise<void>; onReauthorize: () => void }) {
   const [editing, setEditing] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -190,7 +192,7 @@ function ConnectionDetail({ connection, operation, onClose, onRun, onReauthorize
     <section><h3>Usage totals</h3><div className="connection-totals"><Fact label="Input tokens" value={total("total_input_tokens")} /><Fact label="Cached tokens" value={total("total_cached_tokens")} /><Fact label="Output tokens" value={total("total_output_tokens")} /><Fact label="Billable tokens" value={total("total_billable_tokens")} /></div></section>
     <footer className="connection-actions">
       {isOAuthProvider(connection.provider_id) ? <><button className="primary-button" disabled={busy} onClick={onReauthorize}>Reauthorize account</button>{connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</> : <><button disabled={busy} onClick={() => void onRun("Refresh", () => mutateProviderConnection(connection.id, "refresh"))}>{operation === "Refresh" ? "Refreshing…" : "Refresh credentials"}</button>{connection.dead ? <button disabled={busy} onClick={() => void onRun("Recover", () => mutateProviderConnection(connection.id, "recover"))}>Recover</button> : connection.disabled ? <button disabled={busy} onClick={() => void onRun("Enable", () => mutateProviderConnection(connection.id, "enable"))}>Enable</button> : <ConfirmDialog open={confirmDisable} onOpenChange={setConfirmDisable} title="Disable connection?" description={`${connection.identity.display_name || connection.provider_id} will immediately stop receiving gateway traffic. You can enable it again later.`} confirmLabel="Disable connection" busy={operation === "Disable"} onConfirm={() => void onRun("Disable", () => mutateProviderConnection(connection.id, "disable")).then(() => setConfirmDisable(false))}><button className="danger-action" disabled={busy}>Disable</button></ConfirmDialog>}</>}
-      <ConfirmDialog open={confirmRemove} onOpenChange={setConfirmRemove} title="Remove connection permanently?" description={`${connection.identity.display_name || connection.provider_id} and its stored credentials will be permanently removed from this gateway. Historical usage records will remain.`} confirmLabel="Remove connection" busy={operation === "Remove"} onConfirm={() => void onRun("Remove", () => mutateProviderConnection(connection.id, "remove")).then(() => { setConfirmRemove(false); onClose(); })}><button className="danger-action" disabled={busy}>Remove connection</button></ConfirmDialog>
+      <ConfirmDialog open={confirmRemove} onOpenChange={setConfirmRemove} title="Remove connection permanently?" description={`${connection.identity.display_name || connection.provider_id} and its stored credentials will be permanently removed from this gateway. Historical usage records will remain.`} confirmLabel="Remove connection" busy={operation === "Remove"} onConfirm={() => void onRun("Remove", () => mutateProviderConnection(connection.id, "remove"), true).then(() => { setConfirmRemove(false); onClose(); })}><button className="danger-action" disabled={busy}>Remove connection</button></ConfirmDialog>
     </footer>
   </aside>;
 }
@@ -201,7 +203,7 @@ function ResetCreditsPanel({ connection, busy, operation, confirmOpen, onConfirm
   operation: string | null;
   confirmOpen: boolean;
   onConfirmOpenChange: (open: boolean) => void;
-  onRun: (label: string, task: () => Promise<unknown>) => Promise<void>;
+  onRun: (label: string, task: () => Promise<unknown>, requireElevation?: boolean) => Promise<void>;
 }) {
   const credits = connection.reset_credits;
   const available = credits.available_count > 0;

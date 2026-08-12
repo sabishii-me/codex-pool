@@ -964,6 +964,15 @@ func valueHasImageGenerationTool(v any) bool {
 
 func codexPassthroughRewrite(path string, body []byte) (rewrittenPath string, rewrittenBody []byte, err error) {
 	switch {
+	case strings.HasPrefix(path, "/v1/messages/compact"):
+		// Anthropic messages compact must hit the OpenAI responses compact
+		// endpoint. Routing it through the normal messages path rewrites it to
+		// /v1/responses and OpenAI rejects the compact payload with 403.
+		rewritten, err := translateClaudeToResponsesRequest(body)
+		if err != nil {
+			return path, nil, err
+		}
+		return "/v1/responses/compact", rewritten, nil
 	case strings.HasPrefix(path, "/v1/messages"):
 		rewritten, err := translateClaudeToResponsesRequest(body)
 		if err != nil {
@@ -1554,6 +1563,7 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 	// the model gateway; a public source is rejected before any token parsing
 	// or upstream work, even if it carries a valid pool token.
 	if !isTrustedClientIP(getClientIP(r)) {
+		log.Printf("model API rejected untrusted client: remote=%s xff=%q xreal=%q cf=%q ua=%q", r.RemoteAddr, r.Header.Get("X-Forwarded-For"), r.Header.Get("X-Real-IP"), r.Header.Get("CF-Connecting-IP"), r.Header.Get("User-Agent"))
 		http.Error(w, "model API is restricted to trusted networks", http.StatusForbidden)
 		return
 	}
@@ -1815,7 +1825,21 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		if sourceFormat == FormatClaude && targetFormat == FormatOpenAI {
 			// Codex backend uses Responses API, not Chat Completions
 			if accountType == AccountTypeCodex {
-				translateDir = TranslateClaudeToResponses
+				if strings.HasPrefix(r.URL.Path, "/v1/messages/compact") {
+					log.Printf("[compact] messages/compact: translateDir=None path=/v1/responses/compact body_len=%d", len(bodyBytes))
+					// Translate the Anthropic messages payload into OpenAI responses
+					// input and route to the compact endpoint; the compact handler
+					// below normalizes the final body. Without this the messages
+					// payload reaches OpenAI untouched and is rejected with 403.
+					if translated, terr := translateClaudeToResponsesRequest(bodyBytes); terr == nil {
+						bodyBytes = translated
+						log.Printf("[compact] translated body_len=%d", len(bodyBytes))
+					}
+					r.URL.Path = "/v1/responses/compact"
+					translateDir = TranslateNone
+				} else {
+					translateDir = TranslateClaudeToResponses
+				}
 			} else {
 				translateDir = TranslateClaudeToOAI
 			}
@@ -2013,6 +2037,8 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		}
 		exclude[acc.ID] = true
 
+		log.Printf("[%s] ROUTE session=%q account=%s dead=%t disabled=%t path=%s ua=%q", reqID, conversationID, acc.ID, acc.Dead, acc.Disabled, r.URL.Path, r.UserAgent())
+
 		atomic.AddInt64(&acc.Inflight, 1)
 		atomic.AddInt64(&h.inflight, 1)
 
@@ -2064,23 +2090,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 			// Reclassify as transient so accounts don't accumulate auth penalties.
 			if errClass == ErrorClassAuth && isCloudflareChallenge(errBody, resp.Header) {
 				errClass = ErrorClassTransient
-			}
-
-			// A full HTML gateway page from OpenAI/chatgpt (after Cloudflare has
-			// been excluded above) means the account itself was rejected/flagged.
-			// Retire it instead of a small penalty that lets it keep being routed.
-			if errClass == ErrorClassAuth && isOpenAIGatewayBlock(errBody) {
-				acc.mu.Lock()
-				acc.Dead = true
-				acc.Penalty += 100.0
-				acc.mu.Unlock()
-				log.Printf("[%s] marking account %s as DEAD: openai gateway block, body=%s", reqID, acc.ID, errBodyStr)
-				if err := saveAccount(acc); err != nil {
-					log.Printf("[%s] warning: failed to save dead account %s: %v", reqID, acc.ID, err)
-				}
-				lastErr = fmt.Errorf("account flagged by gateway: %s", errBodyStr)
-				h.recent.add(lastErr.Error())
-				continue
 			}
 
 			if errClass == ErrorClassPayment && isDeactivatedWorkspace(errBody) {
@@ -3294,7 +3303,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		// Log the error body for debugging
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		decompressed := bodyForInspection(nil, errBody) // nil request - will auto-detect gzip
-		log.Printf("[%s] account %s got %d from %s, body=%s", reqID, acc.ID, resp.StatusCode, outReq.URL.Host, safeText(decompressed))
+		log.Printf("[%s] account %s got %d from %s, path=%s ua=%q originator=%q residency=%q oai_beta=%q body_len=%d body=%s", reqID, acc.ID, resp.StatusCode, outReq.URL.Host, outReq.URL.Path, outReq.Header.Get("User-Agent"), outReq.Header.Get("originator"), outReq.Header.Get("x-openai-internal-codex-residency"), outReq.Header.Get("OpenAI-Beta"), len(errBody), safeText(decompressed))
 		// Replace body so client still gets the error
 		resp.Body = io.NopCloser(bytes.NewReader(errBody))
 
@@ -3795,6 +3804,13 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 			http.Error(w, "format translation error: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+		// Compact requests must be normalized to the OpenAI responses compact
+		// shape. The Claude→responses translation alone leaves a shape OpenAI
+		// rejects; direct /responses/compact calls succeed (every account
+		// returns response.compaction), so normalize here before forwarding.
+		if strings.HasPrefix(path, "/responses/compact") || strings.HasPrefix(path, "/v1/responses/compact") {
+			bodyBytes = ensureCodexResponsesCompactBody(bodyBytes)
+		}
 		targetBase = provider.UpstreamURL(path)
 		r = r.Clone(r.Context())
 		r.URL.Path = path
@@ -4293,10 +4309,18 @@ func (h *proxyHandler) tryOnce(
 		resp.Body = newClaudeToolNameReadCloser(resp.Body, claudeToolNameMapper)
 	}
 	if err != nil {
+		log.Printf("[%s] UPSTREAM-ERROR account=%s path=%s err=%v", reqID, acc.ID, in.URL.Path, err)
 		acc.mu.Lock()
 		acc.Penalty += 0.2
 		acc.mu.Unlock()
 		return nil, nil, false, err
+	}
+	if resp != nil && resp.StatusCode >= 400 {
+		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 300))
+		if len(preview) > 0 {
+			resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(preview), resp.Body))
+		}
+		log.Printf("[%s] OPENAI-ERROR account=%s status=%d path=%s ct=%q cf=%q body-preview=%q", reqID, acc.ID, resp.StatusCode, in.URL.Path, resp.Header.Get("Content-Type"), resp.Header.Get("Cf-Mitigated"), string(preview))
 	}
 
 	// If we got a 401/403, try to refresh and retry on the *same* account once.
@@ -4330,15 +4354,28 @@ func (h *proxyHandler) tryOnce(
 				// must be marked dead rather than accumulating a small penalty
 				// and silently dropping out of the routing window forever.
 				if resp != nil && (resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden) {
-					acc.mu.Lock()
-					acc.Dead = true
-					acc.Penalty += 100.0
-					acc.mu.Unlock()
-					log.Printf("[%s] marking account %s as DEAD: fresh token still rejected after refresh", reqID, acc.ID)
-					if err := saveAccount(acc); err != nil {
-						log.Printf("[%s] warning: failed to save dead account %s: %v", reqID, acc.ID, err)
+					preview3, _ := io.ReadAll(io.LimitReader(resp.Body, 400))
+					if len(preview3) > 0 {
+						resp.Body = io.NopCloser(io.MultiReader(bytes.NewReader(preview3), resp.Body))
 					}
-					refreshFailed = true
+					log.Printf("[%s] OPENAI-403-AFTER-REFRESH account=%s path=%s status=%d cf=%q body-preview=%q", reqID, acc.ID, in.URL.Path, resp.StatusCode, resp.Header.Get("Cf-Mitigated"), string(preview3))
+					// A compact request rejection is upstream compact behavior, not a
+					// credential problem. OpenAI rejects compact calls independently
+					// of account health (the same account serves normal requests fine),
+					// so a compact 403 must not retire the account.
+					if strings.Contains(in.URL.Path, "compact") {
+						refreshFailed = true
+					} else {
+						acc.mu.Lock()
+						acc.Dead = true
+						acc.Penalty += 100.0
+						acc.mu.Unlock()
+						log.Printf("[%s] marking account %s as DEAD: fresh token still rejected after refresh", reqID, acc.ID)
+						if err := saveAccount(acc); err != nil {
+							log.Printf("[%s] warning: failed to save dead account %s: %v", reqID, acc.ID, err)
+						}
+						refreshFailed = true
+					}
 				}
 			} else {
 				errStr := err.Error()

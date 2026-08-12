@@ -58,7 +58,7 @@ func (h *proxyHandler) writeGatewaySessionJSON(w http.ResponseWriter, r *http.Re
 	// Anthropic-compatible providers (Kimi, MiniMax, Z.ai, etc.) share a pool
 	// credential format with the removed Claude account integration.
 	anthropicPoolKey := generateClaudePoolToken(secret, user.ID)
-	piModelsJSON, err := generatePiModelsJSON(h.getEffectiveModelAPIURL(r), codexAccessToken, anthropicPoolKey, h.pricing)
+	piModelsJSON, err := generatePiModelsJSON(h.getEffectiveModelAPIURL(r), codexAccessToken, anthropicPoolKey, h.pool, h.pricing)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate pi models config.")
 		return

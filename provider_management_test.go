@@ -45,13 +45,22 @@ func TestProviderAdminRoutesRequireElevatedAdminSession(t *testing.T) {
 		t.Fatalf("admin-listed GET without elevation status = %d, want 200", unelevatedResponse.Code)
 	}
 
-	// Writes (POST) still require MFA elevation.
+	// Account additions (POST) and reads are MFA-free for admin-listed sessions.
 	writeRequest := httptest.NewRequest(http.MethodPost, "/admin/kimi", strings.NewReader(`{}`))
 	writeRequest.AddCookie(newTestSessionCookie(t, secret, user))
 	writeResponse := httptest.NewRecorder()
 	h.ServeHTTP(writeResponse, writeRequest)
-	if writeResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("admin-listed unelevated write status = %d, want 401", writeResponse.Code)
+	if writeResponse.Code == http.StatusUnauthorized {
+		t.Fatalf("admin-listed unelevated write status = %d, want not 401", writeResponse.Code)
+	}
+
+	// Destructive DELETE still requires MFA elevation.
+	deleteRequest := httptest.NewRequest(http.MethodDelete, "/admin/kimi", nil)
+	deleteRequest.AddCookie(newTestSessionCookie(t, secret, user))
+	deleteResponse := httptest.NewRecorder()
+	h.ServeHTTP(deleteResponse, deleteRequest)
+	if deleteResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("admin-listed unelevated delete status = %d, want 401", deleteResponse.Code)
 	}
 
 	// Elevate via a real TOTP verify call, then the same route should succeed.

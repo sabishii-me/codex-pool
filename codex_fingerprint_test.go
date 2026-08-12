@@ -20,15 +20,10 @@ func TestCodexProviderAddsDesktopFingerprintHeadersAndCookies(t *testing.T) {
 	NewCodexProvider(nil, nil, nil).SetAuthHeaders(req, acc)
 
 	checks := map[string]string{
-		"Authorization":                     "Bearer tok",
-		"ChatGPT-Account-ID":                "acct_123",
-		"originator":                        "Codex Desktop",
-		"x-openai-internal-codex-residency": "us",
-		"OpenAI-Beta":                       "responses_websockets=2026-02-06",
-		"sec-fetch-site":                    "same-origin",
-		"sec-fetch-mode":                    "cors",
-		"sec-fetch-dest":                    "empty",
-		"sec-ch-ua-mobile":                  "?0",
+		"Authorization":      "Bearer tok",
+		"ChatGPT-Account-ID": "acct_123",
+		"originator":         "pi",
+		"OpenAI-Beta":        "responses=experimental",
 	}
 	for key, want := range checks {
 		if got := req.Header.Get(key); got != want {
@@ -38,8 +33,11 @@ func TestCodexProviderAddsDesktopFingerprintHeadersAndCookies(t *testing.T) {
 	if got := req.Header.Get("x-client-request-id"); got == "" {
 		t.Fatalf("x-client-request-id was not set")
 	}
-	if got := req.Header.Get("User-Agent"); !strings.HasPrefix(got, "Codex Desktop/") {
-		t.Fatalf("User-Agent = %q, want Codex Desktop prefix", got)
+	if got := req.Header.Get("User-Agent"); !strings.HasPrefix(got, "pi (") {
+		t.Fatalf("User-Agent = %q, want pi ( prefix", got)
+	}
+	if got := req.Header.Get("x-openai-internal-codex-residency"); got != "" {
+		t.Fatalf("x-openai-internal-codex-residency should not be set, got %q", got)
 	}
 	cookie := req.Header.Get("Cookie")
 	if !strings.Contains(cookie, "cf_clearance=clear") || !strings.Contains(cookie, "__cf_bm=bm") {

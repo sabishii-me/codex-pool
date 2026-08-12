@@ -107,7 +107,7 @@ describe("route-level page jobs", () => {
 
   it("Usage owns measured activity and does not repeat Home orientation", () => {
     const members: ResourceState<PoolUserStats[]> = { status: "idle" };
-    const html = renderToStaticMarkup(<UsagePage isElevated={false} members={members} />);
+    const html = renderToStaticMarkup(<UsagePage isElevated={false} isAdmin={false} members={members} />);
     expect(html).toContain("Loading usage");
     expect(html).not.toContain("Choose a model");
     expect(html).not.toContain("Configure a client");

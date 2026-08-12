@@ -95,21 +95,15 @@ func applyCodexRequestFingerprint(req *http.Request, acc *ProviderConnection) {
 		return
 	}
 
-	fp := currentCodexFingerprint()
-	req.Header.Set("originator", fp.Originator)
-	req.Header.Set("x-openai-internal-codex-residency", getenv("CODEX_RESIDENCY", codexDefaultResidency))
+	// Match how the Pi client talks to OpenAI Codex: real identity, no Codex
+	// Desktop impersonation. The Codex Desktop originator/UA was never
+	// requested and OpenAI rejects the impersonated requests with 403.
+	req.Header.Set("originator", "pi")
+	req.Header.Set("User-Agent", fmt.Sprintf("pi (%s; %s)", runtime.GOOS, runtime.GOARCH))
 	if req.Header.Get("x-client-request-id") == "" {
 		req.Header.Set("x-client-request-id", uuid.NewString())
 	}
-	req.Header.Set("OpenAI-Beta", "responses_websockets=2026-02-06")
-	req.Header.Set("User-Agent", codexDesktopUserAgent(fp))
-	req.Header.Set("sec-ch-ua", fmt.Sprintf(`"Chromium";v="%s", "Not:A-Brand";v="24"`, fp.ChromiumVersion))
-	req.Header.Set("sec-ch-ua-mobile", "?0")
-	req.Header.Set("sec-ch-ua-platform", fmt.Sprintf(`"%s"`, codexSecCHPlatform(fp.Platform)))
-	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	req.Header.Set("sec-fetch-site", "same-origin")
-	req.Header.Set("sec-fetch-mode", "cors")
-	req.Header.Set("sec-fetch-dest", "empty")
+	req.Header.Set("OpenAI-Beta", "responses=experimental")
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "application/json, text/event-stream")
 	}

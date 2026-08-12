@@ -46,7 +46,7 @@ const (
 // detectRequestFormat determines the API format from the request path.
 func detectRequestFormat(path string) RequestFormat {
 	switch {
-	case path == "/v1/messages" || strings.HasPrefix(path, "/v1/messages?"):
+	case path == "/v1/messages" || strings.HasPrefix(path, "/v1/messages?") || strings.HasPrefix(path, "/v1/messages/compact"):
 		return FormatClaude
 	case strings.HasPrefix(path, "/v1/chat/completions"):
 		return FormatOpenAI

@@ -2,22 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { loadUsageProjection } from "../api";
 import type { GatewayMember, PoolUserStats, UsageProjection } from "../types";
 import type { ResourceState } from "../resource-state";
-import { CardHeader, Metric, MultiSeriesChart, PageFrame, compact, type ChartSeries } from "../components/ui";
+import { CardHeader, Metric, MultiSeriesChart, PageFrame, PieChart, compact, type ChartSeries } from "../components/ui";
 
 type UsageScope = "me" | "pool" | "member";
 type Range = "24h" | "7d" | "30d";
 const ranges: Record<Range, { hours: number; days: number; label: string; bucket: "hour" | "day" }> = { "24h": { hours: 24, days: 1, label: "24 hours", bucket: "hour" }, "7d": { hours: 168, days: 7, label: "7 days", bucket: "day" }, "30d": { hours: 720, days: 30, label: "30 days", bucket: "day" } };
 
-export function UsagePage({ isElevated, members, identities = { status: "idle" } }: { isElevated: boolean; members: ResourceState<PoolUserStats[]>; identities?: ResourceState<GatewayMember[]> }) {
+export function UsagePage({ isElevated, isAdmin, members, identities = { status: "idle" } }: { isElevated: boolean; isAdmin: boolean; members: ResourceState<PoolUserStats[]>; identities?: ResourceState<GatewayMember[]> }) {
+  // Reading usage never requires MFA: any admin can view pool/member scopes
+  // without elevating. isElevated is kept for backward compatibility but no
+  // longer gates read-only views.
+  const canViewAll = isAdmin || isElevated;
   const initial = new URLSearchParams(typeof window === "undefined" ? "" : window.location.search);
   const requestedScope = initial.get("scope") as UsageScope | null;
-  const [scope, setScope] = useState<UsageScope>(isElevated && requestedScope && ["pool", "member"].includes(requestedScope) ? requestedScope : "me");
+  const [scope, setScope] = useState<UsageScope>(canViewAll && requestedScope && ["pool", "member"].includes(requestedScope) ? requestedScope : "me");
   const [memberID, setMemberID] = useState(initial.get("member") ?? "");
   const [range, setRange] = useState<Range>("7d");
   const [state, setState] = useState<ResourceState<UsageProjection>>({ status: "loading" });
-  const effectiveScope: UsageScope = isElevated ? scope : "me";
+  const effectiveScope: UsageScope = canViewAll ? scope : "me";
 
-  useEffect(() => { if (!isElevated && scope !== "me") setScope("me"); }, [isElevated, scope]);
+  useEffect(() => { if (!canViewAll && scope !== "me") setScope("me"); }, [canViewAll, scope]);
   useEffect(() => {
     const query = new URLSearchParams(); if (effectiveScope !== "me") query.set("scope", effectiveScope); if (effectiveScope === "member" && memberID) query.set("member", memberID);
     if (typeof window !== "undefined") window.history.replaceState({}, "", `${window.location.pathname}${query.size ? `?${query}` : ""}`);
@@ -40,8 +44,8 @@ export function UsagePage({ isElevated, members, identities = { status: "idle" }
   const memberLabel = (id: string) => identities.status === "ready" ? identities.data.find(member => member.id === id)?.email ?? id : id;
 
   return <PageFrame kicker="Activity" title="Usage" description="Tokens, requests, and cost.">
-    <div className="usage-controls"><div className="scope-bar" aria-label="Usage scope"><button className={effectiveScope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>{isElevated ? <><button className={effectiveScope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button><button className={effectiveScope === "member" ? "active" : ""} onClick={() => setScope("member")}>Member usage</button></> : null}</div><div className="range-bar">{(Object.keys(ranges) as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value}</button>)}</div></div>
-    {effectiveScope === "member" ? <label className="member-scope-select"><span>Member</span><select value={memberID} onChange={event => setMemberID(event.target.value)}><option value="">Select a member</option>{members.status === "ready" ? members.data.map(member => <option key={member.user_id} value={member.user_id}>{memberLabel(member.user_id)}</option>) : null}</select></label> : null}
+    <div className="usage-controls"><div className="scope-bar" aria-label="Usage scope"><button className={effectiveScope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>{canViewAll ? <><button className={effectiveScope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button><button className={effectiveScope === "member" ? "active" : ""} onClick={() => setScope("member")}>Member usage</button></> : null}</div><div className="range-bar">{(Object.keys(ranges) as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value}</button>)}</div></div>
+    {effectiveScope === "member" ? <section className="member-pie-bento bento-card"><CardHeader title="Member usage" subtitle="Billable tokens by member — click a slice to inspect" /><PieChart slices={(members.status === "ready" ? members.data : []).map(member => ({ label: memberLabel(member.user_id), value: member.total_billable_tokens }))} selectedLabel={memberID ? memberLabel(memberID) : undefined} onSelect={label => { const found = members.status === "ready" ? members.data.find(member => memberLabel(member.user_id) === label) : undefined; if (found) setMemberID(found.user_id); }} /></section> : null}
     {state.status === "loading" ? <section className="usage-unavailable"><span>{effectiveScope} scope</span><h2>Loading usage</h2></section> : null}
     {state.status === "idle" ? <section className="usage-unavailable"><span>Member usage</span><h2>Select a member</h2></section> : null}
     {state.status === "error" ? <section className="usage-unavailable"><span>Unavailable</span><h2>Usage could not be loaded</h2><p>{state.message}</p></section> : null}

@@ -4362,8 +4362,11 @@ func (h *proxyHandler) tryOnce(
 					// A compact request rejection is upstream compact behavior, not a
 					// credential problem. OpenAI rejects compact calls independently
 					// of account health (the same account serves normal requests fine),
-					// so a compact 403 must not retire the account.
-					if strings.Contains(in.URL.Path, "compact") {
+					// so a compact 403 must not retire the account. Cloudflare bot
+					// challenges (cf="challenge" + HTML) are also transient gateway
+					// blocks, not credential failures, so they must not retire a
+					// healthy account either (same trap as the earlier 403 mis-kill).
+					if strings.Contains(in.URL.Path, "compact") || isCloudflareChallenge(preview3, resp.Header) {
 						refreshFailed = true
 					} else {
 						acc.mu.Lock()

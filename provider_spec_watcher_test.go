@@ -41,7 +41,7 @@ func TestProviderSpecsWatcherPublishesThenReloadsConnections(t *testing.T) {
 	}
 	registry := NewProviderRegistry(&CodexProvider{}, &GeminiProvider{}, NewDeepSeekProvider(nil))
 	handler := &proxyHandler{cfg: &config{poolDir: poolDir}, registry: registry, pool: newProviderPool(nil)}
-	spec := deepSeekProviderSpec
+	spec := mustBuiltinProviderSpec("deepseek")
 	spec.BaseURL = "https://replacement.example.test/anthropic"
 	writeProviderSpecTestFile(t, specsDir, "deepseek.json", spec)
 	watcher := &poolWatcher{providerSpecsDir: specsDir, handler: handler}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { loadUsageProjection } from "../api";
+import { loadPoolUsers, loadUsageProjection } from "../api";
 import type { GatewayMember, PoolUserStats, UsageProjection } from "../types";
 import type { ResourceState } from "../resource-state";
 import { CardHeader, Metric, MultiSeriesChart, PageFrame, PieChart, compact, type ChartSeries } from "../components/ui";
@@ -20,6 +20,21 @@ export function UsagePage({ isElevated, isAdmin, members, identities = { status:
   const [range, setRange] = useState<Range>("7d");
   const [state, setState] = useState<ResourceState<UsageProjection>>({ status: "loading" });
   const effectiveScope: UsageScope = canViewAll ? scope : "me";
+
+  // Member pie chart data follows the selected range (24h/7d/30d) so the
+  // slices reflect the current window, not the all-time leaderboard totals.
+  const [pieUsers, setPieUsers] = useState<ResourceState<PoolUserStats[]>>({ status: "idle" });
+  useEffect(() => {
+    if (effectiveScope !== "member") return;
+    let cancelled = false;
+    setPieUsers({ status: "loading" });
+    loadPoolUsers(ranges[range].hours).then(({ users }) => {
+      if (!cancelled) setPieUsers({ status: "ready", data: users });
+    }).catch(error => {
+      if (!cancelled) setPieUsers({ status: "error", message: error instanceof Error ? error.message : "Members unavailable" });
+    });
+    return () => { cancelled = true; };
+  }, [effectiveScope, range]);
 
   useEffect(() => { if (!canViewAll && scope !== "me") setScope("me"); }, [canViewAll, scope]);
   useEffect(() => {
@@ -45,7 +60,7 @@ export function UsagePage({ isElevated, isAdmin, members, identities = { status:
 
   return <PageFrame kicker="Activity" title="Usage" description="Tokens, requests, and cost.">
     <div className="usage-controls"><div className="scope-bar" aria-label="Usage scope"><button className={effectiveScope === "me" ? "active" : ""} onClick={() => setScope("me")}>My usage</button>{canViewAll ? <><button className={effectiveScope === "pool" ? "active" : ""} onClick={() => setScope("pool")}>Pool usage</button><button className={effectiveScope === "member" ? "active" : ""} onClick={() => setScope("member")}>Member usage</button></> : null}</div><div className="range-bar">{(Object.keys(ranges) as Range[]).map(value => <button key={value} className={range === value ? "active" : ""} onClick={() => setRange(value)}>{value}</button>)}</div></div>
-    {effectiveScope === "member" ? <section className="member-pie-bento bento-card"><CardHeader title="Member usage" subtitle="Billable tokens by member — click a slice to inspect" /><PieChart slices={(members.status === "ready" ? members.data : []).map(member => ({ label: memberLabel(member.user_id), value: member.total_billable_tokens }))} selectedLabel={memberID ? memberLabel(memberID) : undefined} onSelect={label => { const found = members.status === "ready" ? members.data.find(member => memberLabel(member.user_id) === label) : undefined; if (found) setMemberID(found.user_id); }} /></section> : null}
+    {effectiveScope === "member" ? <section className="member-pie-bento bento-card"><CardHeader title="Member usage" subtitle={`Billable tokens by member · ${ranges[range].label} — click a slice to inspect`} /><PieChart slices={(pieUsers.status === "ready" ? pieUsers.data : []).map(member => ({ label: memberLabel(member.user_id), value: member.total_billable_tokens }))} selectedLabel={memberID ? memberLabel(memberID) : undefined} onSelect={label => { const found = pieUsers.status === "ready" ? pieUsers.data.find(member => memberLabel(member.user_id) === label) : undefined; if (found) setMemberID(found.user_id); }} /></section> : null}
     {state.status === "loading" ? <section className="usage-unavailable"><span>{effectiveScope} scope</span><h2>Loading usage</h2></section> : null}
     {state.status === "idle" ? <section className="usage-unavailable"><span>Member usage</span><h2>Select a member</h2></section> : null}
     {state.status === "error" ? <section className="usage-unavailable"><span>Unavailable</span><h2>Usage could not be loaded</h2><p>{state.message}</p></section> : null}

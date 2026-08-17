@@ -2,17 +2,13 @@ package main
 
 import "net/url"
 
-var minimaxProviderSpec = ProviderSpec{
-	ID: AccountTypeMinimax, Protocol: ProtocolAnthropicMessages,
-	BaseURL: "https://api.minimax.io/anthropic", PlanType: "minimax", CredentialField: "api_key",
-	Auth: ProviderAuthSpec{Type: AuthBearer}, QuotaProfile: QuotaMinimax,
-}
-
 type MinimaxProvider = DeclarativeProvider
 
 func NewMinimaxProvider(base *url.URL) *MinimaxProvider {
-	spec := minimaxProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeMinimax)
+	// Model data comes from the declarative spec (provider-specs/minimax.json,
+	// embedded as the builtin fallback) - the single data source. The code
+	// var is retained only as a schema-shaped fallback when the JSON is absent.
+	spec := mustBuiltinProviderSpec("minimax")
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

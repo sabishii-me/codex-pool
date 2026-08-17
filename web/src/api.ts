@@ -60,8 +60,12 @@ export async function setGatewayMemberEnabled(id: string, enabled: boolean) {
   return decode<Record<string, unknown>>(await fetch(`/admin/pool-users/${encodeURIComponent(id)}/${enabled ? "enable" : "disable"}`, { method: "POST" }));
 }
 
-export async function loadPoolUsers(): Promise<{ users: PoolUserStats[]; total_users: number }> {
-  return decode(await fetch("/api/pool/users", { cache: "no-store" }));
+export async function loadPoolUsers(hours?: number, days?: number): Promise<{ users: PoolUserStats[]; total_users: number }> {
+  const query = new URLSearchParams();
+  if (hours) query.set("hours", String(hours));
+  if (days) query.set("days", String(days));
+  const suffix = query.size ? `?${query}` : "";
+  return decode(await fetch(`/api/pool/users${suffix}`, { cache: "no-store" }));
 }
 
 export async function loadPoolStats(): Promise<PoolStats> {

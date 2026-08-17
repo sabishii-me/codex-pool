@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -58,7 +59,7 @@ func (h *proxyHandler) writeGatewaySessionJSON(w http.ResponseWriter, r *http.Re
 	// Anthropic-compatible providers (Kimi, MiniMax, Z.ai, etc.) share a pool
 	// credential format with the removed Claude account integration.
 	anthropicPoolKey := generateClaudePoolToken(secret, user.ID)
-	piModelsJSON, err := generatePiModelsJSON(h.getEffectiveModelAPIURL(r), codexAccessToken, anthropicPoolKey, h.pool, h.pricing)
+	piModelsJSON, err := generatePiModelsJSON(h.getEffectiveModelAPIURL(r), codexAccessToken, anthropicPoolKey, h.pool, h.registry, h.pricing)
 	if err != nil {
 		respondJSONError(w, http.StatusInternalServerError, "Failed to generate pi models config.")
 		return
@@ -1373,6 +1374,30 @@ func (h *proxyHandler) handlePoolUsers(w http.ResponseWriter, r *http.Request) {
 			RequestCount:        u.RequestCount,
 			FirstSeen:           u.FirstSeen,
 			LastSeen:            u.LastSeen,
+		}
+	}
+
+	// Range-scoped totals from analytics when an explicit hours window is
+	// requested (member usage pie chart tracks the selected 24h/7d/30d window
+	// instead of the all-time leaderboard totals).
+	if h.analyticsStore != nil {
+		if hours, err := strconv.Atoi(r.URL.Query().Get("hours")); err == nil && hours > 0 {
+			since := time.Now().UTC().Add(-time.Duration(hours) * time.Hour).Format("2006-01-02T15:04:05Z")
+			if byUser, err := h.analyticsStore.getUserBillableByRange(since); err == nil {
+				for i := range stats {
+					if ru, ok := byUser[stats[i].UserID]; ok {
+						stats[i].TotalBillableTokens = ru.TotalBillableTokens
+						stats[i].TotalInputTokens = ru.TotalInputTokens
+						stats[i].TotalOutputTokens = ru.TotalOutputTokens
+						stats[i].RequestCount = ru.RequestCount
+					} else {
+						stats[i].TotalBillableTokens = 0
+						stats[i].TotalInputTokens = 0
+						stats[i].TotalOutputTokens = 0
+						stats[i].RequestCount = 0
+					}
+				}
+			}
 		}
 	}
 

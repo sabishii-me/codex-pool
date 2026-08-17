@@ -123,9 +123,9 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
 			} else {
-				applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, true)
-				applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, false)
-				applyUsageProjectionDiagnostics(projection.ByConnection, h.pricing, false)
+				applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, h.registry, true)
+				applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, h.registry, false)
+				applyUsageProjectionDiagnostics(projection.ByConnection, h.pricing, h.registry, false)
 			}
 			economics, err := h.buildSignalEconomics(projection.Evidence.GeneratedAt)
 			if err != nil {
@@ -162,18 +162,18 @@ func (h *proxyHandler) handleUsageV2(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			projection.PartialFailures = append(projection.PartialFailures, "usage detail unavailable")
 		} else {
-			applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, true)
-			applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, false)
+			applyUsageProjectionDiagnostics(projection.ByModel, h.pricing, h.registry, true)
+			applyUsageProjectionDiagnostics(projection.ByProvider, h.pricing, h.registry, false)
 		}
 	}
 	respondJSON(w, projection)
 }
 
-func applyUsageProjectionDiagnostics(values []UsageDimension, pricing *PricingData, includeCost bool) {
+func applyUsageProjectionDiagnostics(values []UsageDimension, pricing *PricingData, registry *ProviderRegistry, includeCost bool) {
 	for index := range values {
 		applyUsageCacheDiagnostics(&values[index])
 		if includeCost {
-			applyUsageCostDiagnostics(&values[index], pricing)
+			applyUsageCostDiagnostics(&values[index], pricing, registry)
 		} else {
 			values[index].CostStatus = "aggregate"
 		}

@@ -1,0 +1,86 @@
+{
+  "id": "openrouter",
+  "protocol": "anthropic-messages",
+  "base_url": "https://openrouter.ai/api",
+  "plan_type": "openrouter",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "model_prefix": "openrouter/",
+  "strip_model_prefix": true,
+  "usage_profiles": [
+    "anthropic-messages"
+  ],
+  "models": [
+    {
+      "id": "auto-beta",
+      "display_name": "Auto Router (Beta)",
+      "context_window": 2000000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "file",
+        "video"
+      ]
+    },
+    {
+      "id": "fusion",
+      "display_name": "OpenRouter: Fusion",
+      "context_window": 1000000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "pareto-code",
+      "display_name": "Pareto Code Router",
+      "context_window": 2000000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "free",
+      "display_name": "Free Models Router",
+      "context_window": 200000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text",
+        "image"
+      ]
+    },
+    {
+      "id": "bodybuilder",
+      "display_name": "Body Builder (beta)",
+      "context_window": 128000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "auto",
+      "display_name": "Auto Router",
+      "context_window": 2000000,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text",
+        "image",
+        "audio",
+        "file",
+        "video"
+      ]
+    }
+  ]
+}

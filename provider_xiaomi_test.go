@@ -31,7 +31,7 @@ func TestXiaomiModelRoutingUsesLongContextCanonicalModel(t *testing.T) {
 		}
 	}
 
-	for _, model := range []string{"mimo-v2.5", "mimo", "mimo-v2.5-pro-preview"} {
+	for _, model := range []string{"mimo", "mimo-v2.5-pro-preview"} {
 		if isXiaomiModel(model) {
 			t.Fatalf("did not expect %q to route to Xiaomi", model)
 		}

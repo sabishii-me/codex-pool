@@ -449,6 +449,39 @@ func (s *AnalyticsStore) getCostByProvider(days int) (map[string]float64, error)
 }
 
 // getDailyCosts returns daily cost totals by provider for the last N days (for charting).
+// getUserBillableByRange returns per-user billable tokens for the requested
+// range (ISO since). Used by the member usage pie chart so the slices track
+// the selected 24h/7d/30d window instead of the all-time leaderboard totals.
+func (s *AnalyticsStore) getUserBillableByRange(since string) (map[string]UserUsage, error) {
+	result := map[string]UserUsage{}
+	if s == nil || s.db == nil {
+		return result, nil
+	}
+	rows, err := s.db.Query(`
+		SELECT user_id,
+		       COALESCE(SUM(input_tokens), 0),
+		       COALESCE(SUM(output_tokens), 0),
+		       COALESCE(SUM(billable_tokens), 0),
+		       COUNT(*)
+		FROM usage_events
+		WHERE started_at >= ? AND user_id != ''
+		GROUP BY user_id`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var u UserUsage
+		var reqs int
+		if err := rows.Scan(&u.UserID, &u.TotalInputTokens, &u.TotalOutputTokens, &u.TotalBillableTokens, &reqs); err != nil {
+			continue
+		}
+		u.RequestCount = int64(reqs)
+		result[u.UserID] = u
+	}
+	return result, rows.Err()
+}
+
 func (s *AnalyticsStore) getDailyCosts(days int) ([]DailyCostEntry, error) {
 	since := time.Now().AddDate(0, 0, -days).Format("2006-01-02")
 	rows, err := s.db.Query(`

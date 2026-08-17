@@ -7,18 +7,12 @@ import (
 
 const openrouterModelPrefix = "openrouter/"
 
-var openRouterProviderSpec = ProviderSpec{
-	ID: AccountTypeOpenRouter, Protocol: ProtocolAnthropicMessages,
-	BaseURL: "https://openrouter.ai/api", PlanType: "openrouter", CredentialField: "api_key",
-	Auth:        ProviderAuthSpec{Type: AuthBearer},
-	ModelPrefix: openrouterModelPrefix, StripModelPrefix: true,
-}
-
 type OpenRouterProvider = DeclarativeProvider
 
 func NewOpenRouterProvider(base *url.URL) *OpenRouterProvider {
-	spec := openRouterProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeOpenRouter)
+	// Model data comes from the declarative spec (provider-specs/openrouter.json,
+	// embedded as the builtin fallback) - the single data source.
+	spec := mustBuiltinProviderSpec("openrouter")
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

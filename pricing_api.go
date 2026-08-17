@@ -84,10 +84,35 @@ func pricingRateKind(provider ProviderID) string {
 	return "provider_billed"
 }
 
-func priceSheets(pricing *PricingData, provider string) []ModelPriceSheet {
+func modelRouteFromSpec(spec ProviderSpec, m ModelRouteSpec) ModelRoute {
+	return ModelRoute{
+		ProviderID: spec.ID, ID: m.ID, DisplayName: m.DisplayName,
+		Description: m.Description, Aliases: append([]string(nil), m.Aliases...),
+		ContextWindow: m.ContextWindow, MaxTokens: m.MaxOutputTokens,
+		Reasoning: m.Reasoning, Input: append([]string(nil), m.Input...),
+	}
+}
+
+func priceSheets(pricing *PricingData, provider string, registry *ProviderRegistry) []ModelPriceSheet {
 	provider = strings.ToLower(strings.TrimSpace(provider))
-	out := make([]ModelPriceSheet, 0, len(poolModels))
+	out := make([]ModelPriceSheet, 0, 32)
+	// Declarative specs are the single data source for standard providers.
+	if registry != nil {
+		for _, p := range registry.DeclarativeProviders() {
+			spec := p.Spec()
+			if provider != "" && strings.ToLower(string(spec.ID)) != provider {
+				continue
+			}
+			for _, m := range spec.Models {
+				out = append(out, priceSheetForModel(pricing, modelRouteFromSpec(spec, m)))
+			}
+		}
+	}
+	// Plugin providers still backed by the hardcoded catalog until migrated.
 	for _, model := range poolModels {
+		if model.ProviderID != AccountTypeCodex && model.ProviderID != AccountTypeGrok && model.ProviderID != AccountTypeKimi {
+			continue
+		}
 		if provider != "" && strings.ToLower(string(model.ProviderID)) != provider {
 			continue
 		}
@@ -102,10 +127,35 @@ func priceSheets(pricing *PricingData, provider string) []ModelPriceSheet {
 	return out
 }
 
-func findModelRouteByID(id string) (ModelRoute, bool) {
+func findModelRouteByID(id string, registry *ProviderRegistry) (ModelRoute, bool) {
+	// Declarative specs are the single data source for standard providers.
+	if registry != nil {
+		for _, p := range registry.DeclarativeProviders() {
+			spec := p.Spec()
+			for _, m := range spec.Models {
+				if m.ID == id {
+					return modelRouteFromSpec(spec, m), true
+				}
+				for _, alias := range m.Aliases {
+					if alias == id {
+						return modelRouteFromSpec(spec, m), true
+					}
+				}
+			}
+		}
+	}
+	// Plugin providers still backed by the hardcoded catalog until migrated.
 	for _, model := range poolModels {
+		if model.ProviderID != AccountTypeCodex && model.ProviderID != AccountTypeGrok && model.ProviderID != AccountTypeKimi {
+			continue
+		}
 		if model.ID == id {
 			return model, true
+		}
+		for _, alias := range model.Aliases {
+			if alias == id {
+				return model, true
+			}
 		}
 	}
 	return ModelRoute{}, false
@@ -124,7 +174,7 @@ func (h *proxyHandler) handleModelPricingV2(w http.ResponseWriter, r *http.Reque
 		respondJSON(w, map[string]any{
 			"currency": "USD", "unit": pricingUnitPerMillionTokens,
 			"generated_at": time.Now().UTC(),
-			"models":       priceSheets(h.pricing, r.URL.Query().Get("provider")),
+			"models":       priceSheets(h.pricing, r.URL.Query().Get("provider"), h.registry),
 		})
 		return
 	}
@@ -137,7 +187,7 @@ func (h *proxyHandler) handleModelPricingV2(w http.ResponseWriter, r *http.Reque
 		respondJSONError(w, http.StatusBadRequest, "invalid model ID")
 		return
 	}
-	model, ok := findModelRouteByID(id)
+	model, ok := findModelRouteByID(id, h.registry)
 	if !ok {
 		respondJSONError(w, http.StatusNotFound, "pricing model not found")
 		return

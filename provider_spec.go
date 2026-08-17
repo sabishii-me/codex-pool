@@ -258,17 +258,19 @@ func (p *DeclarativeProvider) DetectsSSE(path, contentType string) bool {
 	return eventStreamDetector.Detect(path, contentType)
 }
 
-func modelRouteSpecsForProvider(providerID ProviderID) []ModelRouteSpec {
-	models := modelsForProvider(providerID)
-	specs := make([]ModelRouteSpec, 0, len(models))
-	for _, model := range models {
-		specs = append(specs, ModelRouteSpec{
-			ID: model.ID, DisplayName: model.DisplayName, Description: model.Description,
-			Aliases: append([]string(nil), model.Aliases...), ContextWindow: model.ContextWindow,
-			MaxOutputTokens: model.MaxTokens, Reasoning: model.Reasoning, Input: append([]string(nil), model.Input...),
+// modelRouteSpecsFromProviderSpec converts a declarative provider spec's model
+// rows back into ModelRoute values (test/observability helper for the
+// data-driven provider catalogs).
+func modelRouteSpecsFromProviderSpec(spec ProviderSpec) []ModelRoute {
+	models := make([]ModelRoute, 0, len(spec.Models))
+	for _, m := range spec.Models {
+		models = append(models, ModelRoute{
+			ProviderID: spec.ID, ID: m.ID, DisplayName: m.DisplayName, Description: m.Description,
+			Aliases: append([]string(nil), m.Aliases...), ContextWindow: m.ContextWindow,
+			MaxTokens: m.MaxOutputTokens, Reasoning: m.Reasoning, Input: append([]string(nil), m.Input...),
 		})
 	}
-	return specs
+	return models
 }
 
 func isSafeProviderDirectoryName(value string) bool {

@@ -196,6 +196,13 @@ func TestKimiPlatformCatalogUsesOfficialModelsAndLimits(t *testing.T) {
 		"kimi-k2.5":                {262144, 32768},
 	}
 	models := modelsForProvider(AccountTypeKimiPlatform)
+	// Kimi Platform is a declarative provider; its catalog lives in the
+	// embedded provider spec (provider-specs.builtin/kimi-platform.json),
+	// not in poolModels. Fall back to the builtin spec when poolModels no
+	// longer carries standard provider rows.
+	if len(models) == 0 {
+		models = modelRouteSpecsFromProviderSpec(NewKimiPlatformProvider(nil).Spec())
+	}
 	if len(models) != len(want) {
 		t.Fatalf("Kimi Platform catalog has %d models, want %d: %#v", len(models), len(want), models)
 	}

@@ -1,0 +1,62 @@
+{
+  "id": "deepseek",
+  "protocol": "anthropic-messages",
+  "base_url": "https://api.deepseek.com/anthropic",
+  "plan_type": "deepseek",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "usage_profiles": [
+    "anthropic-messages"
+  ],
+  "models": [
+    {
+      "id": "deepseek-v4-pro-0813",
+      "display_name": "DeepSeek: DeepSeek V4 Pro 0813",
+      "context_window": 1048576,
+      "max_output_tokens": 384000,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "deepseek-v4-flash-0731",
+      "display_name": "DeepSeek: DeepSeek V4 Flash 0731",
+      "context_window": 1310720,
+      "max_output_tokens": 393216,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "deepseek-v4-pro",
+      "display_name": "DeepSeek: DeepSeek V4 Pro 0423",
+      "context_window": 1048576,
+      "max_output_tokens": 384000,
+      "reasoning": true,
+      "input": [
+        "text"
+      ],
+      "aliases": [
+        "deepseek",
+        "deepseek-pro"
+      ]
+    },
+    {
+      "id": "deepseek-v4-flash",
+      "display_name": "DeepSeek: DeepSeek V4 Flash 0423",
+      "context_window": 1048576,
+      "max_output_tokens": 384000,
+      "reasoning": false,
+      "input": [
+        "text"
+      ],
+      "aliases": [
+        "deepseek-flash"
+      ]
+    }
+  ]
+}

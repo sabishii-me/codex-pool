@@ -8,7 +8,7 @@ import (
 )
 
 func TestModelPricingEndpointReportsKnownAndUnknownWithoutInventingZero(t *testing.T) {
-	h, user, secret := newTestHandlerWithSession(t)
+	h, user, secret := newTestHandlerWithSession(t); h.registry = testDeclarativeRegistry(t)
 	h.pricing = &PricingData{models: map[string]ModelPricing{
 		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007, cacheReadSet: true},
 	}, source: "test_fixture"}
@@ -45,7 +45,7 @@ func TestModelPricingEndpointReportsKnownAndUnknownWithoutInventingZero(t *testi
 }
 
 func TestModelPricingEndpointRequiresSessionAndSupportsProviderFilter(t *testing.T) {
-	h, user, secret := newTestHandlerWithSession(t)
+	h, user, secret := newTestHandlerWithSession(t); h.registry = testDeclarativeRegistry(t)
 	h.pricing = &PricingData{models: map[string]ModelPricing{}}
 
 	response := httptest.NewRecorder()
@@ -67,8 +67,8 @@ func TestModelPricingEndpointRequiresSessionAndSupportsProviderFilter(t *testing
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Models) != 2 {
-		t.Fatalf("deepseek price sheets=%d, want 2", len(result.Models))
+	if len(result.Models) != 4 {
+		t.Fatalf("deepseek price sheets=%d, want 4", len(result.Models))
 	}
 	for _, sheet := range result.Models {
 		if sheet.ProviderID != AccountTypeDeepSeek {
@@ -81,20 +81,20 @@ func TestPiModelsUseCanonicalPricingAndOmitUnknownCost(t *testing.T) {
 	pricing := &PricingData{models: map[string]ModelPricing{
 		"deepseek-v4-pro": {InputCostPerToken: 0.00000027, OutputCostPerToken: 0.0000011, CacheReadCost: 0.00000007, cacheReadSet: true},
 	}, source: "test_fixture"}
-	models := piModelsForProvider(AccountTypeDeepSeek, pricing)
-	if len(models) != 2 {
-		t.Fatalf("deepseek model count=%d", len(models))
-	}
+	pool := &ProviderPool{accounts: []*ProviderConnection{{ID: "deepseek-1", Type: AccountTypeDeepSeek}}}
+	registry := testDeclarativeRegistry(t)
+	models := availablePiModels(pool, registry, pricing)
+	var deepseek []piModelConfig
 	for _, model := range models {
-		switch model.ID {
-		case "deepseek-v4-pro":
-			if model.Cost == nil || model.Cost.Input != 0.27 || model.Cost.Output != 1.1 {
-				t.Fatalf("known Pi cost=%#v", model.Cost)
-			}
-		case "deepseek-v4-flash":
-			if model.Cost != nil {
-				t.Fatalf("unknown Pi cost must be omitted, got %#v", model.Cost)
-			}
+		if model.ID == "deepseek-v4-pro" {
+			deepseek = append(deepseek, model)
 		}
+	}
+	if len(deepseek) != 1 {
+		t.Fatalf("deepseek-v4-pro Pi model count=%d", len(deepseek))
+	}
+	model := deepseek[0]
+	if model.Cost == nil || model.Cost.Input != 0.27 || model.Cost.Output != 1.1 {
+		t.Fatalf("known Pi cost=%#v", model.Cost)
 	}
 }

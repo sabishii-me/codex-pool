@@ -1,0 +1,57 @@
+{
+  "id": "nvidia",
+  "protocol": "openai-chat",
+  "base_url": "https://integrate.api.nvidia.com/v1",
+  "plan_type": "nvidia",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "model_prefix": "nvidia/",
+  "strip_model_prefix": true,
+  "usage_profiles": [
+    "openai-chat"
+  ],
+  "models": [
+    {
+      "id": "nemotron-3.5-lightning",
+      "display_name": "NVIDIA: Nemotron 3.5 Lightning",
+      "context_window": 1000000,
+      "max_output_tokens": 131072,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "nemotron-3-ultra-550b-a55b",
+      "display_name": "NVIDIA: Nemotron 3 Ultra",
+      "context_window": 512288,
+      "max_output_tokens": 0,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "nemotron-3-super-120b-a12b",
+      "display_name": "NVIDIA: Nemotron 3 Super",
+      "context_window": 1000000,
+      "max_output_tokens": 16384,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "nemotron-3-nano-30b-a3b",
+      "display_name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+      "context_window": 262144,
+      "max_output_tokens": 262144,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    }
+  ]
+}

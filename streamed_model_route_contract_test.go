@@ -27,7 +27,7 @@ func TestStreamedModelRouteCoversEveryModelRoutedProvider(t *testing.T) {
 		{"antigravity", "antigravity/gemini-3-flash", AccountTypeAntigravity, "gemini-3-flash"},
 		{"kimi", "kimi-for-coding", AccountTypeKimi, "kimi-for-coding"},
 		{"kimi-platform", "kimi-platform/kimi-k3", AccountTypeKimiPlatform, "kimi-k3"},
-		{"minimax", "minimax", AccountTypeMinimax, "MiniMax-M3"},
+		{"minimax", "minimax", AccountTypeMinimax, "minimax-m3"},
 		{"zai", "glm-5.2", AccountTypeZAI, "glm-5.2"},
 		{"xiaomi", "mimo-v2.5-pro", AccountTypeXiaomi, "mimo-v2.5-pro"},
 		{"grok", "grok-composer", AccountTypeGrok, "grok-composer-2.5-fast"},

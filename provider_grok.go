@@ -458,35 +458,51 @@ var grokCLIModelCatalog = []grokClientModel{
 	},
 }
 
-func serveGrokModels(w http.ResponseWriter) {
-	respondJSON(w, map[string]any{"object": "list", "data": grokModelsForClient()})
+func serveGrokModels(w http.ResponseWriter, registry *ProviderRegistry) {
+	respondJSON(w, map[string]any{"object": "list", "data": grokModelsForClient(registry)})
 }
 
-func grokModelsForClient() []grokClientModel {
+func grokModelsForClient(registry *ProviderRegistry) []grokClientModel {
 	models := append([]grokClientModel(nil), grokCLIModelCatalog...)
+	// Declarative specs are the single model data source for standard providers.
+	if registry != nil {
+		for _, p := range registry.DeclarativeProviders() {
+			spec := p.Spec()
+			apiBackend := "messages"
+			if spec.Protocol == ProtocolOpenAIChat {
+				apiBackend = "chat_completions"
+			}
+			for _, model := range spec.Models {
+				name := model.DisplayName
+				if name == "" {
+					name = model.ID
+				}
+				models = append(models, grokClientModel{
+					ID: model.ID, Object: "model", OwnedBy: "codex-pool", Model: model.ID,
+					Name: name, Description: model.Description, ContextWindow: model.ContextWindow,
+					AutoCompactThresholdPercent: 80, SystemPromptLabel: name, APIBackend: apiBackend,
+				})
+			}
+		}
+	}
+	// codex is a plugin provider (openai-responses protocol is not a standard
+	// ProviderSpec protocol) so its model catalog stays in poolModels until the
+	// protocol is supported declaratively.
 	for _, model := range poolModels {
-		apiBackend := "messages"
-		if model.ProviderID == AccountTypeCodex {
-			apiBackend = "chat_completions"
+		if model.ProviderID != AccountTypeCodex {
+			continue
 		}
 		models = append(models, grokClientModel{
-			ID:                          model.ID,
-			Object:                      "model",
-			OwnedBy:                     "codex-pool",
-			Model:                       model.ID,
-			Name:                        model.DisplayName,
-			Description:                 model.Description,
-			ContextWindow:               model.ContextWindow,
-			AutoCompactThresholdPercent: 80,
-			SystemPromptLabel:           model.DisplayName,
-			APIBackend:                  apiBackend,
+			ID: model.ID, Object: "model", OwnedBy: "codex-pool", Model: model.ID,
+			Name: model.DisplayName, Description: model.Description, ContextWindow: model.ContextWindow,
+			AutoCompactThresholdPercent: 80, SystemPromptLabel: model.DisplayName, APIBackend: "chat_completions",
 		})
 	}
 	return models
 }
 
-func grokSetupModelIDs() []string {
-	models := grokSetupModels()
+func grokSetupModelIDs(registry *ProviderRegistry) []string {
+	models := grokSetupModels(registry)
 	ids := make([]string, 0, len(models)+1)
 	seen := make(map[string]struct{}, len(models))
 	for _, model := range models {
@@ -504,8 +520,8 @@ type grokSetupModel struct {
 	APIBackend string
 }
 
-func grokSetupModels() []grokSetupModel {
-	catalog := grokModelsForClient()
+func grokSetupModels(registry *ProviderRegistry) []grokSetupModel {
+	catalog := grokModelsForClient(registry)
 	models := make([]grokSetupModel, 0, len(catalog)+1)
 	seen := make(map[string]struct{}, len(catalog)+1)
 	for _, model := range catalog {

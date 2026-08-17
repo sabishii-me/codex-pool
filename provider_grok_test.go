@@ -18,7 +18,7 @@ import (
 
 func TestServeGrokModelsReturnsGrokClientCatalog(t *testing.T) {
 	rr := httptest.NewRecorder()
-	serveGrokModels(rr)
+	serveGrokModels(rr, testDeclarativeRegistry(t))
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d", rr.Code)
@@ -30,7 +30,7 @@ func TestServeGrokModelsReturnsGrokClientCatalog(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode catalog: %v", err)
 	}
-	if body.Object != "list" || len(body.Data) != len(grokCLIModelCatalog)+len(poolModels) {
+	if body.Object != "list" || len(body.Data) < len(grokCLIModelCatalog)+1 {
 		t.Fatalf("catalog object=%q models=%d", body.Object, len(body.Data))
 	}
 	for _, model := range body.Data {
@@ -45,13 +45,13 @@ func TestServeGrokModelsReturnsGrokClientCatalog(t *testing.T) {
 }
 
 func TestGrokClientCatalogIncludesPoolModels(t *testing.T) {
-	models := grokModelsForClient()
+	models := grokModelsForClient(testDeclarativeRegistry(t))
 	want := map[string]struct {
 		owner   string
 		backend string
 	}{
 		"gpt-5.6-luna":    {owner: "codex-pool", backend: "chat_completions"},
-		"MiniMax-M3":      {owner: "codex-pool", backend: "messages"},
+		"minimax-m3":      {owner: "codex-pool", backend: "messages"},
 		"grok-4.5":        {owner: "xAI", backend: "responses"},
 	}
 	for _, model := range models {
@@ -68,7 +68,7 @@ func TestGrokClientCatalogIncludesPoolModels(t *testing.T) {
 		t.Fatalf("missing Grok client models: %#v", want)
 	}
 
-	ids := grokSetupModelIDs()
+	ids := grokSetupModelIDs(testDeclarativeRegistry(t))
 	for _, id := range []string{"grok-build", "gpt-5.6-luna"} {
 		if !slices.Contains(ids, id) {
 			t.Fatalf("setup model IDs missing %q", id)

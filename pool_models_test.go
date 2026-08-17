@@ -17,10 +17,23 @@ func TestPoolModelDescriptorsDoNotFabricateAggregatorInventory(t *testing.T) {
 	}
 }
 
+func testDeclarativeRegistry(t *testing.T) *ProviderRegistry {
+	t.Helper()
+	specs, err := LoadProviderSpecsDir("provider-specs")
+	if err != nil {
+		t.Fatalf("load provider-specs: %v", err)
+	}
+	registry := &ProviderRegistry{}
+	if err := registry.ReplaceDeclarative(specs); err != nil {
+		t.Fatalf("replace declarative: %v", err)
+	}
+	return registry
+}
+
 func TestPoolModelDescriptorsCoverEveryProvider(t *testing.T) {
 	t.Parallel()
 
-	descriptors := poolModelDescriptors()
+	descriptors := poolModelDescriptorsWithRegistry(nil, testDeclarativeRegistry(t))
 	byID := make(map[string]poolModelDescriptor, len(descriptors))
 	for _, descriptor := range descriptors {
 		byID[descriptor.ID] = descriptor
@@ -29,7 +42,7 @@ func TestPoolModelDescriptorsCoverEveryProvider(t *testing.T) {
 	tests := map[string]string{
 		"gpt-5.6-sol":     "openai",
 		"kimi-for-coding": "anthropic",
-		"MiniMax-M3":      "anthropic",
+		"minimax-m3":      "anthropic",
 		"glm-5.2":         "anthropic",
 		"mimo-v2.5-pro":   "anthropic",
 		"grok-4.5":        "openai",

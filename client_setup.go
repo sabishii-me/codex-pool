@@ -14,7 +14,7 @@ func (h *proxyHandler) serveGrokSetupScript(w http.ResponseWriter, r *http.Reque
 	}
 	baseURL := strings.TrimRight(h.getEffectivePublicURL(r), "/")
 	modelBase := strings.TrimRight(h.getEffectiveModelAPIURL(r), "/")
-	setupModels := grokSetupModels()
+	setupModels := grokSetupModels(h.registry)
 
 	if wantsPowerShell(r) {
 		powerShellModels := make([]string, 0, len(setupModels))

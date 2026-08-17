@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-func applyUsageCostDiagnostics(value *UsageDimension, pricing *PricingData) {
+func applyUsageCostDiagnostics(value *UsageDimension, pricing *PricingData, registry *ProviderRegistry) {
 	if value == nil {
 		return
 	}
-	model, ok := findModelRouteByID(value.ID)
+	model, ok := findModelRouteByID(value.ID, registry)
 	if !ok || (value.ProviderID != "" && model.ProviderID != ProviderID(value.ProviderID)) {
 		value.CostStatus = "unknown"
 		value.CostReason = "no canonical model route"

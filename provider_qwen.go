@@ -2,17 +2,12 @@ package main
 
 import "net/url"
 
-var qwenProviderSpec = ProviderSpec{
-	ID: AccountTypeQwen, Protocol: ProtocolAnthropicMessages,
-	BaseURL: "https://coding-intl.dashscope.aliyuncs.com/apps/anthropic", PlanType: "qwen", CredentialField: "api_key",
-	Auth: ProviderAuthSpec{Type: AuthBearer},
-}
-
 type QwenProvider = DeclarativeProvider
 
 func NewQwenProvider(base *url.URL) *QwenProvider {
-	spec := qwenProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeQwen)
+	// Model data comes from the declarative spec (provider-specs/qwen.json,
+	// embedded as the builtin fallback) - the single data source.
+	spec := mustBuiltinProviderSpec("qwen")
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

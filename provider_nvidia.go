@@ -7,18 +7,12 @@ import (
 
 const nvidiaModelPrefix = "nvidia/"
 
-var nvidiaProviderSpec = ProviderSpec{
-	ID: AccountTypeNvidia, Protocol: ProtocolOpenAIChat,
-	BaseURL: "https://integrate.api.nvidia.com/v1", PlanType: "nvidia", CredentialField: "api_key",
-	Auth:        ProviderAuthSpec{Type: AuthBearer},
-	ModelPrefix: nvidiaModelPrefix, StripModelPrefix: true,
-}
-
 type NvidiaProvider = DeclarativeProvider
 
 func NewNvidiaProvider(base *url.URL) *NvidiaProvider {
-	spec := nvidiaProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeNvidia)
+	// Model data comes from the declarative spec (provider-specs/nvidia.json,
+	// embedded as the builtin fallback) - the single data source.
+	spec := mustBuiltinProviderSpec("nvidia")
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

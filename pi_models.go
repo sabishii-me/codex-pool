@@ -40,7 +40,7 @@ type piModelCost struct {
 	CacheWrite float64 `json:"cacheWrite"`
 }
 
-func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pool *ProviderPool, pricings ...*PricingData) ([]byte, error) {
+func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pool *ProviderPool, registry *ProviderRegistry, pricings ...*PricingData) ([]byte, error) {
 	var pricing *PricingData
 	if len(pricings) > 0 {
 		pricing = pricings[0]
@@ -59,7 +59,7 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pool *
 				BaseURL: baseURL,
 				APIKey:  anthropicAPIKey,
 				API:     "anthropic-messages",
-				Models:  availablePiModels(pool, pricing),
+				Models:  availablePiModels(pool, registry, pricing),
 			},
 		},
 	}
@@ -71,9 +71,56 @@ func generatePiModelsJSON(publicURL, codexAPIKey, anthropicAPIKey string, pool *
 // at least one healthy, routable account. Providers without any available
 // account are omitted so Pi never receives a model list with entries it cannot
 // actually use (e.g. "displayed unavailable" models).
-func availablePiModels(pool *ProviderPool, pricing *PricingData) []piModelConfig {
+//
+// Model data comes from the declarative provider specs (data-driven, provider-specs
+// dir) rather than the hardcoded catalog; plugin providers that still keep their
+// model catalog in code (codex/grok/kimi) are appended from poolModels until they
+// are migrated to declarative specs too.
+func availablePiModels(pool *ProviderPool, registry *ProviderRegistry, pricing *PricingData) []piModelConfig {
 	var result []piModelConfig
+	seen := map[string]bool{}
+	// Declarative providers (data-driven specs) — the single source for standard
+	// providers. Their models carry the authoritative context window / max output
+	// / reasoning / input metadata from provider-specs.
+	if registry != nil {
+		for _, provider := range registry.DeclarativeProviders() {
+			spec := provider.Spec()
+			_, _, available := poolModelAvailability(pool, spec.ID)
+			if !available {
+				continue
+			}
+			for _, m := range spec.Models {
+				if seen[m.ID] {
+					continue
+				}
+				seen[m.ID] = true
+				config := piModelConfig{
+					ID:            m.ID,
+					Name:          m.DisplayName,
+					Reasoning:     boolPtr(m.Reasoning),
+					Input:         append([]string(nil), m.Input...),
+					ContextWindow: m.ContextWindow,
+					MaxTokens:     m.MaxOutputTokens,
+				}
+				if pricing != nil {
+					config.Cost = piCostForModel(pricing, modelRouteFromSpec(spec, m))
+				}
+				if spec.ID == AccountTypeCodex && strings.HasPrefix(m.ID, "gpt-5.6-") {
+					config.ThinkingLevelMap = map[string]string{"xhigh": "xhigh", "max": "max"}
+				}
+				result = append(result, config)
+			}
+		}
+	}
+	// Plugin providers still backed by the hardcoded catalog until migrated.
 	for _, model := range poolModels {
+		if model.ProviderID != AccountTypeCodex && model.ProviderID != AccountTypeGrok && model.ProviderID != AccountTypeKimi {
+			continue
+		}
+		if seen[model.ID] {
+			continue
+		}
+		seen[model.ID] = true
 		_, _, available := poolModelAvailability(pool, model.ProviderID)
 		if !available {
 			continue
@@ -143,31 +190,6 @@ func piCodexModel(id, name string, contextWindow, maxTokens int) piModelConfig {
 
 func boolPtr(v bool) *bool {
 	return &v
-}
-
-func piModelsForProvider(accountType AccountType, pricings ...*PricingData) []piModelConfig {
-	var pricing *PricingData
-	if len(pricings) > 0 {
-		pricing = pricings[0]
-	}
-	models := modelsForProvider(accountType)
-	result := make([]piModelConfig, 0, len(models))
-	for _, model := range models {
-		config := piModelConfig{
-			ID:            model.ID,
-			Name:          model.DisplayName,
-			Reasoning:     boolPtr(model.Reasoning),
-			Input:         append([]string(nil), model.Input...),
-			ContextWindow: model.ContextWindow,
-			MaxTokens:     model.MaxTokens,
-			Cost:          piCostForModel(pricing, model),
-		}
-		if accountType == AccountTypeCodex && strings.HasPrefix(model.ID, "gpt-5.6-") {
-			config.ThinkingLevelMap = map[string]string{"xhigh": "xhigh", "max": "max"}
-		}
-		result = append(result, config)
-	}
-	return result
 }
 
 func piCostForModel(pricing *PricingData, model ModelRoute) *piModelCost {

@@ -14,6 +14,7 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 		"codex-token",
 		"sk-ant-oat01-pool-test",
 		nil, // nil pool -> every model's provider is treated as available
+		nil, // nil registry -> only plugin providers (codex/grok/kimi) contribute
 	)
 	if err != nil {
 		t.Fatalf("generatePiModelsJSON error: %v", err)
@@ -45,7 +46,7 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 	for _, m := range prov.Models {
 		byID[m.ID] = m
 	}
-	for _, id := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark", "deepseek-v4-flash", "deepseek-v4-pro", "glm-5.2"} {
+	for _, id := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"} {
 		m, ok := byID[id]
 		if !ok {
 			t.Fatalf("model %q missing from pool provider", id)
@@ -56,9 +57,6 @@ func TestGeneratePiModelsJSON(t *testing.T) {
 	}
 	if m := byID["gpt-5.6-sol"]; m.ThinkingLevelMap["xhigh"] != "xhigh" || m.ThinkingLevelMap["max"] != "max" {
 		t.Fatalf("gpt-5.6-sol thinking levels = %#v, want xhigh+max", m.ThinkingLevelMap)
-	}
-	if m := byID["deepseek-v4-flash"]; m.Reasoning == nil || *m.Reasoning {
-		t.Fatalf("deepseek-v4-flash reasoning = %#v, want false", m.Reasoning)
 	}
 }
 
@@ -72,7 +70,7 @@ func TestGeneratedClientConfigsIncludeDiscoveredAntigravityModels(t *testing.T) 
 			"gemini-live": {ID: "gemini-live", DisplayName: "Gemini Live", MaxTokens: 1000000, MaxOutputTokens: 65536, SupportsThinking: true},
 		},
 	})
-	piJSON, err := generatePiModelsJSON("https://pool.example.com", "codex-token", "claude-token", nil)
+	piJSON, err := generatePiModelsJSON("https://pool.example.com", "codex-token", "claude-token", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +97,7 @@ func TestAvailablePiModelsFiltersUnavailableProviders(t *testing.T) {
 	pool := &ProviderPool{accounts: []*ProviderConnection{
 		{ID: "codex-1", Type: AccountTypeCodex},
 	}}
-	models := availablePiModels(pool, nil)
+	models := availablePiModels(pool, nil, nil)
 	byID := map[string]bool{}
 	for _, m := range models {
 		byID[m.ID] = true
@@ -128,12 +126,13 @@ func TestIsKimiModelHandlesPiBuiltInIDs(t *testing.T) {
 func TestMinimaxCanonicalModelHandlesPiBuiltInIDs(t *testing.T) {
 	t.Parallel()
 
+	// The declarative spec (provider-specs/minimax.json) is the single data
+	// source: model IDs use the official/upstream lowercase IDs.
 	tests := map[string]string{
-		"minimax":                "MiniMax-M3",
-		"minimax-m3":             "MiniMax-M3",
-		"MiniMax-M3":             "MiniMax-M3",
-		"MiniMax-M2.7":           "MiniMax-M2.7",
-		"MiniMax-M2.7-highspeed": "MiniMax-M2.7-highspeed",
+		"minimax":     "minimax-m3",
+		"minimax-m3":  "minimax-m3",
+		"MiniMax-M3":  "minimax-m3",
+		"minimax-m2.7": "minimax-m2.7",
 	}
 
 	for input, want := range tests {

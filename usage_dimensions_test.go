@@ -22,7 +22,7 @@ func TestProviderAwareCacheDiagnostics(t *testing.T) {
 
 func TestUsageCostDiagnosticsPreserveUnknownPricing(t *testing.T) {
 	unknown := UsageDimension{ID: "glm-5.2", ProviderID: string(AccountTypeZAI), CostUSD: 0}
-	applyUsageCostDiagnostics(&unknown, newPricingData())
+	applyUsageCostDiagnostics(&unknown, newPricingData(), nil)
 	if unknown.CostStatus != "unknown" || unknown.CostReason == "" {
 		t.Fatalf("unknown cost diagnostics=%+v", unknown)
 	}

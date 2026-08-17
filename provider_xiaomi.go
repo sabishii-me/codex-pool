@@ -2,18 +2,12 @@ package main
 
 import "net/url"
 
-var xiaomiProviderSpec = ProviderSpec{
-	ID: AccountTypeXiaomi, Protocol: ProtocolAnthropicMessages,
-	BaseURL: "https://token-plan-sgp.xiaomimimo.com/anthropic", PlanType: "xiaomi", CredentialField: "api_key",
-	Auth:          ProviderAuthSpec{Type: AuthBearer},
-	UsageProfiles: []string{UsageAnthropicMessages, UsageResponses},
-}
-
 type XiaomiProvider = DeclarativeProvider
 
 func NewXiaomiProvider(base *url.URL) *XiaomiProvider {
-	spec := xiaomiProviderSpec
-	spec.Models = modelRouteSpecsForProvider(AccountTypeXiaomi)
+	// Model data comes from the declarative spec (provider-specs/xiaomi.json,
+	// embedded as the builtin fallback) - the single data source.
+	spec := mustBuiltinProviderSpec("xiaomi")
 	if base != nil {
 		spec.BaseURL = base.String()
 	}

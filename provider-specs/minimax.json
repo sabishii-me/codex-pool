@@ -1,0 +1,92 @@
+{
+  "id": "minimax",
+  "protocol": "anthropic-messages",
+  "base_url": "https://api.minimax.io/anthropic",
+  "plan_type": "minimax",
+  "credential_field": "api_key",
+  "auth": {
+    "type": "bearer"
+  },
+  "quota_profile": "minimax",
+  "usage_profiles": [
+    "anthropic-messages"
+  ],
+  "models": [
+    {
+      "id": "minimax-m3",
+      "display_name": "MiniMax: MiniMax M3",
+      "context_window": 1048576,
+      "max_output_tokens": 512000,
+      "reasoning": false,
+      "input": [
+        "text",
+        "image",
+        "video"
+      ],
+      "aliases": [
+        "MiniMax-M3",
+        "minimax"
+      ]
+    },
+    {
+      "id": "minimax-m2.7",
+      "display_name": "MiniMax: MiniMax M2.7",
+      "context_window": 204800,
+      "max_output_tokens": 131072,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "minimax-m2.5",
+      "display_name": "MiniMax: MiniMax M2.5",
+      "context_window": 204800,
+      "max_output_tokens": 196608,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "minimax-m2-her",
+      "display_name": "MiniMax: MiniMax M2-her",
+      "context_window": 65536,
+      "max_output_tokens": 2048,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "minimax-m2.1",
+      "display_name": "MiniMax: MiniMax M2.1",
+      "context_window": 204800,
+      "max_output_tokens": 131072,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "minimax-m2",
+      "display_name": "MiniMax: MiniMax M2",
+      "context_window": 204800,
+      "max_output_tokens": 131072,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    },
+    {
+      "id": "minimax-m1",
+      "display_name": "MiniMax: MiniMax M1",
+      "context_window": 1000000,
+      "max_output_tokens": 40000,
+      "reasoning": false,
+      "input": [
+        "text"
+      ]
+    }
+  ]
+}

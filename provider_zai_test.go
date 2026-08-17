@@ -18,7 +18,17 @@ func TestIsZAIModelHandlesCodingPlanModels(t *testing.T) {
 		}
 	}
 
+	// The declarative spec (provider-specs/zai.json) is the single data source
+	// and lists all 12 official GLM coding-plan models; older glm-4.5/4.6/5.x
+	// rows now route to zai too.
 	for _, model := range []string{"glm-4.5", "glm-4.5-air", "glm-4.6", "glm-4.7", "glm-5", "glm-5-turbo", "glm-5.1"} {
+		if !isZAIModel(model) {
+			t.Fatalf("expected %q to route to zai", model)
+		}
+	}
+
+	// Models outside the official catalog must not route to zai.
+	for _, model := range []string{"glm-4.4", "glm-3.5", "claude-sonnet-4-5"} {
 		if isZAIModel(model) {
 			t.Fatalf("did not expect %q to route to zai", model)
 		}

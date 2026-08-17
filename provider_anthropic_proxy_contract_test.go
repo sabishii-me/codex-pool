@@ -47,7 +47,7 @@ func TestAnthropicCompatibleProvidersProxyNonStreamingExactlyOnce(t *testing.T) 
 	cases := []anthropicProxyContractCase{
 		{AccountTypeKimi, "kimi-for-coding"},
 		{AccountTypeKimiPlatform, "kimi-k3"},
-		{AccountTypeMinimax, "MiniMax-M3"},
+		{AccountTypeMinimax, "minimax-m3"},
 		{AccountTypeZAI, "glm-5.2"},
 		{AccountTypeXiaomi, "mimo-v2.5-pro"},
 		{AccountTypeDeepSeek, "deepseek-v4-pro"},
@@ -114,7 +114,7 @@ func TestAnthropicCompatibleProvidersProxyStreamingExactlyOnce(t *testing.T) {
 	}
 	cases := []anthropicProxyContractCase{
 		{AccountTypeKimi, "kimi-for-coding"}, {AccountTypeKimiPlatform, "kimi-k3"},
-		{AccountTypeMinimax, "MiniMax-M3"}, {AccountTypeZAI, "glm-5.2"},
+		{AccountTypeMinimax, "minimax-m3"}, {AccountTypeZAI, "glm-5.2"},
 		{AccountTypeXiaomi, "mimo-v2.5-pro"}, {AccountTypeDeepSeek, "deepseek-v4-pro"},
 		{AccountTypeQwen, "qwen3.6-plus"}, {AccountTypeOpenRouter, "openrouter/anthropic/claude-haiku-4.5"},
 	}
@@ -168,7 +168,7 @@ func TestAnthropicCompatibleProvidersProxyLargeBodyRouteAndUsage(t *testing.T) {
 	cases := []largeBodyCase{
 		{AccountTypeKimi, "kimi-for-coding", "kimi-for-coding"},
 		{AccountTypeKimiPlatform, "kimi-platform/kimi-k3", "kimi-k3"},
-		{AccountTypeMinimax, "minimax", "MiniMax-M3"},
+		{AccountTypeMinimax, "minimax", "minimax-m3"},
 		{AccountTypeZAI, "glm-5.2", "glm-5.2"},
 		{AccountTypeXiaomi, "mimo-v2.5-pro", "mimo-v2.5-pro"},
 		{AccountTypeDeepSeek, "deepseek", "deepseek-v4-pro"},

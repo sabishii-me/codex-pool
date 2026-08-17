@@ -42,6 +42,11 @@ func poolModelDescriptors(pools ...*ProviderPool) []poolModelDescriptor {
 	}
 	models := make([]poolModelDescriptor, 0, len(poolModels)+len(grokModelCatalog))
 	for _, model := range poolModels {
+		// Standard providers are served by declarative specs (single data source).
+		// Only plugin providers that still keep their catalog in code are listed here.
+		if model.ProviderID != AccountTypeCodex && model.ProviderID != AccountTypeGrok && model.ProviderID != AccountTypeKimi {
+			continue
+		}
 		supportingAccounts, availableAccounts, availableNow := poolModelAvailability(pool, model.ProviderID)
 		protocol := "anthropic"
 		if model.ProviderID == AccountTypeCodex {

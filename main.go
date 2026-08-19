@@ -2513,13 +2513,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 					translated = respBody
 				}
 			}
-			// Vision fallback transparency: restore the client-requested model
-			// name in the translated non-streaming response.
-			if visionTransparent != "" && resp.StatusCode < 400 {
-				if rewritten := rewriteModelFieldInJSON(translated, visionTransparent); rewritten != nil {
-					translated = rewritten
-				}
-			}
 			w.WriteHeader(resp.StatusCode)
 			w.Write(translated)
 		} else {

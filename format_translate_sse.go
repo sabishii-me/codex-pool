@@ -283,7 +283,7 @@ func (sw *sseTranslateWriter) translateClaudeEventToOAI(eventType string, data [
 	}
 
 	switch eventType {
-		case "message_start":
+	case "message_start":
 		msg, _ := obj["message"].(map[string]any)
 		if msg != nil {
 			if id, ok := msg["id"].(string); ok {

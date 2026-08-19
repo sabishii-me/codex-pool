@@ -1280,12 +1280,12 @@ func (bw *responsesToChatCompletionsBufferingWriter) Result() []byte {
 }
 
 type anthropicUsageProjection struct {
-	InputTokens            int64
-	CacheReadTokens        int64
-	CacheCreationTokens    int64
-	OutputTokens           int64
-	CacheReadReported      bool
-	CacheCreationReported  bool
+	InputTokens           int64
+	CacheReadTokens       int64
+	CacheCreationTokens   int64
+	OutputTokens          int64
+	CacheReadReported     bool
+	CacheCreationReported bool
 }
 
 func anthropicUsageFromResponses(usage map[string]any) anthropicUsageProjection {
@@ -1318,12 +1318,12 @@ func anthropicUsageFromResponses(usage map[string]any) anthropicUsageProjection 
 		}
 	}
 	return anthropicUsageProjection{
-		InputTokens:            clampNonNegative(totalInput - cacheRead - cacheCreation),
-		CacheReadTokens:        cacheRead,
-		CacheCreationTokens:    cacheCreation,
-		OutputTokens:           toInt64(usage["output_tokens"]),
-		CacheReadReported:      cacheReadReported,
-		CacheCreationReported:  cacheCreationReported,
+		InputTokens:           clampNonNegative(totalInput - cacheRead - cacheCreation),
+		CacheReadTokens:       cacheRead,
+		CacheCreationTokens:   cacheCreation,
+		OutputTokens:          toInt64(usage["output_tokens"]),
+		CacheReadReported:     cacheReadReported,
+		CacheCreationReported: cacheCreationReported,
 	}
 }
 
@@ -1383,23 +1383,23 @@ func anthropicErrorJSON(errorType, message string) []byte {
 // responsesToClaudeBufferingWriter buffers Responses API SSE events into a
 // non-streaming Claude Messages API response.
 type responsesToClaudeBufferingWriter struct {
-	buf                 []byte
-	callback            func([]byte)
-	id                  string
-	model               string
-	contentText         string
-	toolUses            []map[string]any
-	toolIndex           map[string]int
-	itemToCallID        map[string]string
-	inputTokens         int64
-	cacheReadTokens     int64
-	cacheCreationTokens int64
+	buf                   []byte
+	callback              func([]byte)
+	id                    string
+	model                 string
+	contentText           string
+	toolUses              []map[string]any
+	toolIndex             map[string]int
+	itemToCallID          map[string]string
+	inputTokens           int64
+	cacheReadTokens       int64
+	cacheCreationTokens   int64
 	cacheReadReported     bool
 	cacheCreationReported bool
-	outputTokens        int64
-	stopReason          string
-	errType             string
-	errMsg              string
+	outputTokens          int64
+	stopReason            string
+	errType               string
+	errMsg                string
 }
 
 func (bw *responsesToClaudeBufferingWriter) Write(p []byte) (int, error) {
@@ -1976,25 +1976,25 @@ type responsesToClaudeWriter struct {
 	buf      []byte
 	callback func([]byte)
 	// State
-	id                  string
-	model               string
-	started             bool
-	contentBlockIndex   int
-	toolCallIndex       int
-	sentText            bool // whether we've emitted a text content_block_start
-	sentThinking        bool // whether we've emitted a thinking content_block_start
-	finishReason        string
-	inputTokens         int64
-	cacheReadTokens     int64
-	cacheCreationTokens int64
+	id                    string
+	model                 string
+	started               bool
+	contentBlockIndex     int
+	toolCallIndex         int
+	sentText              bool // whether we've emitted a text content_block_start
+	sentThinking          bool // whether we've emitted a thinking content_block_start
+	finishReason          string
+	inputTokens           int64
+	cacheReadTokens       int64
+	cacheCreationTokens   int64
 	cacheReadReported     bool
 	cacheCreationReported bool
-	outputTokens        int64
-	terminal            bool
-	writeErr            error
-	toolContentIndexes  map[string]int
-	toolArgumentSeen    map[string]bool
-	itemToCallID        map[string]string
+	outputTokens          int64
+	terminal              bool
+	writeErr              error
+	toolContentIndexes    map[string]int
+	toolArgumentSeen      map[string]bool
+	itemToCallID          map[string]string
 }
 
 func (rw *responsesToClaudeWriter) Write(p []byte) (int, error) {

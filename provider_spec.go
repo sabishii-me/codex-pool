@@ -58,6 +58,10 @@ type ModelRouteSpec struct {
 	MaxOutputTokens int      `json:"max_output_tokens,omitempty"`
 	Reasoning       bool     `json:"reasoning,omitempty"`
 	Input           []string `json:"input,omitempty"`
+	// VisionFallback names a vision-capable model (same provider) that handles
+	// image-bearing requests when this model is not vision-capable (its Input
+	// list has no "image"). The switch is transparent to the downstream client.
+	VisionFallback string `json:"vision_fallback,omitempty"`
 }
 
 // DeclarativeProvider is immutable after construction.

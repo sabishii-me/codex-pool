@@ -328,6 +328,13 @@ func parseAntigravityModelSnapshot(body []byte, fetchedAt time.Time) (Antigravit
 		decodeRaw(raw, "supportsThinking", &model.SupportsThinking)
 		decodeRaw(raw, "thinkingBudget", &model.ThinkingBudget)
 		decodeRaw(raw, "recommended", &model.Recommended)
+		// The upstream model discovery payload does not always carry
+		// supportsImages (e.g. gemini-3.1-flash-image). When the field is
+		// absent, fall back to the known local catalog capability so the pool
+		// never under-declares a vision-capable model.
+		if !model.SupportsImages && antigravityKnownVisionModels[id] {
+			model.SupportsImages = true
+		}
 		var mimeMap map[string]bool
 		if json.Unmarshal(raw["supportedMimeTypes"], &mimeMap) == nil {
 			for mime, enabled := range mimeMap {
@@ -383,6 +390,14 @@ var antigravityHiddenModelIDs = map[string]bool{
 var antigravityCorrectedDisplayNames = map[string]string{
 	"gemini-2.5-flash":      "Gemini 2.5 Flash",
 	"gemini-2.5-flash-lite": "Gemini 2.5 Flash Lite",
+}
+
+// antigravityKnownVisionModels lists antigravity models known to accept image
+// input. The upstream discovery payload omits supportsImages for some models
+// (e.g. gemini-3.1-flash-image), so this set restores the true capability when
+// the upstream response does not declare it.
+var antigravityKnownVisionModels = map[string]bool{
+	"gemini-3.1-flash-image": true,
 }
 
 func decodeRaw(raw map[string]json.RawMessage, key string, target any) {

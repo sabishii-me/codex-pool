@@ -20,7 +20,8 @@
       "reasoning": true,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-5.1",
@@ -30,7 +31,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-5v-turbo",
@@ -52,7 +54,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-5",
@@ -62,7 +65,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-4.7-flash",
@@ -72,7 +76,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-4.7",
@@ -82,7 +87,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-4.6v",
@@ -104,7 +110,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-4.5v",
@@ -125,7 +132,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     },
     {
       "id": "glm-4.5-air",
@@ -135,7 +143,8 @@
       "reasoning": false,
       "input": [
         "text"
-      ]
+      ],
+      "vision_fallback": "glm-4.6v"
     }
   ]
 }

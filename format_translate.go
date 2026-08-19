@@ -1160,11 +1160,23 @@ func translateClaudeRespToOpenAI(body []byte) ([]byte, error) {
 
 	// Usage
 	if usage, ok := claude["usage"].(map[string]any); ok {
-		oai["usage"] = map[string]any{
-			"prompt_tokens":     toInt64(usage["input_tokens"]),
-			"completion_tokens": toInt64(usage["output_tokens"]),
-			"total_tokens":      toInt64(usage["input_tokens"]) + toInt64(usage["output_tokens"]),
+		inputTokens := toInt64(usage["input_tokens"])
+		outputTokens := toInt64(usage["output_tokens"])
+		oaiUsage := map[string]any{
+			"prompt_tokens":     inputTokens,
+			"completion_tokens": outputTokens,
+			"total_tokens":      inputTokens + outputTokens,
 		}
+		// DeepSeek and other Anthropic-compatible upstreams report cache reads
+		// via cache_read_input_tokens. Surface them to OpenAI-chat consumers so
+		// downstream clients (e.g. Harness/pi-ai) can distinguish a real cache
+		// hit from an unreported/zero value. Only emit the key when the upstream
+		// actually reported it (an absent field means unavailable, not zero).
+		if _, ok := usage["cache_read_input_tokens"]; ok {
+			cached := toInt64(usage["cache_read_input_tokens"])
+			oaiUsage["prompt_tokens_details"] = map[string]any{"cached_tokens": cached}
+		}
+		oai["usage"] = oaiUsage
 	}
 
 	return json.Marshal(oai)

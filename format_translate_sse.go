@@ -33,6 +33,7 @@ type streamTranslationState struct {
 	inputTokens       int64
 	outputTokens      int64
 	cachedInputTokens int64
+	cacheReadReported bool
 }
 
 func (sw *sseTranslateWriter) Write(p []byte) (int, error) {
@@ -114,7 +115,10 @@ func (sw *sseTranslateWriter) translateOAIEventToClaude(eventType string, data [
 		sw.state.inputTokens = toInt64(usage["prompt_tokens"])
 		sw.state.outputTokens = toInt64(usage["completion_tokens"])
 		if details, ok := usage["prompt_tokens_details"].(map[string]any); ok {
-			sw.state.cachedInputTokens = toInt64(details["cached_tokens"])
+			if _, present := details["cached_tokens"]; present {
+				sw.state.cachedInputTokens = toInt64(details["cached_tokens"])
+				sw.state.cacheReadReported = true
+			}
 		}
 	}
 
@@ -279,7 +283,7 @@ func (sw *sseTranslateWriter) translateClaudeEventToOAI(eventType string, data [
 	}
 
 	switch eventType {
-	case "message_start":
+		case "message_start":
 		msg, _ := obj["message"].(map[string]any)
 		if msg != nil {
 			if id, ok := msg["id"].(string); ok {
@@ -290,6 +294,10 @@ func (sw *sseTranslateWriter) translateClaudeEventToOAI(eventType string, data [
 			}
 			if usage, ok := msg["usage"].(map[string]any); ok {
 				sw.state.inputTokens = toInt64(usage["input_tokens"])
+				if _, present := usage["cache_read_input_tokens"]; present {
+					sw.state.cachedInputTokens = toInt64(usage["cache_read_input_tokens"])
+					sw.state.cacheReadReported = true
+				}
 			}
 		}
 		sw.state.messageStarted = true
@@ -393,6 +401,11 @@ func (sw *sseTranslateWriter) translateClaudeEventToOAI(eventType string, data [
 			"prompt_tokens":     sw.state.inputTokens,
 			"completion_tokens": sw.state.outputTokens,
 			"total_tokens":      sw.state.inputTokens + sw.state.outputTokens,
+		}
+		// Surface Anthropic cache reads to OpenAI-chat consumers only when the
+		// upstream actually reported them (absent field = unavailable, not zero).
+		if sw.state.cacheReadReported {
+			usage["prompt_tokens_details"] = map[string]any{"cached_tokens": sw.state.cachedInputTokens}
 		}
 		sw.emitOAIChunkWithFinish(map[string]any{}, stopReason, usage)
 

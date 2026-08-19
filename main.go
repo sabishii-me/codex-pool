@@ -928,6 +928,8 @@ func sanitizeCodexResponsesParams(obj map[string]any) {
 		"top_logprobs",
 		"metadata",
 		"prompt_cache_scope",
+		"prompt_cache_retention",
+		"cache_control",
 	} {
 		delete(obj, key)
 	}

@@ -1805,24 +1805,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 		}
 	}
 
-	// Vision fallback: an image-bearing request addressed to a non-vision
-	// declarative model is transparently routed to the same provider's
-	// configured vision model. requestedModel intentionally stays the client's
-	// original name so downstream responses remain attribution-transparent;
-	// only the upstream body model is rewritten for routing.
-	visionTransparent := ""
-	if requestedModel != "" && requestBodyHasImage(bodyBytes) {
-		if fallback := visionFallbackModel(h.registry, requestedModel); fallback != "" {
-			if !modelSupportsImage(h.registry, requestedModel) {
-				if rewritten := rewriteModelInBody(bodyBytes, fallback); rewritten != nil {
-					bodyBytes = rewritten
-					visionTransparent = requestedModel
-					log.Printf("[%s] vision fallback %s -> %s (image request, transparent)", reqID, requestedModel, fallback)
-				}
-			}
-		}
-	}
-
 	routingContext := buildRequestRoutingContext(incomingPath, inspect, incomingHeaders, userID, accountType, requestedModel, getPoolJWTSecret())
 	conversationID := routingContext.AffinityKey
 
@@ -2532,18 +2514,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 				writer = hw
 			}
 
-			// Vision fallback transparency: rewrite the model field in responses
-			// so the client sees the model name it requested even though the
-			// upstream answered with the vision fallback model. This wrapper is
-			// installed as the innermost sink so every higher-level translator
-			// and interceptor writes through it after its own processing.
-			var visionVT *visionTransparentWriter
-			if visionTransparent != "" && resp.StatusCode < 400 {
-				visionVT = newVisionTransparentWriter(writer, visionTransparent)
-				visionVT.sse = isSSE
-				writer = visionVT
-			}
-
 			usageObserver := newProtocolUsageObserver(provider, requestedModel, func(ru *RequestUsage, pending bool) {
 				ru.ConnectionID = acc.ID
 				ru.UserID = userID
@@ -2650,13 +2620,6 @@ func (h *proxyHandler) proxyRequest(w http.ResponseWriter, r *http.Request, reqI
 
 			_, copyErr := io.Copy(writer, resp.Body)
 			resp.Body.Close()
-			if visionVT != nil {
-				// Flush any bytes the vision wrapper buffered waiting for a JSON
-				// close or SSE terminator.
-				if err := visionVT.Flush(); err != nil && copyErr == nil {
-					copyErr = err
-				}
-			}
 			if hostedMCPFilter != nil {
 				if finalizeErr := hostedMCPFilter.Finalize(); copyErr == nil {
 					copyErr = finalizeErr
@@ -2786,6 +2749,7 @@ func (h *proxyHandler) proxyRequestWebSocket(
 	outURL.Scheme = targetBase.Scheme
 	outURL.Host = targetBase.Host
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(r.URL.Path))
+
 
 	// Build upstream headers: clone client headers, replace auth.
 	upstreamHeaders := cloneHeader(r.Header)
@@ -3279,6 +3243,7 @@ func (h *proxyHandler) proxyRequestStreamed(w http.ResponseWriter, r *http.Reque
 		http.Error(w, fmt.Sprintf("account %s has empty access token", acc.ID), http.StatusServiceUnavailable)
 		return
 	}
+
 
 	var body io.Reader = r.Body
 
@@ -3895,6 +3860,7 @@ func (h *proxyHandler) proxyPassthrough(w http.ResponseWriter, r *http.Request, 
 	// Force uncompressed responses — SSE streams break with on-the-fly decompression.
 	outReq.Header.Set("Accept-Encoding", "identity")
 
+
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
 		h.recent.add(err.Error())
@@ -4081,6 +4047,7 @@ func (h *proxyHandler) proxyPassthroughStreamed(w http.ResponseWriter, r *http.R
 	// Force uncompressed responses — SSE streams break with on-the-fly decompression.
 	outReq.Header.Set("Accept-Encoding", "identity")
 
+
 	resp, err := h.transport.RoundTrip(outReq)
 	if err != nil {
 		h.recent.add(err.Error())
@@ -4167,6 +4134,7 @@ func (h *proxyHandler) tryOnce(
 	outURL.Host = targetBase.Host
 	// Use provider's NormalizePath method for path handling
 	outURL.Path = singleJoin(targetBase.Path, provider.NormalizePath(in.URL.Path))
+
 
 	var claudeToolNameMapper map[string]string
 

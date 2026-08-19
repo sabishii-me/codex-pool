@@ -23,6 +23,21 @@ func applyUsageCostDiagnostics(value *UsageDimension, pricing *PricingData, regi
 	}
 }
 
+// reportingState classifies per-dimension cache reporting coverage from the
+// number of requests that included the cache field vs total requests.
+func reportingState(reportedRequests, totalRequests int64) string {
+	if totalRequests <= 0 {
+		return "none"
+	}
+	if reportedRequests <= 0 {
+		return "none"
+	}
+	if reportedRequests >= totalRequests {
+		return "complete"
+	}
+	return "partial"
+}
+
 func applyUsageCacheDiagnostics(value *UsageDimension) {
 	if value == nil {
 		return
@@ -30,7 +45,9 @@ func applyUsageCacheDiagnostics(value *UsageDimension) {
 	switch ProviderID(strings.ToLower(strings.TrimSpace(value.ProviderID))) {
 	case AccountTypeCodex, AccountTypeGemini, AccountTypeAntigravity:
 		value.CacheSemantics = "inclusive"
-		if value.InputTokens > 0 {
+		// Only report a share percentage when at least one request actually
+		// reported cache telemetry; otherwise "unavailable" not "0%".
+		if value.InputTokens > 0 && value.CacheReadReporting != "none" {
 			share := float64(value.CachedTokens) * 100 / float64(value.InputTokens)
 			value.CacheReadSharePct = &share
 			if value.CachedTokens > value.InputTokens {
@@ -40,7 +57,7 @@ func applyUsageCacheDiagnostics(value *UsageDimension) {
 	case AccountTypeDeepSeek, AccountTypeZAI:
 		value.CacheSemantics = "exclusive"
 		total := value.InputTokens + value.CachedTokens + value.CacheWriteTokens
-		if total > 0 {
+		if total > 0 && value.CacheReadReporting != "none" {
 			share := float64(value.CachedTokens) * 100 / float64(total)
 			value.CacheReadSharePct = &share
 		}
@@ -49,6 +66,11 @@ func applyUsageCacheDiagnostics(value *UsageDimension) {
 		if value.CachedTokens > 0 {
 			value.CacheDiagnostic = "normalization_unavailable"
 		}
+	}
+	// Ensure the share percentage is only ever presented for providers that
+	// actually reported cache telemetry in the selected range.
+	if value.CacheReadReporting == "none" || value.CacheReadReporting == "" {
+		value.CacheReadSharePct = nil
 	}
 }
 
@@ -136,7 +158,8 @@ func (s *AnalyticsStore) getUsageDimensions(userID string, hours int, includeCon
 	query := func(group, id, provider string) ([]UsageDimension, error) {
 		rows, queryErr := s.db.Query(fmt.Sprintf(`SELECT COALESCE(%s,''), COALESCE(%s,''), COUNT(*),
 			COALESCE(SUM(input_tokens),0), COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_write_tokens),0), COALESCE(SUM(output_tokens),0),
-			COALESCE(SUM(reasoning_tokens),0), COALESCE(SUM(billable_tokens),0), COALESCE(SUM(cost_usd),0)
+			COALESCE(SUM(reasoning_tokens),0), COALESCE(SUM(billable_tokens),0), COALESCE(SUM(cost_usd),0),
+			COALESCE(SUM(cache_read_reported),0), COALESCE(SUM(cache_write_reported),0)
 			FROM usage_events WHERE %s GROUP BY %s ORDER BY SUM(billable_tokens) DESC`, id, provider, filter, group), args...)
 		if queryErr != nil {
 			return nil, queryErr
@@ -145,9 +168,12 @@ func (s *AnalyticsStore) getUsageDimensions(userID string, hours int, includeCon
 		out := []UsageDimension{}
 		for rows.Next() {
 			var value UsageDimension
-			if scanErr := rows.Scan(&value.ID, &value.ProviderID, &value.Requests, &value.InputTokens, &value.CachedTokens, &value.CacheWriteTokens, &value.OutputTokens, &value.ReasoningTokens, &value.BillableTokens, &value.CostUSD); scanErr != nil {
+			var cacheReadReported, cacheWriteReported int64
+			if scanErr := rows.Scan(&value.ID, &value.ProviderID, &value.Requests, &value.InputTokens, &value.CachedTokens, &value.CacheWriteTokens, &value.OutputTokens, &value.ReasoningTokens, &value.BillableTokens, &value.CostUSD, &cacheReadReported, &cacheWriteReported); scanErr != nil {
 				return nil, scanErr
 			}
+			value.CacheReadReporting = reportingState(cacheReadReported, value.Requests)
+			value.CacheWriteReporting = reportingState(cacheWriteReported, value.Requests)
 			if value.ID == "" {
 				value.ID = "unknown"
 			}

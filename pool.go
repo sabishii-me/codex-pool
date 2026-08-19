@@ -187,6 +187,11 @@ type RequestUsage struct {
 	OutputTokens        int64
 	ReasoningTokens     int64
 	BillableTokens      int64
+	// Presence flags distinguish "provider did not report cache telemetry" from
+	// "provider reported an explicit zero". Without these, projections would
+	// render unavailable cache stats as a misleading 0% hit rate.
+	CacheReadReported     bool
+	CacheCreationReported bool
 	// Rate limit snapshot after this request
 	PrimaryUsedPct   float64
 	SecondaryUsedPct float64

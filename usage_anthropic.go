@@ -54,6 +54,12 @@ func anthropicUsageFromMap(usageMap map[string]any, includeOutput bool) *Request
 	usage.InputTokens = readInt64(usageMap, "input_tokens")
 	usage.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
 	usage.CacheCreationTokens = readInt64(usageMap, "cache_creation_input_tokens")
+	if _, ok := usageMap["cache_read_input_tokens"]; ok {
+		usage.CacheReadReported = true
+	}
+	if _, ok := usageMap["cache_creation_input_tokens"]; ok {
+		usage.CacheCreationReported = true
+	}
 	if includeOutput {
 		usage.OutputTokens = readInt64(usageMap, "output_tokens")
 	}

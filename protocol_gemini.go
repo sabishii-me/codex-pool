@@ -35,6 +35,9 @@ func (engine GeminiUsageEngine) ParseUsage(event map[string]any) *RequestUsage {
 		OutputTokens:      readInt64(metadata, "candidatesTokenCount"),
 		ReasoningTokens:   readInt64(metadata, "thoughtsTokenCount"),
 	}
+	if _, ok := metadata["cachedContentTokenCount"]; ok {
+		usage.CacheReadReported = true
+	}
 	usage.BillableTokens = clampNonNegative(usage.InputTokens - usage.CachedInputTokens + usage.OutputTokens)
 	if usage.InputTokens == 0 && usage.OutputTokens == 0 && (!engine.Options.AllowReasoningOnly || usage.ReasoningTokens == 0) {
 		return nil

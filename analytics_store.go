@@ -43,6 +43,8 @@ type UsageEvent struct {
 	FailureClass     string
 	MediaCostUSD     *float64
 	EconomicsKnown   bool
+	CacheReadReported     bool
+	CacheWriteReported    bool
 }
 
 func usageEventFromRequest(usage RequestUsage, costUSD float64) UsageEvent {
@@ -54,6 +56,7 @@ func usageEventFromRequest(usage RequestUsage, costUSD float64) UsageEvent {
 		InputTokens: usage.InputTokens, CacheReadTokens: usage.CachedInputTokens,
 		CacheWriteTokens: usage.CacheCreationTokens, OutputTokens: usage.OutputTokens,
 		ReasoningTokens: usage.ReasoningTokens, BillableTokens: usage.BillableTokens, CostUSD: costUSD,
+		CacheReadReported: usage.CacheReadReported, CacheWriteReported: usage.CacheCreationReported,
 	}
 }
 
@@ -171,7 +174,9 @@ func createAnalyticsTables(db *sql.DB) error {
 		operation_id TEXT,
 		failure_class TEXT,
 		media_cost_usd REAL,
-		economics_known INTEGER NOT NULL DEFAULT 1
+		economics_known INTEGER NOT NULL DEFAULT 1,
+		cache_read_reported INTEGER NOT NULL DEFAULT 0,
+		cache_write_reported INTEGER NOT NULL DEFAULT 0
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_usage_events_request ON usage_events(connection_id, request_id) WHERE request_id != '';
 	CREATE INDEX IF NOT EXISTS idx_usage_events_completed ON usage_events(completed_at);
@@ -230,6 +235,8 @@ func createAnalyticsTables(db *sql.DB) error {
 		`ALTER TABLE usage_events ADD COLUMN failure_class TEXT`,
 		`ALTER TABLE usage_events ADD COLUMN media_cost_usd REAL`,
 		`ALTER TABLE usage_events ADD COLUMN economics_known INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE usage_events ADD COLUMN cache_read_reported INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE usage_events ADD COLUMN cache_write_reported INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, migrationErr := db.Exec(migration); migrationErr != nil && !strings.Contains(strings.ToLower(migrationErr.Error()), "duplicate column") {
 			return migrationErr
@@ -320,13 +327,15 @@ func (s *AnalyticsStore) recordUsageEvent(event UsageEvent) (bool, error) {
 			connection_id, model_id, plan_type, input_tokens, cache_read_tokens,
 			cache_write_tokens, output_tokens, reasoning_tokens, billable_tokens, cost_usd,
 			workload_kind, status, image_count, image_mime, image_width, image_height,
-			operation_id, failure_class, media_cost_usd, economics_known)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			operation_id, failure_class, media_cost_usd, economics_known,
+			cache_read_reported, cache_write_reported)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		event.RequestID, event.StartedAt.UTC().Format(time.RFC3339Nano), event.CompletedAt.UTC().Format(time.RFC3339Nano),
 		event.UserID, event.OriginID, string(event.ProviderID), event.ConnectionID, event.ModelID, event.PlanType,
 		event.InputTokens, event.CacheReadTokens, event.CacheWriteTokens, event.OutputTokens,
 		event.ReasoningTokens, event.BillableTokens, event.CostUSD, string(event.WorkloadKind), event.Status,
 		event.ImageCount, event.ImageMIME, event.ImageWidth, event.ImageHeight, event.OperationID, event.FailureClass, event.MediaCostUSD, event.EconomicsKnown,
+		event.CacheReadReported, event.CacheWriteReported,
 	)
 	if err != nil {
 		return false, err

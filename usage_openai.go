@@ -21,8 +21,14 @@ func parseOpenAIChatUsage(obj map[string]any) *RequestUsage {
 		usage.OutputTokens = readInt64(usageMap, "output_tokens")
 	}
 	usage.CachedInputTokens = readInt64(usageMap, "cached_tokens")
+	if _, ok := usageMap["cached_tokens"]; ok {
+		usage.CacheReadReported = true
+	}
 	if details, ok := usageMap["prompt_tokens_details"].(map[string]any); ok && usage.CachedInputTokens == 0 {
-		usage.CachedInputTokens = readInt64(details, "cached_tokens")
+		if _, present := details["cached_tokens"]; present {
+			usage.CachedInputTokens = readInt64(details, "cached_tokens")
+			usage.CacheReadReported = true
+		}
 	}
 	usage.ReasoningTokens = readInt64(usageMap, "reasoning_tokens")
 	if details, ok := usageMap["completion_tokens_details"].(map[string]any); ok && usage.ReasoningTokens == 0 {

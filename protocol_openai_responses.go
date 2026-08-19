@@ -47,17 +47,32 @@ func (engine OpenAIResponsesEngine) ParseUsage(event map[string]any) *RequestUsa
 	}
 
 	usage.CachedInputTokens = readInt64(usageMap, "cached_input_tokens")
-	if usage.CachedInputTokens == 0 {
-		usage.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
+	if _, ok := usageMap["cached_input_tokens"]; ok {
+		usage.CacheReadReported = true
 	}
-	if engine.Options.AllowChatAliases && usage.CachedInputTokens == 0 {
-		usage.CachedInputTokens = readInt64(usageMap, "cached_tokens")
+	if usage.CachedInputTokens == 0 && !usage.CacheReadReported {
+		if _, ok := usageMap["cache_read_input_tokens"]; ok {
+			usage.CachedInputTokens = readInt64(usageMap, "cache_read_input_tokens")
+			usage.CacheReadReported = true
+		}
 	}
-	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && usage.CachedInputTokens == 0 {
-		usage.CachedInputTokens = readInt64(details, "cached_tokens")
+	if engine.Options.AllowChatAliases && usage.CachedInputTokens == 0 && !usage.CacheReadReported {
+		if _, ok := usageMap["cached_tokens"]; ok {
+			usage.CachedInputTokens = readInt64(usageMap, "cached_tokens")
+			usage.CacheReadReported = true
+		}
+	}
+	if details, ok := usageMap["input_tokens_details"].(map[string]any); ok && usage.CachedInputTokens == 0 && !usage.CacheReadReported {
+		if _, present := details["cached_tokens"]; present {
+			usage.CachedInputTokens = readInt64(details, "cached_tokens")
+			usage.CacheReadReported = true
+		}
 	}
 	if engine.Options.IncludeCacheWrites {
 		usage.CacheCreationTokens = readInt64(usageMap, "cache_creation_input_tokens")
+		if _, ok := usageMap["cache_creation_input_tokens"]; ok {
+			usage.CacheCreationReported = true
+		}
 	}
 
 	usage.ReasoningTokens = readInt64(usageMap, "reasoning_output_tokens")

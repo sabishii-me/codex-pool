@@ -43,6 +43,8 @@ func (a *splitUsageAccumulator) add(eventType string, usage *RequestUsage) *Requ
 			merged.InputTokens = usage.InputTokens
 			merged.CachedInputTokens = usage.CachedInputTokens
 			merged.CacheCreationTokens = usage.CacheCreationTokens
+			merged.CacheReadReported = merged.CacheReadReported || usage.CacheReadReported
+			merged.CacheCreationReported = merged.CacheCreationReported || usage.CacheCreationReported
 		}
 		merged.OutputTokens = usage.OutputTokens
 		merged.ReasoningTokens = usage.ReasoningTokens
@@ -277,6 +279,9 @@ func parseTokenCountEvent(obj map[string]any) *RequestUsage {
 	ru := &RequestUsage{Timestamp: time.Now()}
 	ru.InputTokens = readInt64(usageMap, "input_tokens")
 	ru.CachedInputTokens = readInt64(usageMap, "cached_input_tokens")
+	if _, ok := usageMap["cached_input_tokens"]; ok {
+		ru.CacheReadReported = true
+	}
 	ru.OutputTokens = readInt64(usageMap, "output_tokens")
 	ru.ReasoningTokens = readInt64(usageMap, "reasoning_output_tokens")
 

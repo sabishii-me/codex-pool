@@ -31,6 +31,8 @@ type UsageDimension struct {
 	CacheSemantics    string   `json:"cache_semantics"`
 	CacheReadSharePct *float64 `json:"cache_read_share_pct"`
 	CacheDiagnostic   string   `json:"cache_diagnostic,omitempty"`
+	CacheReadReporting  string `json:"cache_read_reporting,omitempty"` // none|complete|partial
+	CacheWriteReporting string `json:"cache_write_reporting,omitempty"`
 }
 
 type UsageModelHourly struct {

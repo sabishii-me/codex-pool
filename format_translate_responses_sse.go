@@ -1280,10 +1280,12 @@ func (bw *responsesToChatCompletionsBufferingWriter) Result() []byte {
 }
 
 type anthropicUsageProjection struct {
-	InputTokens         int64
-	CacheReadTokens     int64
-	CacheCreationTokens int64
-	OutputTokens        int64
+	InputTokens            int64
+	CacheReadTokens        int64
+	CacheCreationTokens    int64
+	OutputTokens           int64
+	CacheReadReported      bool
+	CacheCreationReported  bool
 }
 
 func anthropicUsageFromResponses(usage map[string]any) anthropicUsageProjection {
@@ -1293,28 +1295,51 @@ func anthropicUsageFromResponses(usage map[string]any) anthropicUsageProjection 
 	totalInput := toInt64(usage["input_tokens"])
 	cacheRead := toInt64(usage["cache_read_input_tokens"])
 	cacheCreation := toInt64(usage["cache_creation_input_tokens"])
+	cacheReadReported := false
+	cacheCreationReported := false
+	if _, ok := usage["cache_read_input_tokens"]; ok {
+		cacheReadReported = true
+	}
+	if _, ok := usage["cache_creation_input_tokens"]; ok {
+		cacheCreationReported = true
+	}
 	if details, _ := usage["input_tokens_details"].(map[string]any); details != nil {
-		if cacheRead == 0 {
-			cacheRead = toInt64(details["cached_tokens"])
+		if !cacheReadReported {
+			if _, ok := details["cached_tokens"]; ok {
+				cacheRead = toInt64(details["cached_tokens"])
+				cacheReadReported = true
+			}
 		}
-		if cacheCreation == 0 {
-			cacheCreation = toInt64(details["cache_creation_tokens"])
+		if !cacheCreationReported {
+			if _, ok := details["cache_creation_tokens"]; ok {
+				cacheCreation = toInt64(details["cache_creation_tokens"])
+				cacheCreationReported = true
+			}
 		}
 	}
 	return anthropicUsageProjection{
-		InputTokens:         clampNonNegative(totalInput - cacheRead - cacheCreation),
-		CacheReadTokens:     cacheRead,
-		CacheCreationTokens: cacheCreation,
-		OutputTokens:        toInt64(usage["output_tokens"]),
+		InputTokens:            clampNonNegative(totalInput - cacheRead - cacheCreation),
+		CacheReadTokens:        cacheRead,
+		CacheCreationTokens:    cacheCreation,
+		OutputTokens:           toInt64(usage["output_tokens"]),
+		CacheReadReported:      cacheReadReported,
+		CacheCreationReported:  cacheCreationReported,
 	}
 }
 
 func anthropicUsageMapFromResponses(usage map[string]any, includeOutput bool) map[string]any {
 	projected := anthropicUsageFromResponses(usage)
 	out := map[string]any{
-		"input_tokens":                projected.InputTokens,
-		"cache_read_input_tokens":     projected.CacheReadTokens,
-		"cache_creation_input_tokens": projected.CacheCreationTokens,
+		"input_tokens": projected.InputTokens,
+	}
+	// Only write cache keys when the upstream actually reported them. Writing a
+	// zero for an absent field would make downstream clients (e.g. pi-ai/Claude
+	// style tools) interpret "cache stats unavailable" as "0% cache hit".
+	if projected.CacheReadReported {
+		out["cache_read_input_tokens"] = projected.CacheReadTokens
+	}
+	if projected.CacheCreationReported {
+		out["cache_creation_input_tokens"] = projected.CacheCreationTokens
 	}
 	if includeOutput {
 		out["output_tokens"] = projected.OutputTokens
@@ -1369,6 +1394,8 @@ type responsesToClaudeBufferingWriter struct {
 	inputTokens         int64
 	cacheReadTokens     int64
 	cacheCreationTokens int64
+	cacheReadReported     bool
+	cacheCreationReported bool
 	outputTokens        int64
 	stopReason          string
 	errType             string
@@ -1434,6 +1461,8 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 				bw.inputTokens = projected.InputTokens
 				bw.cacheReadTokens = projected.CacheReadTokens
 				bw.cacheCreationTokens = projected.CacheCreationTokens
+				bw.cacheReadReported = projected.CacheReadReported
+				bw.cacheCreationReported = projected.CacheCreationReported
 			}
 		}
 	case "response.output_text.delta":
@@ -1490,6 +1519,8 @@ func (bw *responsesToClaudeBufferingWriter) processEvent(event []byte) {
 				bw.inputTokens = projected.InputTokens
 				bw.cacheReadTokens = projected.CacheReadTokens
 				bw.cacheCreationTokens = projected.CacheCreationTokens
+				bw.cacheReadReported = projected.CacheReadReported
+				bw.cacheCreationReported = projected.CacheCreationReported
 				bw.outputTokens = projected.OutputTokens
 			}
 			if status, ok := resp["status"].(string); ok && status == "incomplete" {
@@ -1595,13 +1626,20 @@ func (bw *responsesToClaudeBufferingWriter) Result() []byte {
 		"content":       content,
 		"stop_reason":   stopReason,
 		"stop_sequence": nil,
-		"usage": map[string]any{
-			"input_tokens":                bw.inputTokens,
-			"cache_read_input_tokens":     bw.cacheReadTokens,
-			"cache_creation_input_tokens": bw.cacheCreationTokens,
-			"output_tokens":               bw.outputTokens,
-		},
 	}
+	usage := map[string]any{
+		"input_tokens":  bw.inputTokens,
+		"output_tokens": bw.outputTokens,
+	}
+	// Only write cache keys when the upstream reported them; an absent field
+	// means "cache stats unavailable", not "0 cache hits".
+	if bw.cacheReadReported {
+		usage["cache_read_input_tokens"] = bw.cacheReadTokens
+	}
+	if bw.cacheCreationReported {
+		usage["cache_creation_input_tokens"] = bw.cacheCreationTokens
+	}
+	out["usage"] = usage
 	b, _ := json.Marshal(out)
 	return b
 }
@@ -1949,6 +1987,8 @@ type responsesToClaudeWriter struct {
 	inputTokens         int64
 	cacheReadTokens     int64
 	cacheCreationTokens int64
+	cacheReadReported     bool
+	cacheCreationReported bool
 	outputTokens        int64
 	terminal            bool
 	writeErr            error
@@ -2044,6 +2084,8 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 				rw.inputTokens = projected.InputTokens
 				rw.cacheReadTokens = projected.CacheReadTokens
 				rw.cacheCreationTokens = projected.CacheCreationTokens
+				rw.cacheReadReported = projected.CacheReadReported
+				rw.cacheCreationReported = projected.CacheCreationReported
 			}
 		}
 		rw.started = true
@@ -2175,6 +2217,8 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 				rw.inputTokens = projected.InputTokens
 				rw.cacheReadTokens = projected.CacheReadTokens
 				rw.cacheCreationTokens = projected.CacheCreationTokens
+				rw.cacheReadReported = projected.CacheReadReported
+				rw.cacheCreationReported = projected.CacheCreationReported
 				rw.outputTokens = projected.OutputTokens
 			}
 		}
@@ -2196,11 +2240,18 @@ func (rw *responsesToClaudeWriter) processEvent(event []byte) {
 			stopReason = "tool_use"
 		}
 		rw.finishReason = stopReason
-		usage := anthropicUsageMapFromResponses(nil, true)
-		usage["input_tokens"] = rw.inputTokens
-		usage["cache_read_input_tokens"] = rw.cacheReadTokens
-		usage["cache_creation_input_tokens"] = rw.cacheCreationTokens
-		usage["output_tokens"] = rw.outputTokens
+		usage := map[string]any{
+			"input_tokens":  rw.inputTokens,
+			"output_tokens": rw.outputTokens,
+		}
+		// Only write cache keys when the upstream reported them; an absent field
+		// means "cache stats unavailable", not "0 cache hits".
+		if rw.cacheReadReported {
+			usage["cache_read_input_tokens"] = rw.cacheReadTokens
+		}
+		if rw.cacheCreationReported {
+			usage["cache_creation_input_tokens"] = rw.cacheCreationTokens
+		}
 		usageJSON, _ := json.Marshal(usage)
 		// The Codex backend reports authoritative input/cache usage only on the
 		// terminal response. Include that complete snapshot in message_delta;
@@ -2273,12 +2324,21 @@ func (rw *responsesToClaudeWriter) emitClaudeMessageStart() {
 	if id == "" {
 		id = "msg_translated"
 	}
-	usage, _ := json.Marshal(map[string]any{
-		"input_tokens": rw.inputTokens, "cache_read_input_tokens": rw.cacheReadTokens,
-		"cache_creation_input_tokens": rw.cacheCreationTokens, "output_tokens": int64(0),
-	})
+	usage := map[string]any{
+		"input_tokens":  rw.inputTokens,
+		"output_tokens": int64(0),
+	}
+	// Only write cache keys when the upstream reported them; an absent field
+	// means "cache stats unavailable", not "0 cache hits".
+	if rw.cacheReadReported {
+		usage["cache_read_input_tokens"] = rw.cacheReadTokens
+	}
+	if rw.cacheCreationReported {
+		usage["cache_creation_input_tokens"] = rw.cacheCreationTokens
+	}
+	usageJSON, _ := json.Marshal(usage)
 	msg := fmt.Sprintf(`{"type":"message_start","message":{"id":%s,"type":"message","role":"assistant","model":%s,"content":[],"stop_reason":null,"stop_sequence":null,"usage":%s}}`,
-		mustMarshalString(id), mustMarshalString(model), usage)
+		mustMarshalString(id), mustMarshalString(model), usageJSON)
 	rw.emitClaudeEvent("message_start", msg)
 }
 

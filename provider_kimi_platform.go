@@ -11,6 +11,9 @@ var kimiPlatformProviderSpec = mustBuiltinProviderSpec("kimi-platform")
 
 type KimiPlatformProvider = DeclarativeProvider
 
+// NewKimiPlatformProvider creates the Kimi Open Platform provider for the
+// platform.kimi.com console. Its upstream is owned by the declarative spec
+// (provider-specs.builtin/kimi-platform.json, base https://api.moonshot.cn/anthropic).
 func NewKimiPlatformProvider(base *url.URL) *KimiPlatformProvider {
 	spec := cloneProviderSpec(kimiPlatformProviderSpec)
 	if base != nil {

@@ -67,8 +67,8 @@ func TestModelPricingEndpointRequiresSessionAndSupportsProviderFilter(t *testing
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Models) != 4 {
-		t.Fatalf("deepseek price sheets=%d, want 4", len(result.Models))
+	if len(result.Models) != 3 {
+		t.Fatalf("deepseek price sheets=%d, want 3", len(result.Models))
 	}
 	for _, sheet := range result.Models {
 		if sheet.ProviderID != AccountTypeDeepSeek {

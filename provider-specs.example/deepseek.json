@@ -9,21 +9,22 @@
   },
   "models": [
     {
-      "id": "deepseek-v4-flash",
-      "display_name": "DeepSeek-V4-Flash",
-      "description": "Fast, cost-efficient DeepSeek model.",
-      "aliases": ["deepseek-flash"],
-      "context_window": 128000,
-      "max_output_tokens": 32768,
+      "id": "deepseek-v4-pro",
+      "display_name": "DeepSeek: DeepSeek V4 Pro",
+      "description": "Frontier DeepSeek reasoning model.",
+      "aliases": ["deepseek", "deepseek-pro"],
+      "context_window": 1048576,
+      "max_output_tokens": 393216,
+      "reasoning": true,
       "input": ["text"]
     },
     {
-      "id": "deepseek-v4-pro",
-      "display_name": "DeepSeek-V4-Pro",
-      "description": "Frontier DeepSeek reasoning model.",
-      "aliases": ["deepseek-pro", "deepseek"],
-      "context_window": 128000,
-      "max_output_tokens": 65536,
+      "id": "deepseek-v4-flash",
+      "display_name": "DeepSeek: DeepSeek V4 Flash",
+      "description": "Fast, cost-efficient DeepSeek model.",
+      "aliases": ["deepseek-flash"],
+      "context_window": 1048576,
+      "max_output_tokens": 393216,
       "reasoning": true,
       "input": ["text"]
     }

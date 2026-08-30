@@ -1,7 +1,7 @@
 {
   "id": "kimi-platform",
   "protocol": "anthropic-messages",
-  "base_url": "https://api.moonshot.ai/anthropic",
+  "base_url": "https://api.moonshot.cn/anthropic",
   "plan_type": "kimi-platform",
   "credential_field": "api_key",
   "auth": {

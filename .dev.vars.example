@@ -1,0 +1,23 @@
+# Codex Pool deploy environment (single target).
+# Copy to `.dev.vars` (gitignored) and fill in the values for the ONE
+# environment you are operating on. The skills read only these keys.
+#
+# To switch targets, change the values in `.dev.vars` — the skills never change.
+
+# --- SSH target (the one machine you are deploying to) ---
+HOST=192.168.31.186
+SSH_USER=c0dt
+SSH_KEY=C:\Users\spjc0\.ssh\HOME-A17-LINUX
+DEPLOY_DIR=/mnt/hdd/codex-pool
+SUDO_PASSWORD=
+
+# --- image ---
+API_IMAGE_TAG=staging-2985d0e
+
+# --- verification ---
+HEALTHZ_URL=http://127.0.0.1:18990/healthz
+POOL_JWT_SECRET=
+
+# --- local build ---
+STAGING_IMAGE_PREFIX=codex-pool:staging-
+API_IMAGE_NAME=codex-pool-api

@@ -28,6 +28,10 @@ security-audit-results.tsv
 dev/
 staging/
 pool/
+
+# Deploy target vars (local, machine-specific)
+.dev.vars
+!.dev.vars.example
 data/
 config.toml
 *.db
